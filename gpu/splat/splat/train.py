@@ -1,15 +1,20 @@
 """Entrenamiento 3D Gaussian Splatting con gsplat (rasterizador CUDA + DefaultStrategy).
 
 Sigue a examples/simple_trainer.py de gsplat: mismas tasas de aprendizaje, pérdida
-0,8·L1 + 0,2·(1−SSIM), armónicos esféricos hasta grado 3 y densificación del paper original.
-Agrega un ajuste fino de cámaras (las de VGGT no pasan por bundle adjustment) y una corrección
-de exposición por imagen (teléfonos distintos), que no se exporta.
+0,8·L1 + 0,2·(1−SSIM), armónicos esféricos hasta grado 3 y densificación del paper original con
+el gradiente absoluto (AbsGS), que densifica mejor las zonas con detalle fino. Agrega un ajuste
+fino de cámaras y una corrección de exposición por imagen (teléfonos distintos), que no se exporta.
+
+El calendario (decaimiento de la tasa de aprendizaje y fin de la densificación a la mitad) sigue
+el avance por pasos o por tiempo, lo que vaya primero: con un plazo, el entrenamiento termina a
+tiempo y deja una escena completa en vez de que el job se corte por timeout.
 """
 
 from __future__ import annotations
 
 import math
 import random
+import time
 from dataclasses import dataclass
 from typing import Callable, Sequence
 
@@ -23,6 +28,8 @@ SH_DEGREE = 3
 SH_INTERVAL = 1000
 # Sobre esto se deja de densificar (memoria y tiempo); el archivo final se recorta igual.
 GROWTH_CAP = 4_000_000
+# Umbral de gradiente para densificar con absgrad (el recomendado por gsplat para AbsGS).
+GROW_GRAD2D_ABS = 0.0008
 
 ProgressFn = Callable[[int, int, int, float], None]
 
@@ -37,6 +44,7 @@ class TrainedSplats:
     c2w: np.ndarray  # cámaras afinadas (N_img,4,4)
     psnr: float
     count: int
+    steps: int  # pasos hechos (menos que los pedidos si se acabó el tiempo)
 
 
 def rotation_6d_to_matrix(d6: torch.Tensor) -> torch.Tensor:
@@ -114,6 +122,7 @@ def render(
     width: int,
     height: int,
     sh_degree: int,
+    absgrad: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor, dict]:
     from gsplat import rasterization
 
@@ -130,7 +139,7 @@ def render(
         height=height,
         sh_degree=sh_degree,
         packed=False,
-        absgrad=False,
+        absgrad=absgrad,
         render_mode="RGB",
     )
 
@@ -146,8 +155,11 @@ def train_splats(
     progress: ProgressFn,
     log: Callable[[str], None] = print,
     seed: int = 0,
+    deadline: float | None = None,
 ) -> tuple[TrainedSplats, torch.nn.ParameterDict]:
-    """→ (resultado en numpy, parámetros en la GPU para renderizar la vista previa)."""
+    """`deadline`: instante de time.monotonic() en que debe terminar el entrenamiento.
+    → (resultado en numpy, parámetros en la GPU para renderizar la vista previa)."""
+
     from gsplat.losses import ssim_loss
     from gsplat.strategy import DefaultStrategy
 
@@ -174,25 +186,42 @@ def train_splats(
         k: torch.optim.Adam([{"params": params[k], "lr": lr, "name": k}], eps=1e-15, fused=True)
         for k, lr in lrs.items()
     }
-    schedulers = [torch.optim.lr_scheduler.ExponentialLR(optimizers["means"], gamma=0.01 ** (1.0 / iterations))]
     strategy = DefaultStrategy(
         refine_start_iter=min(500, iterations // 10),
         refine_stop_iter=int(iterations * 0.5),
         reset_every=3000,
         refine_every=100,
+        absgrad=True,
+        grow_grad2d=GROW_GRAD2D_ABS,
     )
     strategy.check_sanity(params, optimizers)
     state = strategy.initialize_state(scene_scale=scene_scale)
 
     cam_opt = CameraOpt(n_img, scene_scale).to(device)
-    cam_optim = torch.optim.Adam(cam_opt.parameters(), lr=1e-5, weight_decay=1e-6)
-    schedulers.append(torch.optim.lr_scheduler.ExponentialLR(cam_optim, gamma=0.01 ** (1.0 / iterations)))
+    cam_lr = 1e-5
+    cam_optim = torch.optim.Adam(cam_opt.parameters(), lr=cam_lr, weight_decay=1e-6)
     exp_opt = ExposureOpt(n_img).to(device)
     exp_optim = torch.optim.Adam(exp_opt.parameters(), lr=1e-3)
 
     order: list[int] = []
     psnr_ema = 0.0
+    t_start = time.monotonic()
+    budget = None if deadline is None else max(1.0, deadline - t_start)
+    steps_done = 0
     for step in range(iterations):
+        frac = step / iterations
+        if budget is not None:
+            frac = max(frac, (time.monotonic() - t_start) / budget)
+            if frac >= 1.0:
+                log(f"gsplat: se acabó el tiempo en el paso {step} de {iterations}; se exporta lo entrenado")
+                break
+            if frac >= 0.5 and step < strategy.refine_stop_iter:
+                log(f"gsplat: a mitad del tiempo en el paso {step}; se detiene la densificación")
+                strategy.refine_stop_iter = step
+        # Decaimiento exponencial hasta 1/100 (como ExponentialLR), sobre el avance.
+        decay = 0.01**frac
+        optimizers["means"].param_groups[0]["lr"] = lrs["means"] * decay
+        cam_optim.param_groups[0]["lr"] = cam_lr * decay
         if not order:
             order = list(range(n_img))
             random.shuffle(order)
@@ -202,7 +231,7 @@ def train_splats(
         h, w = gt.shape[1:3]
         cam = cam_opt(c2w_t[i : i + 1], ids)
         sh_degree = min(step // SH_INTERVAL, SH_DEGREE)
-        rgb, _alpha, info = render(params, cam, ks_t[i : i + 1], w, h, sh_degree)
+        rgb, _alpha, info = render(params, cam, ks_t[i : i + 1], w, h, sh_degree, absgrad=True)
         strategy.step_pre_backward(params, optimizers, state, step, info)
         pred = exp_opt(rgb, ids)
         l1 = (pred - gt).abs().mean()
@@ -213,8 +242,6 @@ def train_splats(
         for opt in (*optimizers.values(), cam_optim, exp_optim):
             opt.step()
             opt.zero_grad(set_to_none=True)
-        for sched in schedulers:
-            sched.step()
         strategy.step_post_backward(params, optimizers, state, step, info, packed=False)
         if len(params["means"]) > GROWTH_CAP and strategy.refine_stop_iter > step:
             log(f"gsplat: tope de {GROWTH_CAP} gaussianas alcanzado en el paso {step}; se detiene la densificación")
@@ -224,7 +251,8 @@ def train_splats(
             mse = float(((pred.clamp(0, 1) - gt) ** 2).mean())
         psnr = -10.0 * math.log10(max(mse, 1e-10))
         psnr_ema = psnr if step == 0 else 0.98 * psnr_ema + 0.02 * psnr
-        progress(step + 1, iterations, len(params["means"]), psnr_ema)
+        steps_done = step + 1
+        progress(steps_done, iterations, len(params["means"]), psnr_ema)
 
     with torch.no_grad():
         ids_all = torch.arange(n_img, device=device)
@@ -238,6 +266,7 @@ def train_splats(
             c2w=refined,
             psnr=psnr_ema,
             count=len(params["means"]),
+            steps=steps_done,
         )
     return out, params
 

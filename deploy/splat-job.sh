@@ -36,6 +36,13 @@ esac
 CPU="${CPU:-$DEFAULT_CPU}"
 MEMORY="${MEMORY:-$DEFAULT_MEMORY}"
 TASK_TIMEOUT="${TASK_TIMEOUT:-2700s}"
+# El job ajusta el entrenamiento para terminar antes del timeout: se le pasa en segundos.
+case "$TASK_TIMEOUT" in
+  *h) TIME_BUDGET_S=$(( ${TASK_TIMEOUT%h} * 3600 )) ;;
+  *m) TIME_BUDGET_S=$(( ${TASK_TIMEOUT%m} * 60 )) ;;
+  *s) TIME_BUDGET_S=${TASK_TIMEOUT%s} ;;
+  *) TIME_BUDGET_S=$TASK_TIMEOUT ;;
+esac
 # Cloud Build regional (us-central1) no ofrece máquinas grandes en este proyecto: el pool global sí.
 BUILD_REGION="${BUILD_REGION:-global}"
 BUILD_MACHINE="${BUILD_MACHINE:-E2_HIGHCPU_32}"
@@ -189,7 +196,7 @@ if ! gc run jobs deploy "$JOB" \
   --gpu=1 --gpu-type="$GPU_TYPE" --no-gpu-zonal-redundancy \
   --cpu="$CPU" --memory="$MEMORY" \
   --tasks=1 --parallelism=1 --max-retries=0 --task-timeout="$TASK_TIMEOUT" \
-  --set-env-vars="SPLAT_GPU_TYPE=${GPU_TYPE}" \
+  --set-env-vars="SPLAT_GPU_TYPE=${GPU_TYPE},SPLAT_TIME_BUDGET_S=${TIME_BUDGET_S}" \
   --labels="app=vigia,component=splat"; then
   # Cloud Run guarda la especificación aunque el job quede sin "Ready": si el recurso existe,
   # se siguen aplicando los permisos para que funcione apenas se resuelva la cuota.

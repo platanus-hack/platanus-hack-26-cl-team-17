@@ -9,6 +9,8 @@ import subprocess
 from dataclasses import dataclass, replace
 from typing import Callable, Sequence
 
+import numpy as np
+
 from .manifest import ManifestFrame, ManifestMedia
 
 # Lado largo máximo de los cuadros de entrenamiento (igual que LIMITS.FRAME_LONG_EDGE_PX).
@@ -17,6 +19,9 @@ FRAME_LONG_EDGE_PX = 1280
 MAX_CANDIDATES_PER_VIDEO = 600
 # Un cuadro de video hereda la posición del cuadro con GPS más cercano en el tiempo (dron).
 GPS_TIME_TOLERANCE_S = 2.0
+# Un cuadro con nitidez bajo esta fracción del percentil 90 de su medio está movido y se descarta,
+# salvo que eso deje al medio con menos de la mitad de sus cuadros (entonces queda la mitad más nítida).
+BLUR_FRACTION = 0.25
 
 
 @dataclass(frozen=True)
@@ -73,9 +78,24 @@ def pick_sharpest(scores: Sequence[float], k: int) -> list[int]:
     return picked
 
 
-def plan_frames(per_media: Sequence[Sequence[FrameCandidate]], max_frames: int) -> list[FrameCandidate]:
-    """Elige hasta `max_frames` cuadros repartidos entre medios (en orden de medio y tiempo)."""
-    counts = [len(c) for c in per_media]
+def drop_blurry(cands: Sequence[FrameCandidate], fraction: float = BLUR_FRACTION) -> list[FrameCandidate]:
+    if len(cands) < 4:
+        return list(cands)
+    ref = float(np.percentile([c.sharpness for c in cands], 90))
+    sharp = [c for c in cands if c.sharpness >= fraction * ref]
+    if len(sharp) * 2 >= len(cands):
+        return sharp
+    keep = sorted(cands, key=lambda c: -c.sharpness)[: math.ceil(len(cands) / 2)]
+    return sorted(keep, key=lambda c: c.t_s)
+
+
+def plan_frames(
+    per_media: Sequence[Sequence[FrameCandidate]], max_frames: int, per_media_cap: int | None = None
+) -> list[FrameCandidate]:
+    """Elige hasta `max_frames` cuadros repartidos entre medios (en orden de medio y tiempo),
+    sin cuadros movidos y con a lo sumo `per_media_cap` por medio."""
+    per_media = [drop_blurry(c) for c in per_media]
+    counts = [len(c) if per_media_cap is None else min(len(c), per_media_cap) for c in per_media]
     alloc = allocate(counts, max_frames)
     chosen: list[FrameCandidate] = []
     for cands, k in zip(per_media, alloc):

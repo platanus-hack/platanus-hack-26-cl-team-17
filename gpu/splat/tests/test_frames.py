@@ -7,6 +7,7 @@ import unittest
 from splat.frames import (
     FrameCandidate,
     allocate,
+    drop_blurry,
     frame_candidates,
     gps_for_time,
     pick_sharpest,
@@ -85,6 +86,23 @@ class PickTest(unittest.TestCase):
         times0 = [c.t_s for c in chosen if c.media_index == 0]
         self.assertEqual(times0, sorted(times0))
         self.assertGreater(max(times0) - min(times0), 20)
+
+    def test_plan_respects_per_media_cap(self):
+        per_media = [[cand(0, t) for t in range(50)], [cand(1, t) for t in range(50)]]
+        chosen = plan_frames(per_media, 80, per_media_cap=30)
+        self.assertEqual(sum(1 for c in chosen if c.media_index == 0), 30)
+        self.assertEqual(sum(1 for c in chosen if c.media_index == 1), 30)
+
+    def test_drop_blurry_removes_moved_frames(self):
+        cands = [cand(0, t, sharp=100.0) for t in range(10)] + [cand(0, 10 + t, sharp=5.0) for t in range(3)]
+        self.assertEqual([c.t_s for c in drop_blurry(cands)], list(range(10)))
+
+    def test_drop_blurry_keeps_sharpest_half_of_a_bad_video(self):
+        sharp = [1.0, 50.0, 2.0, 60.0, 1.5, 55.0, 1.0, 1.2, 1.1, 1.3]
+        kept = drop_blurry([cand(0, t, sharp=s) for t, s in enumerate(sharp)])
+        self.assertEqual(len(kept), 5)
+        self.assertEqual([c.t_s for c in kept], sorted(c.t_s for c in kept))
+        self.assertTrue({1, 3, 5} <= {c.t_s for c in kept})
 
 
 class GpsTest(unittest.TestCase):
