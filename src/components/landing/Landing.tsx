@@ -71,16 +71,19 @@ export function Landing() {
           {/* Velo gris azulado: oscurece la foto y deja leer el texto sin apagar las luces de la ciudad. */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-[#141C26]/90 via-[#1A2430]/70 to-[#1A2430]/45"
+            className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-[#141C26]/45 via-[#1A2430]/35 to-[#1A2430]/20"
           />
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-t from-[#141C26]/80 to-transparent" />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-t from-[#141C26]/40 to-transparent" />
 
           <div className="mx-auto grid min-h-dvh w-full max-w-7xl items-center gap-14 px-4 pt-28 pb-20 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16">
             <div className="flex min-w-0 flex-col gap-8">
-              <h1 id="portada-titulo" className="font-display text-5xl leading-[1.05] font-bold tracking-[-0.03em] text-white sm:text-6xl">
+              <h1
+                id="portada-titulo"
+                className="font-display text-5xl leading-[1.05] font-bold tracking-[-0.03em] text-white [text-shadow:0_2px_24px_rgb(0_0_0/0.45)] sm:text-6xl"
+              >
                 La emergencia, vista antes de llegar.
               </h1>
-              <p className="max-w-xl text-xl leading-relaxed text-white/90">
+              <p className="max-w-xl text-xl leading-relaxed text-white [text-shadow:0_1px_12px_rgb(0_0_0/0.55)]">
                 Reúne los videos de los vecinos, el dron y la radio en una sola ficha, para que el oficial a cargo decida
                 con más información y las unidades lleguen sabiendo a qué van.
               </p>
