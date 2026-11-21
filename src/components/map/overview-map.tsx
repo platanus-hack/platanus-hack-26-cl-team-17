@@ -5,7 +5,7 @@
  * fuera de la vista, el mapa se desplaza hasta él.
  */
 import { useEffect, useEffectEvent, useMemo, useRef } from "react";
-import { Scan } from "lucide-react";
+import { Globe, Scan } from "lucide-react";
 import type { IncidentSummary } from "@/lib/contract";
 import { isValidLatLng, type LatLng } from "@/lib/geo";
 import { publicConfig } from "@/lib/public-config";
@@ -20,6 +20,11 @@ import { useMapLibre, type MapView } from "./use-maplibre";
 
 const SINGLE_ZOOM = 15;
 const MAX_FIT_ZOOM = 15;
+/** Chile continental, de Arica al Cabo de Hornos (oeste-sur, este-norte). */
+const CHILE_BOUNDS: [[number, number], [number, number]] = [
+  [-76.5, -56.2],
+  [-66.0, -17.3],
+];
 const EMPTY_ZOOM = 11;
 /** Margen del encuadre: deja ver la etiqueta bajo los marcadores de los bordes. */
 const FIT_PADDING = 96;
@@ -166,6 +171,8 @@ export default function OverviewMapCanvas({ incidents, selectedId, onSelect, the
     boundsMaxZoom: MAX_FIT_ZOOM,
     boundsPadding: FIT_PADDING,
     trackView: true,
+    baseStyle: "city",
+    tilt: true,
   });
   const { map, containerRef, controller, base, error, loaded, view } = handle;
   const hiddenLabels = useMemo(() => (view ? labelsToHide(view, valid, selectedId) : NO_HIDDEN), [view, valid, selectedId]);
@@ -229,6 +236,14 @@ export default function OverviewMapCanvas({ incidents, selectedId, onSelect, the
           <div className="pointer-events-none absolute right-2 top-2 flex flex-col items-end gap-1.5">
             <MapButton label="Ver todos" showLabel disabled={!map} onClick={() => frameAll(true)}>
               <Scan className="size-4" aria-hidden />
+            </MapButton>
+            <MapButton
+              label="Chile"
+              showLabel
+              disabled={!map}
+              onClick={() => map?.fitBounds(CHILE_BOUNDS, { padding: 24, pitch: 0, bearing: 0, duration: 1200 })}
+            >
+              <Globe className="size-4" aria-hidden />
             </MapButton>
             <ZoomControls map={map} />
           </div>

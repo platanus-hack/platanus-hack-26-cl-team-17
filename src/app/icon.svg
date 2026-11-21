@@ -1,9 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <title>Vigía</title>
-  <rect width="32" height="32" rx="5" fill="#0a0e13"/>
-  <g fill="none" stroke="#e8eef4" stroke-width="2">
-    <path stroke-linecap="square" d="M3 10V3h7M22 3h7v7M29 22v7h-7M10 29H3v-7"/>
-    <path stroke-width="2.5" stroke-linejoin="round" d="M5.5 16c3.4-4.9 6.9-7 10.5-7s7.1 2.1 10.5 7c-3.4 4.9-6.9 7-10.5 7s-7.1-2.1-10.5-7Z"/>
-  </g>
-  <circle cx="16" cy="16" r="4" fill="#ff6a47"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200"><title>vigilia</title><rect width="200" height="200" rx="44" fill="#FFFFFF"/><g transform="translate(0 -1)"><defs><linearGradient id="l" x1="100" y1="72.7" x2="27.3" y2="72.7" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFB020" stop-opacity=".95"/><stop offset="1" stop-color="#FFB020" stop-opacity="0"/></linearGradient><linearGradient id="r" x1="100" y1="72.7" x2="172.7" y2="72.7" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FFB020" stop-opacity=".95"/><stop offset="1" stop-color="#FFB020" stop-opacity="0"/></linearGradient></defs><path d="M100 72.7 27.3 39.1v67.2z" fill="url(#l)"/><path d="M100 72.7 172.7 39.1v67.2z" fill="url(#r)"/><circle cx="100" cy="72.6" r="16.4" fill="#FFB020" fill-opacity=".2"/><circle cx="100" cy="72.7" r="8.6" fill="#FFB020"/><path d="M89.1 84h21.8l3 25.4H86.1z" fill="#E8362F"/><path d="M85.5 114.1h29l2.7 23.4H82.8z" fill="#E8362F"/><path d="M82.3 142.2h35.4l2.6 21.9H79.7z" fill="#E8362F"/></g></svg>

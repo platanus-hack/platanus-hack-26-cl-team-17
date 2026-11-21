@@ -77,6 +77,7 @@ export interface SubmitReportResult {
 export type SubmitReportErrorCode =
   | ApiErrorCode
   | "unsupported"
+  | "unreadable"
   | "empty"
   | "timeout"
   | "failed";
@@ -149,6 +150,7 @@ const NON_RETRYABLE_CODES: ReadonlySet<string> = new Set([
   "forbidden",
   "not_found",
   "unsupported",
+  "unreadable",
   "empty",
 ]);
 
@@ -356,6 +358,26 @@ export function videoExtension(mime: string): "mp4" | "mov" | "webm" | "3gp" {
   if (m === "video/3gpp" || m === "video/3gpp2") return "3gp";
   return "mp4";
 }
+
+/**
+ * true si el navegador puede leer los bytes del archivo (lee el inicio y el final).
+ * En Android, un video elegido desde Google Fotos o Drive que solo está en la nube, o uno
+ * que cambió después de elegirlo, llega como `File` ilegible: el `<video>` no lo abre y el
+ * PUT falla al instante con un error de red, aunque haya conexión.
+ */
+export async function isFileReadable(file: Blob, probeBytes = 64 * 1024): Promise<boolean> {
+  try {
+    const n = Math.max(1, Math.min(probeBytes, file.size));
+    await file.slice(0, n).arrayBuffer();
+    if (file.size > n) await file.slice(file.size - n).arrayBuffer();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export const UNREADABLE_VIDEO_MESSAGE =
+  "Tu teléfono no nos dejó leer este video. Si está en Google Fotos o en la nube, descárgalo primero al teléfono (o grábalo de nuevo con la cámara) y vuelve a elegirlo.";
 
 export function formatMb(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / (1024 * 1024)))} MB`;
@@ -740,6 +762,8 @@ export interface SubmitReportDeps {
     signal?: AbortSignal,
   ) => Promise<unknown>;
   putToTarget: (target: UploadTarget, body: Blob, opts: PutOptions) => Promise<void>;
+  /** Comprueba que el archivo se pueda leer (por defecto `isFileReadable`). */
+  isReadable?: (file: Blob) => Promise<boolean>;
   /** Base del backoff para reintentos de /complete (por defecto 500 ms). */
   retryBaseMs?: number;
   /** Tope por intento de /complete (por defecto 20 s); el cliente `api` no trae tiempo de espera. */
@@ -911,6 +935,12 @@ export async function runSubmitReport(
   try {
     throwIfAborted(signal);
     if (isVideo) {
+      // Antes de registrar nada: si el teléfono no entrega los bytes, ni los fotogramas ni el
+      // video van a llegar, y el error de red que daría el PUT confunde a quien envía.
+      if (!(await (deps.isReadable ?? isFileReadable)(main))) {
+        throw new SubmitReportError(UNREADABLE_VIDEO_MESSAGE, { stage, code: "unreadable" });
+      }
+      throwIfAborted(signal);
       try {
         const res = await deps.extractVideoFrames(main, {
           signal,

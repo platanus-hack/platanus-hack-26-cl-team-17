@@ -14,6 +14,7 @@
 #   SKIP_INFRA=1 bash deploy/cloudrun.sh       # solo build + deploy
 #   IMAGE=<imagen> bash deploy/cloudrun.sh     # despliega esa imagen sin construir
 #   ANTHROPIC_API_KEY=sk-... bash deploy/cloudrun.sh   # carga la llave si el secreto está vacío
+#   VIGIA_BRIDGE_TOKEN=... bash deploy/cloudrun.sh     # fija el token del puente Zello si el secreto está vacío
 set -euo pipefail
 
 # ---------------------------------------------------------------------------
@@ -38,6 +39,9 @@ SECRET_DATABASE_URL="${SECRET_DATABASE_URL:-vigia-database-url}"
 SECRET_SESSION="${SECRET_SESSION:-vigia-session-secret}"
 SECRET_ADMIN_PASSWORD="${SECRET_ADMIN_PASSWORD:-vigia-admin-password}"
 SECRET_ANTHROPIC="${SECRET_ANTHROPIC:-anthropic-api-key}"
+# Token interno del puente Zello (tools/zello-bridge → Authorization: Bearer). Con
+# DATABASE_URL las rutas del mando exigen sesión, así que sin él el puente recibe 401.
+SECRET_BRIDGE="${SECRET_BRIDGE:-vigia-bridge-token}"
 
 # Servicio Cloud Run. min-instances=1 sin throttling de CPU es el principal costo fijo.
 CPU="${CPU:-2}"
@@ -65,6 +69,10 @@ VIGIA_AI_EFFORT="${VIGIA_AI_EFFORT:-}"
 VIGIA_AI_FAST="${VIGIA_AI_FAST:-1}"
 # Radio de demostración sin sesión en /radio/<código> (micrófono → bitácora). 0 = apagada.
 VIGIA_DEMO_RADIO="${VIGIA_DEMO_RADIO:-1}"
+# Usuario de Zello del OBAC: lo que dice por Zello es una pregunta para Vigía. Lo lee el
+# agente en el servidor; usa el mismo valor que el .env.local del puente. Vacío = solo
+# cuenta lo que empieza con «Vigía, …».
+ZELLO_OBAC_USERNAME="${ZELLO_OBAC_USERNAME:-}"
 
 # 1 → falla si el secreto de Anthropic no tiene valor (por defecto se despliega con IA simulada).
 REQUIRE_ANTHROPIC="${REQUIRE_ANTHROPIC:-0}"
@@ -179,8 +187,8 @@ Vigía → Cloud Run. Esto es lo que se va a usar o crear:
   Bucket               gs://$BUCKET (CORS desde deploy/cors.json)
   Artifact Registry    $AR_HOST/$PROJECT/$AR_REPO
   Cuenta de servicio   $SA_EMAIL
-  Secretos             $SECRET_DATABASE_URL, $SECRET_SESSION, $SECRET_ADMIN_PASSWORD, $SECRET_ANTHROPIC
-  Admin inicial        $VIGIA_ADMIN_EMAIL
+  Secretos             $SECRET_DATABASE_URL, $SECRET_SESSION, $SECRET_ADMIN_PASSWORD, $SECRET_ANTHROPIC, $SECRET_BRIDGE
+  Admin inicial       $VIGIA_ADMIN_EMAIL
   URL de la app        $APP_URL
   Infraestructura      $([[ "$SKIP_INFRA" == "1" ]] && echo "se omite (SKIP_INFRA=1)" || echo "se revisa y se crea lo que falte")
   Imagen               ${IMAGE:-se construye con Cloud Build ($BUILD_MACHINE)}
@@ -242,7 +250,7 @@ if [[ "$SKIP_INFRA" != "1" ]]; then
   fi
 
   info "Secretos"
-  for s in "$SECRET_DATABASE_URL" "$SECRET_SESSION" "$SECRET_ADMIN_PASSWORD" "$SECRET_ANTHROPIC"; do
+  for s in "$SECRET_DATABASE_URL" "$SECRET_SESSION" "$SECRET_ADMIN_PASSWORD" "$SECRET_ANTHROPIC" "$SECRET_BRIDGE"; do
     ensure_secret "$s"
   done
 
@@ -292,6 +300,17 @@ if [[ "$SKIP_INFRA" != "1" ]]; then
     add_secret_version "$SECRET_ANTHROPIC" "$ANTHROPIC_API_KEY"
   fi
 
+  # Token del puente Zello: el mismo valor va en el .env.local de quien corre el puente.
+  # Se toma VIGIA_BRIDGE_TOKEN si lo defines (para que calce con un puente ya configurado);
+  # si no, se genera uno. Nunca se imprime.
+  if secret_has_version "$SECRET_BRIDGE"; then
+    ok "$SECRET_BRIDGE ya tiene valor (se conserva)"
+  elif [[ -n "${VIGIA_BRIDGE_TOKEN:-}" ]]; then
+    add_secret_version "$SECRET_BRIDGE" "$VIGIA_BRIDGE_TOKEN"
+  else
+    add_secret_version "$SECRET_BRIDGE" "$(openssl rand -hex 32)"
+  fi
+
   info "Cloud Storage"
   if gc storage buckets describe "gs://$BUCKET" >/dev/null 2>&1; then
     ok "Bucket gs://$BUCKET ya existe"
@@ -330,7 +349,7 @@ if [[ "$SKIP_INFRA" != "1" ]]; then
     --member="serviceAccount:${SA_EMAIL}" --role=roles/iam.serviceAccountTokenCreator \
     --condition=None >/dev/null
   ok "roles/iam.serviceAccountTokenCreator sobre sí misma (signBlob)"
-  for s in "$SECRET_DATABASE_URL" "$SECRET_SESSION" "$SECRET_ADMIN_PASSWORD" "$SECRET_ANTHROPIC"; do
+  for s in "$SECRET_DATABASE_URL" "$SECRET_SESSION" "$SECRET_ADMIN_PASSWORD" "$SECRET_ANTHROPIC" "$SECRET_BRIDGE"; do
     grant_secret_access "$s"
   done
 fi
@@ -352,6 +371,14 @@ elif [[ "$REQUIRE_ANTHROPIC" == "1" ]]; then
   die "El secreto $SECRET_ANTHROPIC no tiene valor. Cárgalo con: printf '%s' \"\$ANTHROPIC_API_KEY\" | gcloud secrets versions add $SECRET_ANTHROPIC --data-file=- --project=$PROJECT"
 else
   warn "El secreto $SECRET_ANTHROPIC no tiene valor: se despliega SIN llave de Anthropic y la IA funcionará en modo SIMULADO (rotulado así en la interfaz)."
+fi
+BRIDGE_MOUNTED=0
+if secret_has_version "$SECRET_BRIDGE"; then
+  SECRETS+=",VIGIA_BRIDGE_TOKEN=${SECRET_BRIDGE}:latest"
+  BRIDGE_MOUNTED=1
+  ok "Se monta $SECRET_BRIDGE (puente Zello)"
+else
+  warn "El secreto $SECRET_BRIDGE no tiene valor: se despliega SIN token del puente Zello y el puente recibirá 401. Corre el script sin SKIP_INFRA para crearlo."
 fi
 ok "Secretos listos"
 
@@ -412,6 +439,7 @@ info "Desplegando $SERVICE en Cloud Run"
   [[ -n "$VIGIA_AI_EFFORT" ]] && printf 'VIGIA_AI_EFFORT: %s\n' "$(yaml_quote "$VIGIA_AI_EFFORT")"
   [[ -n "$VIGIA_AI_FAST" ]] && printf 'VIGIA_AI_FAST: %s\n' "$(yaml_quote "$VIGIA_AI_FAST")"
   [[ -n "$VIGIA_DEMO_RADIO" ]] && printf 'VIGIA_DEMO_RADIO: %s\n' "$(yaml_quote "$VIGIA_DEMO_RADIO")"
+  [[ -n "$ZELLO_OBAC_USERNAME" ]] && printf 'ZELLO_OBAC_USERNAME: %s\n' "$(yaml_quote "$ZELLO_OBAC_USERNAME")"
   true
 } >"$WORK_DIR/env.yaml"
 
@@ -445,6 +473,7 @@ cat <<EOF
   URL de Cloud Run   ${STATUS_URL:-(no se pudo leer)}
   Imagen             $IMAGE
   IA                 $([[ "$ANTHROPIC_MOUNTED" == "1" ]] && echo "Claude (llave montada)" || echo "SIMULADA (falta valor en $SECRET_ANTHROPIC)")
+  Puente Zello       $([[ "$BRIDGE_MOUNTED" == "1" ]] && echo "token montado ($SECRET_BRIDGE)" || echo "SIN token (falta valor en $SECRET_BRIDGE)")
 
 Próximos pasos:
   1. Revisa que responda:  curl -fsS $APP_URL/api/status
@@ -460,6 +489,15 @@ if [[ "$ANTHROPIC_MOUNTED" != "1" ]]; then
   3. Para activar Claude carga la llave y vuelve a desplegar:
        printf '%s' "\$ANTHROPIC_API_KEY" | gcloud secrets versions add $SECRET_ANTHROPIC --data-file=- --project=$PROJECT
        SKIP_INFRA=1 IMAGE=$IMAGE bash deploy/cloudrun.sh
+EOF
+fi
+if [[ "$BRIDGE_MOUNTED" == "1" ]]; then
+  cat <<EOF
+
+  Puente Zello (corre aparte, en un notebook o la Jetson). En su .env.local pon:
+       VIGIA_URL=$APP_URL
+       VIGIA_BRIDGE_TOKEN=<el valor de: gcloud secrets versions access latest --secret=$SECRET_BRIDGE --project=$PROJECT>
+     y córrelo con: npm run zello
 EOF
 fi
 # Huevo y gallina: la URL que se usó en el build y en CORS debe ser una URL real del servicio.

@@ -12,6 +12,11 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Entornos de Python (gpu/splat, detector): traen miles de .js de terceros y
+    // recorrerlos agota la memoria de la máquina.
+    "**/.venv/**",
+    // Servicio del detector (Python); sus modelos incluyen un binario con extensión .ts.
+    "detector/**",
   ]),
 ]);
 

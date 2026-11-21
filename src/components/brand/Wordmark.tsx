@@ -22,16 +22,14 @@ const SIZES = {
   xl: { logo: 60, name: "text-6xl", gap: "gap-4", tagline: "text-lg" },
 } as const;
 
-/** Logotipo de Vigía: isotipo + "VIGÍA" en tipografía condensada, con bajada opcional. */
+/** Logotipo: faro + «vigilia» en minúsculas (Carbón), con bajada opcional. */
 export function Wordmark({ size = "md", tagline = false, href, className }: WordmarkProps) {
   const s = SIZES[size];
   const content = (
     <>
       <Logo size={s.logo} title="" className="text-text" />
       <span className="flex min-w-0 flex-col">
-        <span className={cn("font-display leading-none font-semibold text-text", s.name)}>
-          Vigía
-        </span>
+        <span className={cn("font-display leading-none font-bold tracking-[-0.02em] text-text", s.name)}>vigilia</span>
         {tagline ? (
           <span className={cn("mt-1 leading-snug text-muted", s.tagline)}>{BRAND_TAGLINE}</span>
         ) : null}

@@ -28,6 +28,7 @@ export {
   isCrossOrigin,
   uploadErrorFor,
   isAbortError,
+  isFileReadable,
   SubmitReportError,
   isSubmitReportError,
 } from "@/lib/client/upload-core";

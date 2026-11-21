@@ -1,0 +1,5 @@
+# Pesos, ONNX, codificador de CLIP e imágenes de prueba: se generan con export.py
+models/
+.venv/
+__pycache__/
+*.log

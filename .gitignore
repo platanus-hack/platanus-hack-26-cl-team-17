@@ -47,6 +47,9 @@ next-env.d.ts
 .coord/
 key.env
 
+# Pesos de los modelos del detector (los genera detector/export.py; ~340 MB)
+detector/models/
+
 # Entornos de Python (p. ej. gpu/splat/.venv)
 .venv/
 __pycache__/

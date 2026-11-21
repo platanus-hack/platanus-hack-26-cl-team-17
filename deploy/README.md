@@ -18,7 +18,7 @@ fotogramas) en **Cloud Storage** con URLs firmadas V4, y secretos en **Secret Ma
 | Bucket | `gs://platanus-515411-vigia-evidencia` (acceso uniforme, prevención de acceso público, CORS desde `deploy/cors.json`) |
 | Artifact Registry | `southamerica-west1-docker.pkg.dev/platanus-515411/vigia` (repositorio Docker `vigia`) |
 | Cuenta de servicio | `vigia-run@platanus-515411.iam.gserviceaccount.com` |
-| Secretos | `vigia-database-url` (→ `DATABASE_URL`), `vigia-session-secret` (→ `VIGIA_SESSION_SECRET`), `vigia-admin-password` (→ `VIGIA_ADMIN_PASSWORD`), `anthropic-api-key` (→ `ANTHROPIC_API_KEY`, puede estar sin valor) |
+| Secretos | `vigia-database-url` (→ `DATABASE_URL`), `vigia-session-secret` (→ `VIGIA_SESSION_SECRET`), `vigia-admin-password` (→ `VIGIA_ADMIN_PASSWORD`), `anthropic-api-key` (→ `ANTHROPIC_API_KEY`, puede estar sin valor), `vigia-bridge-token` (→ `VIGIA_BRIDGE_TOKEN`, token del puente Zello) |
 | Admin inicial | `VIGIA_ADMIN_EMAIL=admin@vigia.local` |
 
 Todos son los valores por defecto de `cloudrun.sh` y se pueden cambiar con variables de
@@ -49,6 +49,11 @@ Es **idempotente**: consulta cada recurso antes de crearlo y nunca recrea lo que
      `gcloud secrets versions access latest --secret=vigia-admin-password --project=platanus-515411`.
    - `anthropic-api-key`: si está vacío y defines `ANTHROPIC_API_KEY` al correr el script, la
      carga. Ojo: si tienes esa variable exportada en tu terminal por desarrollo local, se usará.
+   - `vigia-bridge-token`: token interno del puente Zello (`tools/zello-bridge`). Usa
+     `VIGIA_BRIDGE_TOKEN` si la defines (para que calce con el `.env.local` del puente); si no,
+     genera uno con `openssl rand -hex 32` y no lo imprime. El mismo valor va en el `.env.local`
+     de quien corre el puente, junto con `VIGIA_URL=<URL de la app>`; léelo con
+     `gcloud secrets versions access latest --secret=vigia-bridge-token --project=platanus-515411`.
 6. Bucket con acceso uniforme, prevención de acceso público y CORS de `deploy/cors.json`
    (el script falla si el archivo no existe). El marcador de origen del archivo
    (`https://REEMPLAZA-CON-TU-ORIGEN`, o `__APP_URL__`) se reemplaza por la URL de la app en una
@@ -66,7 +71,7 @@ Es **idempotente**: consulta cada recurso antes de crearlo y nunca recrea lo que
    `--execution-environment=gen2`, `--cpu-boost`, `--allow-unauthenticated` (los vecinos
    reportan sin cuenta), la cuenta de servicio, las variables (`GCS_BUCKET`,
    `GOOGLE_CLOUD_PROJECT`, `VIGIA_ADMIN_EMAIL`, `NEXT_PUBLIC_APP_URL`, `DATABASE_POOL_MAX`, y las
-   opcionales de mapa e IA si las defines) y los secretos.
+   opcionales de mapa, IA y `ZELLO_OBAC_USERNAME` si las defines) y los secretos.
    Las variables van en un archivo YAML (`--env-vars-file`, mismo efecto que `--set-env-vars`)
    para que las comas en los valores no rompan nada.
 10. Imprime la URL y los próximos pasos.
@@ -158,7 +163,7 @@ la identidad del servicio. Por eso la cuenta `vigia-run` necesita:
 | `roles/iam.serviceAccountTokenCreator` | **la propia cuenta** `vigia-run` | `signBlob`: firmar URLs V4 sin llave |
 | `roles/storage.objectAdmin` | **solo** el bucket `platanus-515411-vigia-evidencia` | leer, escribir y borrar evidencia |
 | `roles/cloudsql.client` | el proyecto | conectarse por el conector `/cloudsql/...` |
-| `roles/secretmanager.secretAccessor` | cada uno de los 4 secretos | montar los secretos como variables |
+| `roles/secretmanager.secretAccessor` | cada uno de los 5 secretos | montar los secretos como variables |
 
 Nada más: sin Editor ni Owner.
 
@@ -181,7 +186,7 @@ configuración vive en `deploy/cors.json` y el script la aplica en cada corrida.
 | Cloud Storage | decenas de GB de evidencia + descargas | USD 1 – 10 |
 | Artifact Registry | imágenes (~0,5 GB c/u; borra las viejas) | USD 0 – 3 |
 | Cloud Build | ~10 min por deploy en `E2_HIGHCPU_8` | < USD 1 por deploy |
-| Secret Manager | 4 secretos | < USD 1 |
+| Secret Manager | 5 secretos | < USD 1 |
 | Anthropic (Claude) | según uso, se cobra aparte en tu cuenta de Anthropic | variable |
 
 **El costo principal es Cloud Run con `--min-instances=1` y `--no-cpu-throttling`**: la

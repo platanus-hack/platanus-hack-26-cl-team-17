@@ -27,6 +27,7 @@ import type { FeatureCollection } from "geojson";
 import type { LatLng } from "@/lib/geo";
 import type { Bounds } from "./geojson";
 import { MAP_LOCALE_ES, OVERLAY_PREFIX, rasterFallbackStyle, satelliteStyle } from "./base-style";
+import { standardLikeStyle } from "@/components/ficha/map/standard-style";
 import { FALLBACK_PALETTE, readPalette, type MapPalette } from "./palette";
 import type { MapTheme } from "./types";
 
@@ -75,6 +76,13 @@ export interface MapInit {
   trackView?: boolean;
   minZoom?: number;
   maxZoom?: number;
+  /**
+   * Mapa base: "satellite" (por defecto, lectura táctica real) o "city" (la ciudad vectorial 3D
+   * clara de la ficha, con relieve y nombres a escala país).
+   */
+  baseStyle?: "satellite" | "city";
+  /** Permite inclinar y girar (parte inclinado a 45°). Por defecto, siempre al norte y plano. */
+  tilt?: boolean;
 }
 
 export interface FitOptions {
@@ -180,11 +188,14 @@ export class MapController {
         attributionControl: { compact: this.init.compactAttribution },
         maplibreLogo: false,
         locale: MAP_LOCALE_ES,
-        // Mapa siempre al norte y sin inclinación: lectura táctica sin ambigüedad.
-        dragRotate: false,
-        pitchWithRotate: false,
-        touchPitch: false,
-        maxPitch: 0,
+        // Por defecto, siempre al norte y sin inclinación (lectura táctica sin ambigüedad);
+        // con `tilt`, la vista de ciudad 3D se inclina y gira.
+        dragRotate: Boolean(this.init.tilt),
+        pitchWithRotate: Boolean(this.init.tilt),
+        touchPitch: Boolean(this.init.tilt),
+        maxPitch: this.init.tilt ? 70 : 0,
+        pitch: this.init.tilt ? 45 : 0,
+        bearing: this.init.tilt ? -12 : 0,
         trackResize: false,
         fadeDuration: 120,
       });
@@ -311,8 +322,9 @@ export class MapController {
   }
 
   private styleFor(attempt: Attempt, palette: MapPalette): StyleSpecification | string {
-    // "vector" es el intento principal (hoy, la vista satelital); "raster" es el respaldo de OpenStreetMap.
-    return attempt === "vector" ? satelliteStyle() : rasterFallbackStyle(this.theme, palette);
+    // "vector" es el intento principal (satélite o ciudad 3D); "raster" es el respaldo de OpenStreetMap.
+    if (attempt !== "vector") return rasterFallbackStyle(this.theme, palette);
+    return this.init.baseStyle === "city" ? standardLikeStyle() : satelliteStyle();
   }
 
   private applyStyle(map: MapLibreMap) {

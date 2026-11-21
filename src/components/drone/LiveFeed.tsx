@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Eye, Maximize2, Minimize2, Sparkles, VideoOff } from "lucide-react";
+import { Eye, Maximize2, Minimize2, ScanEye, Sparkles, VideoOff } from "lucide-react";
 import { Badge, IconButton, Spinner, useNow } from "@/components/ui";
 import { toneText, type Tone } from "@/components/ui/tone";
 import { api } from "@/lib/client/api";
@@ -9,6 +9,16 @@ import type { LiveInsightView, LiveInsightsResponse } from "@/lib/contract";
 import type { TimelineSeverity } from "@/lib/domain";
 import { formatClock } from "@/lib/format";
 import { cn } from "@/lib/cn";
+import {
+  detectionCountsLine,
+  hasCritical,
+  mergeLiveDetections,
+  overlayDetections,
+  pickDetectionForSeq,
+  type LiveDetection,
+  type LiveDetectionsResponse,
+} from "@/lib/vision/live-detections";
+import { CRITICAL_LABELS, detectionText, type Detection } from "@/lib/vision/types";
 
 /** Pausa entre consultas de cuadro (la respuesta 204 sin cuadro nuevo es barata). */
 const FRAME_POLL_MS = 250;
@@ -16,6 +26,9 @@ const FRAME_RETRY_MS = 2000;
 const INSIGHTS_POLL_MS = 3000;
 /** Sin cuadro nuevo por más que esto, el video se marca como detenido. */
 const STALE_MS = 4000;
+/** Detecciones YOLO del video en vivo: consulta frecuente con detector; muy espaciada sin él. */
+const DETECTIONS_POLL_MS = 300;
+const DETECTIONS_IDLE_MS = 10_000;
 
 const SEVERITY_TONE: Record<TimelineSeverity, Tone> = {
   info: "neutral",
@@ -24,7 +37,10 @@ const SEVERITY_TONE: Record<TimelineSeverity, Tone> = {
   critical: "critical",
 };
 
-type FeedState = { kind: "waiting" } | { kind: "frame"; url: string; receivedAt: number; at: string } | { kind: "error" };
+type FeedState =
+  | { kind: "waiting" }
+  | { kind: "frame"; url: string; receivedAt: number; at: string; seq: number }
+  | { kind: "error" };
 
 /** Consulta el último cuadro en vivo; nunca hay dos consultas a la vez y se pausa con la pestaña oculta. */
 function useLiveFrame(missionId: string, enabled: boolean): FeedState {
@@ -63,7 +79,13 @@ function useLiveFrame(missionId: string, enabled: boolean): FeedState {
           seq = res.headers.get("x-live-seq");
           const prev = url;
           url = URL.createObjectURL(blob);
-          setFeed({ kind: "frame", url, receivedAt: Date.now(), at: res.headers.get("x-live-at") ?? new Date().toISOString() });
+          setFeed({
+            kind: "frame",
+            url,
+            receivedAt: Date.now(),
+            at: res.headers.get("x-live-at") ?? new Date().toISOString(),
+            seq: Number(seq) || 0,
+          });
           // El cuadro anterior se libera cuando el nuevo ya está pintado.
           if (prev) setTimeout(() => URL.revokeObjectURL(prev), 1000);
         } else if (res.status === 404) {
@@ -122,6 +144,119 @@ function useLiveInsights(missionId: string, enabled: boolean): LiveInsightsRespo
   return data;
 }
 
+/** Detecciones YOLO recientes (por seq). Sin detector o sin permiso no muestra nada ni avisa error. */
+function useLiveDetections(missionId: string, enabled: boolean): LiveDetection[] {
+  const [list, setList] = useState<LiveDetection[]>([]);
+  useEffect(() => {
+    if (!enabled) return;
+    const ctl = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let known: LiveDetection[] = [];
+    const poll = async () => {
+      let next = DETECTIONS_POLL_MS;
+      if (!document.hidden) {
+        try {
+          const lastSeq = known.at(-1)?.seq;
+          const q = lastSeq !== undefined ? `?after=${lastSeq}` : "";
+          const res = await fetch(`/api/drone/${encodeURIComponent(missionId)}/live/detections${q}`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: ctl.signal,
+          });
+          if (!res.ok) {
+            next = DETECTIONS_IDLE_MS;
+          } else {
+            const body = (await res.json()) as Partial<LiveDetectionsResponse>;
+            if (!body.enabled) {
+              next = DETECTIONS_IDLE_MS;
+            } else {
+              const incoming = [...(Array.isArray(body.recent) ? body.recent : []), ...(body.latest ? [body.latest] : [])];
+              const merged = mergeLiveDetections(known, incoming);
+              if (merged.at(-1)?.seq !== lastSeq) {
+                known = merged;
+                setList(merged);
+              }
+            }
+          }
+        } catch {
+          if (ctl.signal.aborted) return;
+          next = FRAME_RETRY_MS;
+        }
+      }
+      if (!ctl.signal.aborted) timer = setTimeout(poll, next);
+    };
+    void poll();
+    return () => {
+      ctl.abort();
+      if (timer !== null) clearTimeout(timer);
+    };
+  }, [missionId, enabled]);
+  return list;
+}
+
+/**
+ * Cajas del detector sobre el cuadro. El SVG usa las dimensiones del cuadro como viewBox con
+ * "meet", igual que object-contain del <img>: las cajas calzan aunque haya franjas negras.
+ */
+function DetectionOverlay({ width, height, detections }: { width: number; height: number; detections: Detection[] }) {
+  const svgRef = useRef<SVGSVGElement>(null);
+  // Píxeles de pantalla por unidad del cuadro: los rótulos se ven del mismo tamaño en el panel y en pantalla completa.
+  const [scale, setScale] = useState(0);
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el || !(width > 0 && height > 0)) return;
+    const measure = () => setScale(Math.min(el.clientWidth / width, el.clientHeight / height));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [width, height]);
+  if (!(width > 0 && height > 0)) return null;
+  const font = scale > 0 ? 11 / scale : Math.max(10, Math.round(Math.max(width, height) / 48));
+  const pad = font * 0.35;
+  return (
+    <svg
+      ref={svgRef}
+      className="pointer-events-none absolute inset-0 size-full"
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="xMidYMid meet"
+      aria-hidden="true"
+    >
+      {detections.map((d, i) => {
+        const critical = CRITICAL_LABELS.has(d.label);
+        const [x1, y1, x2, y2] = d.box;
+        const x = x1 * width;
+        const y = y1 * height;
+        const text = `${detectionText(d.label)} ${Math.round(d.conf * 100)} %`;
+        const tagH = font * 1.4;
+        const tagW = text.length * font * 0.62 + pad * 2;
+        // Rótulo encima de la caja; si no cabe arriba, dentro.
+        const tagY = y >= tagH ? y - tagH : y;
+        const tagX = Math.min(x, Math.max(0, width - tagW));
+        return (
+          <g key={`${d.label}-${i}`}>
+            <rect
+              x={x}
+              y={y}
+              width={Math.max(1, (x2 - x1) * width)}
+              height={Math.max(1, (y2 - y1) * height)}
+              fill="none"
+              className={critical ? "stroke-critical" : "stroke-white/75"}
+              strokeWidth={critical ? 3 : 1.5}
+              strokeDasharray={d.conf < 0.4 ? "6 4" : undefined}
+              vectorEffect="non-scaling-stroke"
+            />
+            <rect x={tagX} y={tagY} width={tagW} height={tagH} rx={font * 0.2} className={critical ? "fill-critical" : "fill-black/65"} />
+            <text x={tagX + pad} y={tagY + font * 1.05} fontSize={font} className="fill-white font-mono font-semibold">
+              {text}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 function InsightRow({ insight, latest }: { insight: LiveInsightView; latest: boolean }) {
   const tone = insight.engine === "error" ? "neutral" : SEVERITY_TONE[insight.severity];
   return (
@@ -167,6 +302,7 @@ export function LiveFeed({ missionId, label, active, className }: LiveFeedProps)
   const now = useNow(1000);
   const feed = useLiveFrame(missionId, active);
   const insights = useLiveInsights(missionId, active);
+  const detections = useLiveDetections(missionId, active);
   const boxRef = useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -185,6 +321,10 @@ export function LiveFeed({ missionId, label, active, className }: LiveFeedProps)
   const stale = age !== null && age > STALE_MS;
   const list = insights?.insights ?? [];
   const [latest, ...older] = list;
+  // Cajas del cuadro que se está mostrando (mismo seq o el más cercano); con la señal detenida no se dibujan.
+  const shownDetection = feed.kind === "frame" && !stale ? pickDetectionForSeq(detections, feed.seq) : null;
+  const boxes = shownDetection ? overlayDetections(shownDetection.result) : [];
+  const countsText = detectionCountsLine(boxes);
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
@@ -212,6 +352,10 @@ export function LiveFeed({ missionId, label, active, className }: LiveFeedProps)
           </div>
         )}
 
+        {shownDetection && (
+          <DetectionOverlay width={shownDetection.result.width} height={shownDetection.result.height} detections={boxes} />
+        )}
+
         <div className="pointer-events-none absolute inset-x-2 top-2 flex items-center justify-between gap-2">
           {feed.kind === "frame" && (
             <span
@@ -228,6 +372,17 @@ export function LiveFeed({ missionId, label, active, className }: LiveFeedProps)
             Dron {label}
           </span>
         </div>
+
+        {countsText && (
+          <span
+            className="pointer-events-none absolute top-10 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/65 px-2 py-1 font-mono text-xs font-semibold text-white backdrop-blur-sm"
+            title="Detecciones automáticas del detector de objetos: pueden fallar"
+          >
+            <ScanEye aria-hidden="true" className={cn("size-3.5 shrink-0", hasCritical(boxes) && "text-critical")} />
+            <span className="sr-only">Detector automático: </span>
+            <span className="truncate">{countsText}</span>
+          </span>
+        )}
 
         {feed.kind === "frame" && (
           <div className="absolute right-2 bottom-2">

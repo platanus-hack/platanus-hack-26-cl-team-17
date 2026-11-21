@@ -1,9 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ArrowLeft, ChevronDown, CircleAlert, Ellipsis, Loader2, LogOut, Siren, Users, type LucideIcon } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronDown,
+  CircleAlert,
+  Ellipsis,
+  Loader2,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Siren,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { LiveClock } from "@/components/ui/time";
 import type { RuntimeMode, StaffPublic } from "@/lib/contract";
@@ -52,6 +64,42 @@ const NAV_PERSONAL: NavItem = {
   isActive: (p) => p === PERSONAL_PATH || p.startsWith(`${PERSONAL_PATH}/`),
 };
 
+/* ───────────── Menú lateral colapsable (se recuerda en el navegador) ───────────── */
+
+const MENU_KEY = "vigia-menu-expandido";
+const MENU_EVENT = "vigia-menu-cambio";
+
+function readMenuExpanded(): boolean {
+  try {
+    return localStorage.getItem(MENU_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function subscribeMenu(onChange: () => void): () => void {
+  window.addEventListener("storage", onChange);
+  window.addEventListener(MENU_EVENT, onChange);
+  return () => {
+    window.removeEventListener("storage", onChange);
+    window.removeEventListener(MENU_EVENT, onChange);
+  };
+}
+
+/** Menú expandido (íconos y textos) o contraído (solo íconos, ocupa menos). Por defecto contraído. */
+function useMenuExpanded(): [boolean, () => void] {
+  const expanded = useSyncExternalStore(subscribeMenu, readMenuExpanded, () => false);
+  const toggle = useCallback(() => {
+    try {
+      localStorage.setItem(MENU_KEY, readMenuExpanded() ? "0" : "1");
+    } catch {
+      /* sin almacenamiento: no se recuerda */
+    }
+    window.dispatchEvent(new Event(MENU_EVENT));
+  }, []);
+  return [expanded, toggle];
+}
+
 /**
  * Marco del puesto de mando al estilo de X: barra lateral con marca, navegación y sesión
  * (solo íconos en pantallas medianas; arriba en teléfonos) y una columna con encabezado y contenido.
@@ -71,6 +119,8 @@ export function MandoShell({
   const contentId = useId();
   const staffAuth = mode?.auth === "staff";
   const nav = staffAuth && staff?.role === "admin" ? [NAV_INCIDENTS, NAV_PERSONAL] : [NAV_INCIDENTS];
+  // En pantallas anchas el menú se puede expandir; contraído deja solo los íconos.
+  const [expanded, toggleMenu] = useMenuExpanded();
 
   return (
     // relative: los elementos absolutos (p. ej. sr-only) quedan recortados aquí y no alargan el documento.
@@ -82,7 +132,12 @@ export function MandoShell({
         Saltar al contenido
       </a>
 
-      <aside className="hidden w-[76px] shrink-0 flex-col items-center border-r border-line px-2 md:flex xl:w-64 xl:items-stretch xl:px-3">
+      <aside
+        className={cn(
+          "hidden w-[76px] shrink-0 flex-col items-center border-r border-line px-2 transition-[width] md:flex",
+          expanded && "xl:w-64 xl:items-stretch xl:px-3",
+        )}
+      >
         <Link
           href="/mando"
           aria-label="Vigía: ir a incidentes"
@@ -95,22 +150,38 @@ export function MandoShell({
           <ul className="flex flex-col gap-1">
             {nav.map((item) => (
               <li key={item.href}>
-                <SideNavLink item={item} active={item.isActive(pathname)} />
+                <SideNavLink item={item} active={item.isActive(pathname)} expanded={expanded} />
               </li>
             ))}
           </ul>
         </nav>
 
-        <div className="mt-auto flex flex-col gap-3 pb-3 xl:items-stretch">
-          {mode ? (
+        <button
+          type="button"
+          onClick={toggleMenu}
+          aria-expanded={expanded}
+          title={expanded ? "Contraer menú" : "Expandir menú"}
+          className={cn(
+            "mt-1 hidden items-center gap-5 rounded-full p-3 text-muted transition-colors hover:bg-surface-2 hover:text-text xl:flex",
+            expanded ? "xl:justify-start xl:pr-6" : "justify-center",
+          )}
+        >
+          {expanded ? <PanelLeftClose aria-hidden className="size-[22px] shrink-0" /> : <PanelLeftOpen aria-hidden className="size-[22px] shrink-0" />}
+          <span className={cn("text-[15px]", expanded ? "" : "sr-only")}>{expanded ? "Contraer menú" : "Expandir menú"}</span>
+        </button>
+
+        <div className={cn("mt-auto flex flex-col gap-3 pb-3", expanded && "xl:items-stretch")}>
+          {mode && expanded ? (
             <div className="hidden px-3 xl:block">
               <ModeBadges mode={mode} compact />
             </div>
           ) : null}
-          <div className="hidden px-3 text-sm text-muted xl:block">
-            <LiveClock />
-          </div>
-          {staffAuth && staff ? <UserMenu staff={staff} placement="sidebar" /> : null}
+          {expanded ? (
+            <div className="hidden px-3 text-sm text-muted xl:block">
+              <LiveClock />
+            </div>
+          ) : null}
+          {staffAuth && staff ? <UserMenu staff={staff} placement="sidebar" expanded={expanded} /> : null}
         </div>
       </aside>
 
@@ -164,13 +235,13 @@ export function MandoShell({
 
           {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
 
-          <div className="hidden shrink-0 text-sm text-muted sm:block xl:hidden">
+          <div className={cn("hidden shrink-0 text-sm text-muted sm:block", expanded && "xl:hidden")}>
             <LiveClock />
           </div>
 
           {mode ? (
             <>
-              <div className="hidden shrink-0 lg:block xl:hidden">
+              <div className={cn("hidden shrink-0 lg:block", expanded && "xl:hidden")}>
                 <ModeBadges mode={mode} />
               </div>
               <div className="shrink-0 lg:hidden">
@@ -194,27 +265,40 @@ export function MandoShell({
   );
 }
 
-/** Enlace de la barra lateral: ícono grande y texto de 20 px (solo ícono bajo xl); el activo va en negrita. */
-function SideNavLink({ item, active }: { item: NavItem; active: boolean }) {
+/**
+ * Enlace de la barra lateral: ícono grande y, con el menú expandido en pantallas anchas,
+ * texto de 20 px; el activo va en negrita.
+ */
+function SideNavLink({ item, active, expanded }: { item: NavItem; active: boolean; expanded: boolean }) {
   const Icon = item.icon;
   return (
     <Link
       href={item.href}
       aria-current={active ? "page" : undefined}
       title={item.label}
-      className="group flex justify-center text-xl text-text xl:justify-start"
+      className={cn("group flex justify-center text-xl text-text", expanded && "xl:justify-start")}
     >
-      <span className="flex items-center gap-5 rounded-full p-3 transition-colors group-hover:bg-surface-2 xl:pr-6">
+      <span className={cn("flex items-center gap-5 rounded-full p-3 transition-colors group-hover:bg-surface-2", expanded && "xl:pr-6")}>
         <Icon aria-hidden className="size-[26px] shrink-0" strokeWidth={active ? 2.5 : 1.75} />
-        <span className={cn("sr-only xl:not-sr-only", active ? "font-bold" : "font-normal")}>{item.label}</span>
+        <span className={cn("sr-only", expanded && "xl:not-sr-only", active ? "font-bold" : "font-normal")}>{item.label}</span>
       </span>
     </Link>
   );
 }
 
 /** Menú de la sesión del personal con la opción de cerrar sesión. */
-function UserMenu({ staff, placement }: { staff: StaffPublic; placement: "sidebar" | "header" }) {
+function UserMenu({
+  staff,
+  placement,
+  expanded = false,
+}: {
+  staff: StaffPublic;
+  placement: "sidebar" | "header";
+  /** Menú lateral expandido: muestra nombre y cargo en pantallas anchas. */
+  expanded?: boolean;
+}) {
   const inSidebar = placement === "sidebar";
+  const wide = inSidebar && expanded;
   const router = useRouter();
   const menuId = useId();
   const [open, setOpen] = useState(false);
@@ -272,7 +356,7 @@ function UserMenu({ staff, placement }: { staff: StaffPublic; placement: "sideba
   return (
     <div
       ref={rootRef}
-      className={cn("relative shrink-0", inSidebar && "xl:w-full")}
+      className={cn("relative shrink-0", wide && "xl:w-full")}
       onKeyDown={onKeyDown}
       onBlur={(e) => {
         if (open && !e.currentTarget.contains(e.relatedTarget)) setOpen(false);
@@ -288,7 +372,7 @@ function UserMenu({ staff, placement }: { staff: StaffPublic; placement: "sideba
         onKeyDown={onButtonKeyDown}
         className={cn(
           "flex items-center text-left transition-colors hover:bg-surface-2",
-          inSidebar ? "w-full justify-center gap-3 rounded-full p-3 xl:justify-start" : "h-9 gap-1.5 rounded-full px-1",
+          inSidebar ? cn("w-full justify-center gap-3 rounded-full p-3", wide && "xl:justify-start") : "h-9 gap-1.5 rounded-full px-1",
           open && "bg-surface-2",
         )}
       >
@@ -301,15 +385,15 @@ function UserMenu({ staff, placement }: { staff: StaffPublic; placement: "sideba
         >
           {initials(staff.name)}
         </span>
-        <span className={cn("min-w-0 flex-1 flex-col", inSidebar ? "hidden xl:flex" : "hidden")}>
+        <span className={cn("min-w-0 flex-1 flex-col", wide ? "hidden xl:flex" : "hidden")}>
           <span className="truncate text-[15px] leading-5 font-bold">{staff.name}</span>
           <span className="truncate text-[15px] leading-5 text-muted">{roleLabel}</span>
         </span>
-        <span className={cn("sr-only", inSidebar && "xl:hidden")}>
+        <span className={cn("sr-only", wide && "xl:hidden")}>
           {staff.name}, {roleLabel}
         </span>
         {inSidebar ? (
-          <Ellipsis aria-hidden className="hidden size-5 shrink-0 xl:block" />
+          <Ellipsis aria-hidden className={cn("hidden size-5 shrink-0", wide && "xl:block")} />
         ) : (
           <ChevronDown aria-hidden className={cn("size-3.5 shrink-0 text-muted transition-transform", open && "rotate-180")} />
         )}

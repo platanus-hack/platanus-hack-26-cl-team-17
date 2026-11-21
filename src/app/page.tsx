@@ -58,7 +58,17 @@ export default function Home() {
       </header>
 
       <main className="flex-1">
-        <section aria-labelledby="portada-titulo" className="border-b border-line">
+        <section aria-labelledby="portada-titulo" className="relative isolate overflow-hidden border-b border-line">
+          {/* Fondo: Santiago en movimiento (ilustración animada: cordillera, Costanera Center, San Cristóbal). */}
+          <picture className="pointer-events-none absolute inset-0 -z-10">
+            <source srcSet="/portada/santiago-poster.png" media="(prefers-reduced-motion: reduce)" />
+            <img src="/portada/santiago.gif" alt="" className="size-full object-cover object-bottom" />
+          </picture>
+          {/* Velo blanco a la izquierda para que el texto se lea sobre la ciudad. */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-white/90 via-white/55 to-white/0 max-lg:bg-white/75"
+          />
           <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-10 sm:px-6 md:py-16 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:gap-14">
             <div className="flex min-w-0 flex-col gap-7">
               <h1 id="portada-titulo">

@@ -2,9 +2,12 @@
  * Selección del motor de IA (solo servidor).
  *  - Con credencial de Anthropic (y sin VIGIA_AI=simulated) → Claude con visión.
  *  - Sin credencial → motor de reglas determinista, siempre rotulado "simulated".
+ *  - Con VIGIA_DETECTOR_URL y el detector sano, Claude razona sobre las detecciones YOLO
+ *    y un cuadro anotado en vez de ver todos los fotogramas (engine-detector.ts).
  */
 import { aiEngineKind } from "@/lib/config";
 import { createClaudeEngine } from "./engine-claude";
+import { createDetectorEngine } from "./engine-detector";
 import { createSimulatedEngine } from "./engine-simulated";
 import type { Engine } from "./types";
 
@@ -29,7 +32,8 @@ export function getEngine(): Engine {
   const kind = aiEngineKind();
   // Se revisa el modo en cada llamada: si cambia la configuración no queda un motor viejo pegado.
   if (!engine || engine.kind !== kind) {
-    engine = kind === "claude" ? createClaudeEngine() : getSimulatedEngine();
+    // Claude va envuelto en el detector YOLO: sin detector sano se comporta igual que antes.
+    engine = kind === "claude" ? createDetectorEngine(createClaudeEngine()) : getSimulatedEngine();
   }
   return engine;
 }

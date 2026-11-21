@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import useSWR from "swr";
 import { ArrowLeft, Ban, CircleAlert, MapPin, RotateCw, SearchX, WifiOff, type LucideIcon } from "lucide-react";
 import { MediaUploader } from "@/components/report";
+import { VideoRequestBanner } from "@/components/vigia/VideoRequestBanner";
 import { Button, Skeleton, TimeAgo } from "@/components/ui";
 import { ApiClientError, api, errorMessage } from "@/lib/client/api";
 import type { PublicIncident } from "@/lib/contract";
@@ -80,6 +81,7 @@ function Ready({ incident }: { incident: PublicIncident }) {
           Avisada <TimeAgo iso={incident.created_at} />
         </p>
       </header>
+      <VideoRequestBanner code={incident.code} />
       <p className="text-lg leading-snug text-text">
         Envía tu video o tus fotos de esta emergencia. Le llegan directo al personal de Bomberos que la atiende.
       </p>

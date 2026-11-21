@@ -41,6 +41,7 @@ import { DronePanel, LiveFeed, useSimulatedMissionTicker } from "@/components/dr
 import { ReconstructionPanel } from "@/components/splat";
 import { CriticalStrip, SituationPanel } from "@/components/mando/situation";
 import { TimelinePanel } from "@/components/mando/timeline";
+import { VigiaDock } from "@/components/vigia";
 import { ScenarioChip, scenarioVisible, useScenario } from "@/components/mando/scenario";
 import { api, errorMessage, type ApiClientError } from "@/lib/client/api";
 import { useIncidentSnapshot, useMe, useRuntimeMode } from "@/lib/client/use-live";
@@ -588,6 +589,13 @@ function IncidentScreen({ id }: IncidentViewProps) {
           {otherLayers}
         </div>
 
+        {/* Vigía: un mensaje a la vez abajo de la escena, con su ícono en la esquina */}
+        <VigiaDock
+          incidentId={incident.id}
+          className="absolute z-20"
+          style={{ left: safeL, right: safeR, bottom: GAP + SCENE_FOOTER_H + 8 }}
+        />
+
         {/* Encabezado flotante */}
         <div ref={setHeaderEl} className="absolute top-3 right-3 left-3 z-30 flex flex-col gap-2">
           {banners}
@@ -703,6 +711,7 @@ function IncidentScreen({ id }: IncidentViewProps) {
           <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-surface">
             <CenterLayer active={centerView === "scene"}>{sceneEl}</CenterLayer>
             {otherLayers}
+            <VigiaDock incidentId={incident.id} className="absolute inset-x-2 bottom-8 z-20" />
           </div>
 
           <MediaStrip media={snapshot.media} selectedId={viewer?.mediaId ?? null} onOpen={setViewer} className="shrink-0" />

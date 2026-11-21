@@ -2,7 +2,9 @@
 
 /*
  * Vigía — tokens de diseño.
- * Estilo X (Twitter): blanco y negro más un celeste (`accent` = `info`) para lo activo, enlaces y foco.
+ * Estilo X (Twitter) con la paleta de marca: fondo blanco, texto y botones principales en Carbón
+ * (#151A21), superficies secundarias en Humo (#F4F1EC) y Rojo Bombero (#E8362F) para lo crítico;
+ * Ámbar Faro (#FFB020) como acento (indicadores, foco, rellenos); `info` es un ámbar oscuro legible como texto.
  * Los botones principales van en negro (`bg-text text-bg`). Rojo, ámbar, verde y morado solo con
  * significado (crítico, advertencia, ok, dron). Fuente: Inter (Chirp, la de X, es propietaria);
  * mono solo para códigos y horas. Controles en píldora, paneles con 16 px de radio.
@@ -41,19 +43,25 @@
   --color-drone-soft: color-mix(in oklab, var(--v-drone) var(--v-soft), transparent);
   --color-fire-soft: color-mix(in oklab, var(--v-fire) var(--v-soft), transparent);
 
-  /* Ficha del incidente (mapa 3D claro): colores con significado y grises cálidos. */
-  --color-f-red: #e5484d;
+  /* Marca (archivo «Vigilia – Logo»): Rojo Bombero, Ámbar Faro, Carbón y Humo. */
+  --color-brand-red: #e8362f;
+  --color-brand-amber: #ffb020;
+  --color-brand-carbon: #151a21;
+  --color-brand-humo: #f4f1ec;
+
+  /* Ficha del incidente (mapa 3D claro): colores de marca con significado y grises cálidos. */
+  --color-f-red: #e8362f;
   --color-f-orange: #f76b15;
   --color-f-orange-ink: #cc4e00;
-  --color-f-amber: #ffb224;
-  --color-f-amber-ink: #915930;
+  --color-f-amber: #ffb020;
+  --color-f-amber-ink: #8f5a12;
   --color-f-blue: #0090ff;
   --color-f-green: #30a46c;
-  --color-f-ink: #21201c;
-  --color-f-muted: #63635e;
-  --color-f-faint: #8d8d86;
-  --color-f-line: #e9e8e6;
-  --color-f-wash: #f1f0ef;
+  --color-f-ink: #151a21;
+  --color-f-muted: #5f6168;
+  --color-f-faint: #8c8e94;
+  --color-f-line: #e8e4dd;
+  --color-f-wash: #f4f1ec;
 
   --font-display: var(--font-inter), -apple-system, "Segoe UI", ui-sans-serif, sans-serif;
   --font-sans: var(--font-inter), -apple-system, "Segoe UI", ui-sans-serif, sans-serif;
@@ -74,23 +82,24 @@
   color-scheme: light;
   --v-bg: #ffffff;
   --v-surface: #ffffff;
-  --v-surface-2: #f7f9f9;
-  --v-line: #eff3f4;
-  --v-line-strong: #cfd9de;
-  --v-text: #0f1419;
+  /* Humo (marca) para superficies secundarias; Carbón para texto y botones principales. */
+  --v-surface-2: #f4f1ec;
+  --v-line: #ece8e1;
+  --v-line-strong: #d6d0c6;
+  --v-text: #151a21;
   --v-muted: #536471;
   --v-faint: #8b98a5;
   --v-on-solid: #ffffff;
-  --v-accent: #1d9bf0;
-  --v-critical: #dc1f2c;
+  --v-accent: #ffb020;
+  --v-critical: #e8362f;
   --v-warning: #b54708;
   --v-ok: #00875a;
-  --v-info: #1d9bf0;
+  --v-info: #8f5a12;
   --v-drone: #7856ff;
   /* Fuego y estructuras afectadas (mapa, plano y escena 3D); el celeste es solo de interfaz. */
   --v-fire: #ea580c;
   --v-soft: 8%;
-  --v-scrollbar: #cfd9de;
+  --v-scrollbar: #d6d0c6;
 }
 
 [data-theme="vecino"] {
@@ -183,6 +192,32 @@
   50% {
     opacity: 0.55;
     box-shadow: 0 0 0 4px color-mix(in oklab, var(--v-critical) 0%, transparent);
+  }
+}
+
+/* Barras de "Vigía hablando" (ficha del incidente). */
+@keyframes vg-eq {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+/* Humo sobre casas con fuego (ficha): las variables las ajusta el mapa según zoom, rumbo y viento. */
+@keyframes vg-smoke {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.35);
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--smoke-dx, 0px) + var(--jx, 0px)), calc(-50% - var(--smoke-rise, 90px))) scale(2.6);
   }
 }
 

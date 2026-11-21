@@ -13,6 +13,7 @@ import {
   createProgressReporter,
   guessMime,
   isCrossOrigin,
+  isFileReadable,
   isRetryableStatus,
   mapWithConcurrency,
   normalizeHeading,
@@ -653,6 +654,32 @@ test("submitReport (video): sin decodificador y sin poder subir el video → err
     (err: unknown) => err instanceof SubmitReportError && err.code === "unsupported",
   );
   assert.equal(calls.bodies.length, 0);
+});
+
+test("isFileReadable: lee inicio y final; un archivo ilegible da false", async () => {
+  assert.equal(await isFileReadable(new Blob([new Uint8Array(200_000)])), true);
+  assert.equal(await isFileReadable(new Blob([])), true);
+  const unreadable = {
+    size: 41_519_147,
+    slice: () => ({
+      arrayBuffer: () => Promise.reject(new DOMException("A requested file could not be read", "NotReadableError")),
+    }),
+  } as unknown as Blob;
+  assert.equal(await isFileReadable(unreadable), false);
+});
+
+test("submitReport (video): archivo ilegible → error claro antes de registrar, sin PUT ni avisos", async () => {
+  const { deps, calls } = makeDeps({ isReadable: async () => false });
+  await assert.rejects(
+    runSubmitReport({ kind: "video", file: makeFile("a.mp4", "video/mp4"), note: "" }, deps),
+    (err: unknown) =>
+      err instanceof SubmitReportError &&
+      err.stage === "extracting" &&
+      err.code === "unreadable" &&
+      !err.retryable &&
+      /Google Fotos/.test(err.message),
+  );
+  assert.deepEqual(calls.log, []);
 });
 
 test("submitReport (video): sin fotogramas y el servidor no da destino de video → error", async () => {

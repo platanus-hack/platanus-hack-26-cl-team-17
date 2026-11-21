@@ -755,6 +755,32 @@ export function buildMediaUserContent(input: MediaAnalysisInput): UserContent {
   return content;
 }
 
+/**
+ * Encabezado de un medio (incidente, metadatos y nota), igual al de buildMediaUserContent
+ * pero sin el texto de las imágenes. Lo usa el camino con detector YOLO (engine-detector.ts).
+ */
+export function buildMediaContextText(input: Pick<MediaAnalysisInput, "incident" | "media" | "now">): string {
+  const { incident, media, now } = input;
+  const origin = originOf(incident);
+  return [
+    "# Incidente",
+    incidentBlock(incident, now),
+    "",
+    `# Medio ${safeLabel(media.label)}`,
+    ...mediaHeaderLines(media, origin, now),
+    noteBlock(media),
+  ].join("\n");
+}
+
+/** Rótulo "Fotograma <idx> · t=<seg>s" de un fotograma, con la posición del dron si la trae. */
+export function mediaFrameLabel(
+  input: Pick<MediaAnalysisInput, "incident" | "media">,
+  frame: { idx: number; t_s: number },
+): string {
+  const meta = input.media.frames.find((f) => f.idx === frame.idx);
+  return `Fotograma ${frame.idx} · t=${seconds(frame.t_s)}s${framePositionText(meta, originOf(input.incident))}`;
+}
+
 export function buildCommsUserContent(input: CommsAnalysisInput): UserContent {
   const { incident, now, previous } = input;
   const prev = previous

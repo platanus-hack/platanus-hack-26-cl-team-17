@@ -127,6 +127,30 @@ export const config = {
   get ttsModel() {
     return env("VIGIA_TTS_MODEL") || "eleven_flash_v2_5";
   },
+  /**
+   * Detector YOLO (vigia/detector, p. ej. http://127.0.0.1:8765). Con él, cada cuadro pasa
+   * primero por YOLO y Claude razona sobre las detecciones más un cuadro anotado.
+   * Vacío = sin detector: el análisis manda los fotogramas a Claude con visión, como antes.
+   */
+  get detectorUrl() {
+    return env("VIGIA_DETECTOR_URL").replace(/\/$/, "");
+  },
+  /** Agente Vigía: escucha continua de las emergencias activas. VIGIA_AGENT=0 lo apaga. */
+  get vigiaAgent() {
+    return env("VIGIA_AGENT") !== "0";
+  },
+  /** Modelo del agente Vigía. Responde en segundos: por defecto esfuerzo bajo y modo rápido. */
+  get vigiaAgentModel() {
+    return env("VIGIA_AGENT_MODEL") || "claude-opus-5-5";
+  },
+  get vigiaAgentEffort(): "low" | "medium" | "high" | "xhigh" | "max" {
+    const v = env("VIGIA_AGENT_EFFORT");
+    return v === "medium" || v === "high" || v === "xhigh" || v === "max" ? v : "low";
+  },
+  /** VIGIA_AGENT_FAST=0 apaga el modo rápido del agente (solo existe en Opus). */
+  get vigiaAgentFast() {
+    return env("VIGIA_AGENT_FAST") !== "0";
+  },
   get hasAnthropic() {
     return Boolean(env("ANTHROPIC_API_KEY") || env("ANTHROPIC_AUTH_TOKEN"));
   },

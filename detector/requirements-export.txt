@@ -1,0 +1,11 @@
+# Solo para export.py (descargar pesos, fijar vocabulario, exportar a ONNX).
+# torch y torchvision van primero y desde el índice CPU, para no bajar CUDA:
+#   uv pip install --python .venv/bin/python --index-url https://download.pytorch.org/whl/cpu torch torchvision
+#   uv pip install --python .venv/bin/python -r requirements-export.txt
+# Versiones probadas: torch 2.15.0+cpu, torchvision 0.29.2+cpu, ultralytics 8.4.216, Python 3.14.10.
+ultralytics>=8.4.0
+onnx>=1.16
+onnxslim>=0.1.50
+onnxruntime>=1.20
+# Tokenizador que YOLOE usa con MobileCLIP2 (ultralytics lo instalaría solo de no estar).
+clip @ git+https://github.com/ultralytics/CLIP.git

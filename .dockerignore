@@ -34,7 +34,9 @@ blob-report
 *.log
 npm-debug.log*
 
-# Job de GPU (imagen aparte en gpu/splat) y entornos de Python
+# Job de GPU (imagen aparte en gpu/splat), detector YOLO (servicio Python aparte, ~340 MB
+# de modelos) y entornos de Python
 gpu
+detector
 **/.venv
 **/__pycache__
