@@ -60,7 +60,7 @@ NEXT_PUBLIC_MAP_STYLE_LIGHT="${NEXT_PUBLIC_MAP_STYLE_LIGHT:-}"
 SPLAT_JOB="${SPLAT_JOB:-projects/${PROJECT}/locations/europe-west1/jobs/vigia-splat}"
 VIGIA_AI_MODEL="${VIGIA_AI_MODEL:-}"
 VIGIA_AI_EFFORT="${VIGIA_AI_EFFORT:-}"
-VIGIA_AI_FAST="${VIGIA_AI_FAST:-}"
+VIGIA_AI_FAST="${VIGIA_AI_FAST:-1}"
 
 # 1 → falla si el secreto de Anthropic no tiene valor (por defecto se despliega con IA simulada).
 REQUIRE_ANTHROPIC="${REQUIRE_ANTHROPIC:-0}"
