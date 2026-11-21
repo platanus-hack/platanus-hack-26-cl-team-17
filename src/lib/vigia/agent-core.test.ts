@@ -252,3 +252,12 @@ test("observe: YOLO en vivo del dron despierta a Vigía solo cuando aparece algo
   const lying = observe(world({ drones: [drone(12, [det("persona", 0.8, "tendido")])] }), { ...state, cursors: again.cursors }, NOW + 1000);
   assert.ok(lying.events.some((e) => e.type === "dron_yolo"), "una persona tendida sí");
 });
+
+test("una transmisión de Zello que le habla a Vigía (aunque diga «Viking») es pregunta; sin texto no cuenta", async () => {
+  const { isObacQuestion, hasContent } = await import("./world");
+  assert.equal(isObacQuestion({ source: "zello", speaker: "Agustin_Arevalo", text: "Eh, atento, Viking. Necesito conocer la situación del incendio" }), true);
+  assert.equal(isObacQuestion({ source: "zello", speaker: "nicopad22", text: "Lucas por favor pide el cambio" }), false);
+  assert.equal(isObacQuestion({ source: "manual", speaker: "B-3", text: "Viking" }), false);
+  assert.equal(hasContent("[Transmisión sin transcribir: escuchar la grabación]"), false);
+  assert.equal(hasContent("B-3 en 6-0"), true);
+});

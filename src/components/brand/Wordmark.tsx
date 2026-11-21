@@ -12,6 +12,8 @@ export interface WordmarkProps {
   tagline?: boolean;
   /** Si se indica, el logotipo es un enlace. */
   href?: string;
+  /** "light" = sobre fondos oscuros (texto blanco). */
+  tone?: "dark" | "light";
   className?: string;
 }
 
@@ -23,15 +25,17 @@ const SIZES = {
 } as const;
 
 /** Logotipo: faro + «vigilia» en minúsculas (Carbón), con bajada opcional. */
-export function Wordmark({ size = "md", tagline = false, href, className }: WordmarkProps) {
+export function Wordmark({ size = "md", tagline = false, href, tone = "dark", className }: WordmarkProps) {
   const s = SIZES[size];
   const content = (
     <>
       <Logo size={s.logo} title="" className="text-text" />
       <span className="flex min-w-0 flex-col">
-        <span className={cn("font-display leading-none font-bold tracking-[-0.02em] text-text", s.name)}>vigilia</span>
+        <span className={cn("font-display leading-none font-bold tracking-[-0.02em]", tone === "light" ? "text-white" : "text-text", s.name)}>
+          vigilia
+        </span>
         {tagline ? (
-          <span className={cn("mt-1 leading-snug text-muted", s.tagline)}>{BRAND_TAGLINE}</span>
+          <span className={cn("mt-1 leading-snug", tone === "light" ? "text-white/75" : "text-muted", s.tagline)}>{BRAND_TAGLINE}</span>
         ) : null}
       </span>
     </>

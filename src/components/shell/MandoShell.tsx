@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -10,8 +10,6 @@ import {
   Ellipsis,
   Loader2,
   LogOut,
-  PanelLeftClose,
-  PanelLeftOpen,
   Siren,
   Users,
   type LucideIcon,
@@ -64,45 +62,9 @@ const NAV_PERSONAL: NavItem = {
   isActive: (p) => p === PERSONAL_PATH || p.startsWith(`${PERSONAL_PATH}/`),
 };
 
-/* ───────────── Menú lateral colapsable (se recuerda en el navegador) ───────────── */
-
-const MENU_KEY = "vigia-menu-expandido";
-const MENU_EVENT = "vigia-menu-cambio";
-
-function readMenuExpanded(): boolean {
-  try {
-    return localStorage.getItem(MENU_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function subscribeMenu(onChange: () => void): () => void {
-  window.addEventListener("storage", onChange);
-  window.addEventListener(MENU_EVENT, onChange);
-  return () => {
-    window.removeEventListener("storage", onChange);
-    window.removeEventListener(MENU_EVENT, onChange);
-  };
-}
-
-/** Menú expandido (íconos y textos) o contraído (solo íconos, ocupa menos). Por defecto contraído. */
-function useMenuExpanded(): [boolean, () => void] {
-  const expanded = useSyncExternalStore(subscribeMenu, readMenuExpanded, () => false);
-  const toggle = useCallback(() => {
-    try {
-      localStorage.setItem(MENU_KEY, readMenuExpanded() ? "0" : "1");
-    } catch {
-      /* sin almacenamiento: no se recuerda */
-    }
-    window.dispatchEvent(new Event(MENU_EVENT));
-  }, []);
-  return [expanded, toggle];
-}
-
 /**
- * Marco del puesto de mando al estilo de X: barra lateral con marca, navegación y sesión
- * (solo íconos en pantallas medianas; arriba en teléfonos) y una columna con encabezado y contenido.
+ * Marco del puesto de mando: una sola barra superior (sin menú lateral) con la marca, que
+ * lleva a la portada, el regreso, el título, las acciones de la pantalla y la sesión.
  */
 export function MandoShell({
   children,
@@ -118,13 +80,13 @@ export function MandoShell({
   const pathname = usePathname();
   const contentId = useId();
   const staffAuth = mode?.auth === "staff";
-  const nav = staffAuth && staff?.role === "admin" ? [NAV_INCIDENTS, NAV_PERSONAL] : [NAV_INCIDENTS];
-  // En pantallas anchas el menú se puede expandir; contraído deja solo los íconos.
-  const [expanded, toggleMenu] = useMenuExpanded();
+  const nav = staffAuth && staff?.role === "admin" ? [NAV_INCIDENTS, NAV_PERSONAL] : [];
+  // Sin regreso propio, el tablero vuelve a la portada.
+  const backLink = back ?? (pathname === "/mando" ? { href: "/", label: "Volver al inicio" } : null);
 
   return (
     // relative: los elementos absolutos (p. ej. sr-only) quedan recortados aquí y no alargan el documento.
-    <div className={cn("relative flex h-dvh overflow-hidden bg-bg text-text", className)}>
+    <div className={cn("relative flex h-dvh flex-col overflow-hidden bg-bg text-text", className)}>
       <a
         href={`#${contentId}`}
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-full focus:border focus:border-line-strong focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:text-text"
@@ -132,71 +94,37 @@ export function MandoShell({
         Saltar al contenido
       </a>
 
-      <aside
-        className={cn(
-          "hidden w-[76px] shrink-0 flex-col items-center border-r border-line px-2 transition-[width] md:flex",
-          expanded && "xl:w-64 xl:items-stretch xl:px-3",
-        )}
-      >
+      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-bg/85 px-2 backdrop-blur-md sm:gap-3 sm:px-4">
+        {backLink ? (
+          <Link
+            href={backLink.href}
+            title={backLink.label}
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-text transition-colors hover:bg-surface-2"
+          >
+            <ArrowLeft aria-hidden className="size-5" />
+            <span className="sr-only">{backLink.label}</span>
+          </Link>
+        ) : null}
+
         <Link
-          href="/mando"
-          aria-label="Vigía: ir a incidentes"
-          className="mt-1 flex size-[52px] shrink-0 items-center justify-center rounded-full text-text transition-colors hover:bg-surface-2"
+          href="/"
+          title="Ir a la portada"
+          className="flex shrink-0 items-center gap-2 rounded-full py-1 pr-2 pl-1 transition-colors hover:bg-surface-2"
         >
-          <Logo size={30} title="" />
+          <Logo size={26} title="" />
+          <span className="hidden font-display text-[17px] font-bold tracking-[-0.02em] sm:inline">vigilia</span>
         </Link>
 
-        <nav aria-label="Principal" className="mt-1">
-          <ul className="flex flex-col gap-1">
-            {nav.map((item) => (
-              <li key={item.href}>
-                <SideNavLink item={item} active={item.isActive(pathname)} expanded={expanded} />
-              </li>
-            ))}
-          </ul>
-        </nav>
+        <span aria-hidden="true" className="hidden h-6 w-px bg-line sm:block" />
 
-        <button
-          type="button"
-          onClick={toggleMenu}
-          aria-expanded={expanded}
-          title={expanded ? "Contraer menú" : "Expandir menú"}
-          className={cn(
-            "mt-1 hidden items-center gap-5 rounded-full p-3 text-muted transition-colors hover:bg-surface-2 hover:text-text xl:flex",
-            expanded ? "xl:justify-start xl:pr-6" : "justify-center",
-          )}
-        >
-          {expanded ? <PanelLeftClose aria-hidden className="size-[22px] shrink-0" /> : <PanelLeftOpen aria-hidden className="size-[22px] shrink-0" />}
-          <span className={cn("text-[15px]", expanded ? "" : "sr-only")}>{expanded ? "Contraer menú" : "Expandir menú"}</span>
-        </button>
-
-        <div className={cn("mt-auto flex flex-col gap-3 pb-3", expanded && "xl:items-stretch")}>
-          {mode && expanded ? (
-            <div className="hidden px-3 xl:block">
-              <ModeBadges mode={mode} compact />
-            </div>
-          ) : null}
-          {expanded ? (
-            <div className="hidden px-3 text-sm text-muted xl:block">
-              <LiveClock />
-            </div>
-          ) : null}
-          {staffAuth && staff ? <UserMenu staff={staff} placement="sidebar" expanded={expanded} /> : null}
+        <div className="min-w-0 flex-1">
+          {title ? <h1 className="truncate text-lg leading-6 font-bold">{title}</h1> : null}
+          {subtitle ? <div className="truncate text-[13px] leading-4 text-muted">{subtitle}</div> : null}
         </div>
-      </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-[53px] shrink-0 items-center gap-2 border-b border-line bg-bg/85 px-2 backdrop-blur-md sm:gap-3 sm:px-4">
-          {/* Teléfono: la barra lateral no cabe; marca y navegación van aquí, solo con íconos. */}
-          <Link
-            href="/mando"
-            aria-label="Vigía: ir a incidentes"
-            className="flex size-9 shrink-0 items-center justify-center rounded-full text-text transition-colors hover:bg-surface-2 md:hidden"
-          >
-            <Logo size={22} title="" />
-          </Link>
-          <nav aria-label="Principal" className="shrink-0 md:hidden">
-            <ul className="flex items-center">
+        {nav.length > 0 ? (
+          <nav aria-label="Principal" className="shrink-0">
+            <ul className="flex items-center gap-1">
               {nav.map((item) => {
                 const active = item.isActive(pathname);
                 const Icon = item.icon;
@@ -206,83 +134,44 @@ export function MandoShell({
                       href={item.href}
                       aria-current={active ? "page" : undefined}
                       title={item.label}
-                      className="flex size-9 items-center justify-center rounded-full transition-colors hover:bg-surface-2"
+                      className={cn(
+                        "flex h-9 items-center gap-1.5 rounded-full px-3 text-[14px] transition-colors hover:bg-surface-2",
+                        active ? "font-semibold text-text" : "text-muted",
+                      )}
                     >
-                      <Icon aria-hidden className="size-5" strokeWidth={active ? 2.5 : 1.75} />
-                      <span className="sr-only">{item.label}</span>
+                      <Icon aria-hidden className="size-4" />
+                      <span className="hidden md:inline">{item.label}</span>
                     </Link>
                   </li>
                 );
               })}
             </ul>
           </nav>
+        ) : null}
 
-          {back ? (
-            <Link
-              href={back.href}
-              title={back.label}
-              className="flex size-9 shrink-0 items-center justify-center rounded-full text-text transition-colors hover:bg-surface-2"
-            >
-              <ArrowLeft aria-hidden className="size-5" />
-              <span className="sr-only">{back.label}</span>
-            </Link>
-          ) : null}
+        {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
 
-          <div className="min-w-0 flex-1">
-            {title ? <h1 className="truncate text-xl leading-6 font-extrabold">{title}</h1> : null}
-            {subtitle ? <div className="truncate text-[13px] leading-4 text-muted">{subtitle}</div> : null}
+        <div className="hidden shrink-0 text-sm text-muted lg:block">
+          <LiveClock />
+        </div>
+
+        {mode ? (
+          <div className="shrink-0">
+            <ModeBadges mode={mode} compact />
           </div>
+        ) : null}
 
-          {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
-
-          <div className={cn("hidden shrink-0 text-sm text-muted sm:block", expanded && "xl:hidden")}>
-            <LiveClock />
+        {staffAuth && staff ? (
+          <div className="shrink-0">
+            <UserMenu staff={staff} placement="header" />
           </div>
+        ) : null}
+      </header>
 
-          {mode ? (
-            <>
-              <div className={cn("hidden shrink-0 lg:block", expanded && "xl:hidden")}>
-                <ModeBadges mode={mode} />
-              </div>
-              <div className="shrink-0 lg:hidden">
-                <ModeBadges mode={mode} compact />
-              </div>
-            </>
-          ) : null}
-
-          {staffAuth && staff ? (
-            <div className="shrink-0 md:hidden">
-              <UserMenu staff={staff} placement="header" />
-            </div>
-          ) : null}
-        </header>
-
-        <main id={contentId} tabIndex={-1} className={cn("relative min-h-0 flex-1 outline-none", contentClassName)}>
-          {children}
-        </main>
-      </div>
+      <main id={contentId} tabIndex={-1} className={cn("relative min-h-0 flex-1 outline-none", contentClassName)}>
+        {children}
+      </main>
     </div>
-  );
-}
-
-/**
- * Enlace de la barra lateral: ícono grande y, con el menú expandido en pantallas anchas,
- * texto de 20 px; el activo va en negrita.
- */
-function SideNavLink({ item, active, expanded }: { item: NavItem; active: boolean; expanded: boolean }) {
-  const Icon = item.icon;
-  return (
-    <Link
-      href={item.href}
-      aria-current={active ? "page" : undefined}
-      title={item.label}
-      className={cn("group flex justify-center text-xl text-text", expanded && "xl:justify-start")}
-    >
-      <span className={cn("flex items-center gap-5 rounded-full p-3 transition-colors group-hover:bg-surface-2", expanded && "xl:pr-6")}>
-        <Icon aria-hidden className="size-[26px] shrink-0" strokeWidth={active ? 2.5 : 1.75} />
-        <span className={cn("sr-only", expanded && "xl:not-sr-only", active ? "font-bold" : "font-normal")}>{item.label}</span>
-      </span>
-    </Link>
   );
 }
 

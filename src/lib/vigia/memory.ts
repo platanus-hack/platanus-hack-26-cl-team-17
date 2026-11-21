@@ -55,7 +55,8 @@ export function applyOps(state: VigiaState, ops: VigiaOp[], nowMs: number): Vigi
         const lastSpoken = state.last_spoken_at ? Date.parse(state.last_spoken_at) : null;
         const wanted = o.u.speak !== false && o.u.kind !== "propuesta";
         const speak =
-          wanted && speechAllowed({ priority: o.u.priority, lastSpokenAt: lastSpoken, now: nowMs, silenced: state.silenced });
+          wanted &&
+          speechAllowed({ priority: o.u.priority, lastSpokenAt: lastSpoken, now: nowMs, silenced: state.silenced, kind: o.u.kind });
         state.seq += 1;
         const u: VigiaUtterance = { ...o.u, seq: state.seq, speak };
         if (speak) state.last_spoken_at = new Date(nowMs).toISOString();

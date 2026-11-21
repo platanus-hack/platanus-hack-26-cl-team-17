@@ -28,7 +28,17 @@ import { emitUtterances } from "./outbox";
 import { VIGIA_SYSTEM_PROMPT } from "./prompt";
 import { detectSilenceCommand } from "./rules";
 import { getVigiaState, updateVigiaState } from "./state-store";
-import { addAction, addUtterance, runTool, statusLine, VIGIA_TOOLS, type TurnContext } from "./tools";
+import {
+  addAction,
+  addUtterance,
+  escucharRadio,
+  pendientesText,
+  runTool,
+  statusLine,
+  verHallazgos,
+  VIGIA_TOOLS,
+  type TurnContext,
+} from "./tools";
 import type { VigiaState, VigiaStatus, VigiaUtterance } from "./types";
 import { loadWorld, type World } from "./world";
 
@@ -104,6 +114,22 @@ function describeEvent(e: VigiaEvent): string {
   }
 }
 
+/**
+ * Con una pregunta del OBAC, lo que hace falta para responder va en el mismo mensaje: así
+ * contesta en la primera llamada, sin ir a buscar con otras herramientas (cada vuelta extra
+ * son segundos de radio en silencio).
+ */
+function answerContext(world: World, state: VigiaState, nowMs: number): string {
+  const clipTo = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1)}…`);
+  return [
+    "CONTEXTO PARA RESPONDER (ya lo tienes; no necesitas otras herramientas antes de responder):",
+    clipTo(verHallazgos(world), 2200),
+    "Radio reciente:",
+    clipTo(escucharRadio(world, 8), 1200),
+    `Pendientes: ${clipTo(pendientesText(state, nowMs), 400)}`,
+  ].join("\n");
+}
+
 function turnMessage(world: World, state: VigiaState, events: VigiaEvent[], nowMs: number): string {
   const s = statusLine(world);
   const lastSpoken = state.last_spoken_at ? Math.round((nowMs - Date.parse(state.last_spoken_at)) / 1000) : null;
@@ -119,6 +145,13 @@ function turnMessage(world: World, state: VigiaState, events: VigiaEvent[], nowM
     "",
     "EVENTOS DE ESTA VUELTA:",
     ...events.map(describeEvent),
+    ...(events.some((e) => e.type === "pregunta")
+      ? [
+          "",
+          "PRIMERO responde la pregunta del OBAC con hablarle_al_obac (tipo \"respuesta\") en esta misma llamada: directo, con lo que sabes y lo que no. Lo demás, después.",
+          answerContext(world, state, nowMs),
+        ]
+      : []),
   ]
     .filter((l) => l !== "")
     .join("\n");

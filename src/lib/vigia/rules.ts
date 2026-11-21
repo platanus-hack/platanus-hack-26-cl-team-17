@@ -162,22 +162,48 @@ export interface SpeechCheck {
   now: number;
   /** El OBAC dijo "Vigía, silencio". */
   silenced: boolean;
+  /** Tipo de mensaje (opcional): "respuesta" = el OBAC preguntó y espera la respuesta. */
+  kind?: string;
 }
 
 /**
  * true si el mensaje puede ir por voz ahora. Una posible persona pasa siempre
- * (también en silencio y antes de los 20 s); el resto, solo sin silencio y con
- * SPOKEN_MIN_INTERVAL_MS desde el último mensaje hablado. Lo que no pasa queda en pantalla.
+ * (también en silencio y antes de los 20 s). La respuesta a una pregunta del OBAC pasa
+ * sin esperar los 20 s (él la pidió), pero respeta el silencio. El resto, solo sin
+ * silencio y con SPOKEN_MIN_INTERVAL_MS desde el último mensaje hablado.
+ * Lo que no pasa queda en pantalla.
  */
 export function speechAllowed(p: SpeechCheck): boolean {
   if (p.priority === "persona") return true;
   if (p.silenced) return false;
+  if (p.kind === "respuesta") return true;
   return p.lastSpokenAt === null || p.now - p.lastSpokenAt >= SPOKEN_MIN_INTERVAL_MS;
 }
 
 /** El texto le habla a Vigía ("Vigía, …" o "… Vigía"). */
 export function addressesVigia(text: string): boolean {
   return /\bvigia\b/.test(fold(text));
+}
+
+/**
+ * Cómo suele quedar «Vigía» en una transcripción de radio: «Viking», «vigila», «vigilia»,
+ * «bigía», «vijía», «vixía», «vigía» con o sin tilde… (medido en la prueba con Zello).
+ */
+const VIGIA_HEARD = /\b(vig[ií]a|vigias|vigila|vigilia|viking|vikin|vikia|vijia|vixia|bigia|bijia|vigea|vigi)\b/;
+
+/**
+ * La transmisión le habla a Vigía, tolerando cómo la transcribe la radio. Se busca en las
+ * primeras palabras o al final ("Ese vigila"), donde va el vocativo.
+ */
+export function mentionsVigia(text: string): boolean {
+  const words = fold(text)
+    .replace(/[^a-z0-9ñ\s]/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+  if (words.length === 0) return false;
+  const head = words.slice(0, 8).join(" ");
+  const tail = words.slice(-4).join(" ");
+  return VIGIA_HEARD.test(head) || VIGIA_HEARD.test(tail);
 }
 
 /**

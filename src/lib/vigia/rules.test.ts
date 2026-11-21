@@ -5,6 +5,7 @@ import {
   addressesVigia,
   comparePriority,
   detectSilenceCommand,
+  mentionsVigia,
   sanitizeForObac,
   sanitizeVideoRequest,
   speechAllowed,
@@ -116,4 +117,21 @@ test("pedido de video: siempre 'Sin acercarse' y nunca pide entrar", () => {
   assert.equal(sanitizeVideoRequest("Graben el patio. Sin acercarse.").text, "Graben el patio. Sin acercarse.");
   assert.equal(sanitizeVideoRequest("Acérquese a la ventana y grabe").blocked, true);
   assert.equal(sanitizeVideoRequest("Entre al pasaje y grabe el lado C").blocked, true);
+});
+
+test("la respuesta al OBAC va por voz sin esperar los 20 s, pero respeta el silencio", () => {
+  const now = 1_000_000;
+  assert.equal(speechAllowed({ priority: "resto", kind: "respuesta", lastSpokenAt: now - 3000, now, silenced: false }), true);
+  assert.equal(speechAllowed({ priority: "resto", kind: "respuesta", lastSpokenAt: now - 3000, now, silenced: true }), false);
+  assert.equal(speechAllowed({ priority: "resto", kind: "resumen", lastSpokenAt: now - 3000, now, silenced: false }), false);
+});
+
+test("reconoce el vocativo aunque la radio transcriba mal «Vigía»", () => {
+  // Transcripciones reales de la prueba con Zello (21 nov).
+  assert.equal(mentionsVigia("Eh, atento, Viking. Necesito conocer la situación del incendio. Si tienes algún informe, cambio"), true);
+  assert.equal(mentionsVigia("Si hay alguien que me está hablando, por favor, que se ubique. Ese vigila"), true);
+  assert.equal(mentionsVigia("Vigía, ¿qué tenemos?"), true);
+  assert.equal(mentionsVigia("Oye vigilia, ¿se ve alguien en el lado B?"), true);
+  assert.equal(mentionsVigia("Lucas por favor pide el cambio"), false);
+  assert.equal(mentionsVigia("Central, B-3, 6-0 con 8 voluntarios. 7-0 en la esquina norte."), false);
 });

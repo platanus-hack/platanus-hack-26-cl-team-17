@@ -6,12 +6,14 @@
 import type { LiveInsightView } from "@/lib/contract";
 import type { CommEntry, Incident, Media, MediaAnalysis, SituationReport } from "@/lib/domain";
 import { isMissionActive } from "@/lib/drone/plan";
+import { UNTRANSCRIBED_COMM_TEXT } from "@/lib/labels";
 import { getLiveDetections, listLiveInsights } from "@/lib/drone/live";
 import { isObacComm, isVigiaVoiceComm } from "@/lib/server/zello/channels";
 import { getFiles, getStore } from "@/lib/store";
 import { loadMediaDetections } from "@/lib/vision/media-detections";
 import type { aggregateDetections, DetectResult } from "@/lib/vision/types";
 import { computeCoverage, type SideScheme } from "./coverage";
+import { mentionsVigia } from "./rules";
 import { expandClaves } from "./radio";
 import type { VigiaSideCoverage } from "./types";
 
@@ -63,6 +65,20 @@ export interface World {
   scheme: SideScheme;
   coverage: VigiaSideCoverage[];
   blind: string[];
+}
+
+/** Texto útil de una transmisión: ni vacío ni la marca de "sin transcribir". */
+export function hasContent(text: string): boolean {
+  const t = text.trim();
+  return t !== "" && t !== UNTRANSCRIBED_COMM_TEXT;
+}
+
+/**
+ * La transmisión de Zello es una pregunta para Vigía: la regla del puente (usuario del OBAC
+ * o «Vigía, …» al inicio) o el vocativo como suele transcribirse («Viking», «vigila»…).
+ */
+export function isObacQuestion(c: Pick<CommEntry, "source" | "speaker" | "text">): boolean {
+  return isObacComm(c) || (c.source === "zello" && mentionsVigia(c.text));
 }
 
 /** Las transmisiones de Vigía por Zello vuelven a la bitácora: no se escucha a sí misma. */
@@ -126,7 +142,9 @@ export async function loadWorld(incidentId: string): Promise<World | null> {
         detections: detById.get(m.id) ?? null,
       })),
     radio: comms
-      .filter((c) => !isVigiaVoiceComm(c) && !isVigiaSpeaker(c.speaker))
+      // Ni lo que dijo Vigía ni las transmisiones sin texto (toques del PTT, ruido): no aportan y hacían
+      // que Vigía hablara de ellas en vez de responder.
+      .filter((c) => !isVigiaVoiceComm(c) && !isVigiaSpeaker(c.speaker) && hasContent(c.text))
       .sort((a, b) => a.seq - b.seq)
       .map((c) => ({
         seq: c.seq,
@@ -136,7 +154,7 @@ export async function loadWorld(incidentId: string): Promise<World | null> {
         text: c.text,
         expanded: expandClaves(c.text),
         source: c.source,
-        obac: isObacComm(c),
+        obac: isObacQuestion(c),
       })),
     drones: missions.map((m) => ({
       mission_id: m.id,

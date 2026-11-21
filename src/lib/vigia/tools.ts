@@ -59,7 +59,7 @@ function push(ctx: TurnContext, op: VigiaOp): void {
       const speak =
         op.u.speak !== false &&
         op.u.kind !== "propuesta" &&
-        speechAllowed({ priority: op.u.priority, lastSpokenAt: lastSpoken, now: ctx.nowMs, silenced: ctx.state.silenced });
+        speechAllowed({ priority: op.u.priority, lastSpokenAt: lastSpoken, now: ctx.nowMs, silenced: ctx.state.silenced, kind: op.u.kind });
       ctx.state.seq += 1;
       ctx.state.utterances.push({ ...op.u, seq: ctx.state.seq, speak });
       if (speak) ctx.state.last_spoken_at = new Date(ctx.nowMs).toISOString();

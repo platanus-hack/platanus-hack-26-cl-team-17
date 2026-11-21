@@ -246,7 +246,7 @@ export function DashboardView() {
             <h2 id="incidents-heading" className="label-caps text-xs text-muted">
               {FILTER_LABEL[filter]} · por urgencia
             </h2>
-            <ul className="flex flex-col gap-2">
+            <ul className="flex flex-col divide-y divide-line">
               {rest.map((i) => (
                 <li key={i.id}>
                   <IncidentCard incident={i} selected={selectedId === i.id} onHover={setHoveredId} />
