@@ -1,8 +1,8 @@
 /**
  * Registro de entradas de la bitácora radial. Solo servidor.
  *
- * Lo usan la ruta del mando (POST /api/incidents/[id]/comms y …/comms/audio) y la
- * radio pública de demostración (POST /api/public/incidents/[code]/radio).
+ * Lo usan las rutas del mando (POST /api/incidents/[id]/comms y …/comms/audio), por
+ * donde también registra el puente Zello.
  */
 import type { CommEntry } from "@/lib/domain";
 import { errors } from "@/lib/http";

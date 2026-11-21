@@ -104,8 +104,6 @@ export interface RuntimeMode {
   model: string | null;
   /** cloud_run_gpu = hay job de GPU configurado para 3D Gaussian Splatting; off = no disponible. */
   splat?: "cloud_run_gpu" | "off";
-  /** true = radio de demostración sin sesión activa en /radio/<código> (VIGIA_DEMO_RADIO). */
-  demo_radio?: boolean;
 }
 
 /* ───────────── Personal ───────────── */

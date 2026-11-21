@@ -59,18 +59,6 @@ export const config = {
     return env("VIGIA_ADMIN_PASSWORD");
   },
   /**
-   * Radio de demostración sin sesión (/radio/<código>): cualquiera con el código de
-   * un incidente abierto puede hablar por el micrófono y su transmisión entra a la
-   * bitácora como dictado. VIGIA_DEMO_RADIO=1 la activa, =0 la apaga; sin valor,
-   * solo está activa en modo local (sin Postgres).
-   */
-  get demoRadio() {
-    const v = env("VIGIA_DEMO_RADIO");
-    if (v === "1") return true;
-    if (v === "0") return false;
-    return !env("DATABASE_URL");
-  },
-  /**
    * Zello: lo usa el puente aparte (tools/zello-bridge), no el servidor web.
    * Cuenta del bot de Vigía (el *username* de Zello, no el correo).
    */
@@ -245,6 +233,5 @@ export function runtimeMode(): RuntimeMode {
     model: ai === "claude" ? config.aiModel : null,
     // El job lee y escribe en el bucket: sin Cloud Storage no hay GPU aunque haya job.
     splat: config.splatJob && isGcsConfigured() ? "cloud_run_gpu" : "off",
-    demo_radio: config.demoRadio,
   };
 }

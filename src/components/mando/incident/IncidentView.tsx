@@ -505,8 +505,6 @@ function IncidentScreen({ id }: IncidentViewProps) {
           pipeline={incident.pipeline}
           onChanged={refreshNow}
           highlightSeq={highlightSeq}
-          incidentCode={incident.code}
-          demoRadio={mode?.demo_radio === true}
           className="h-full"
         />
       </TabPanel>
