@@ -59,6 +59,14 @@ export interface PipelineDeps {
   now?: () => Date;
   /** Post-proceso de escenas. Por defecto `sanitizeScene` de ./scene-post; se inyecta en pruebas. */
   sanitizeScene?: (scene: SceneModel, ctx: SceneSanitizeContext) => SceneModel;
+  /**
+   * Anclaje de la escena saneada al mapa real (OSM). Se llama al empezar la fusión (así el
+   * mapa se descarga mientras responde el modelo) y devuelve la función que ancla, que debe
+   * resolver siempre (con la escena tal cual si falla o tarda). Sin inyectar no se ancla.
+   */
+  anchorScene?: (
+    incident: Pick<Incident, "lat" | "lng" | "type" | "scene">,
+  ) => (scene: SceneModel, media: readonly Media[]) => Promise<SceneModel>;
 }
 
 export interface Pipeline {
@@ -388,6 +396,25 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     return fn(scene, ctx);
   }
 
+  /** Prepara el anclaje al mapa real. Nunca lanza: ante cualquier fallo se guarda sin anclar. */
+  function prepareAnchor(incident: Incident): (scene: SceneModel, media: readonly Media[]) => Promise<SceneModel> {
+    let run: ((scene: SceneModel, media: readonly Media[]) => Promise<SceneModel>) | null = null;
+    try {
+      run = deps.anchorScene ? deps.anchorScene(incident) : null;
+    } catch (err) {
+      console.error("[pipeline] no se pudo preparar el anclaje al mapa", incident.id, err);
+    }
+    return async (scene, media) => {
+      if (!run) return scene;
+      try {
+        return await run(scene, media);
+      } catch (err) {
+        console.error("[pipeline] no se pudo anclar la escena al mapa", incident.id, err);
+        return scene;
+      }
+    };
+  }
+
   /** Agrega un evento sin dejar que un fallo del store corte el flujo. */
   async function safeEvent(input: NewEvent): Promise<void> {
     try {
@@ -708,6 +735,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     });
     const incident = await store.getIncident(incidentId);
     if (!incident) return false;
+    const anchor = prepareAnchor(incident);
     const [mediaList, comms] = await Promise.all([
       store.listMedia(incidentId),
       store.listComms(incidentId),
@@ -747,10 +775,13 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         "scene",
         (e) => e.fuseScene(input),
         async (value, kind) => {
-          const clean = await sanitize(value, {
-            incident: { lat: incident.lat, lng: incident.lng },
-            media: mediaList,
-          });
+          const clean = await anchor(
+            await sanitize(value, {
+              incident: { lat: incident.lat, lng: incident.lng },
+              media: mediaList,
+            }),
+            mediaList,
+          );
           await store.updateIncident(incidentId, {
             scene: clean,
             scene_engine: kind,
@@ -1127,6 +1158,14 @@ async function defaultPipeline(): Promise<Pipeline> {
     engine: getEngine(),
     fallbackEngine: getSimulatedEngine(),
     extractFrames: (media) => extractFramesOnServer(media, { store, files }),
+    anchorScene: (incident) => {
+      const osm = import("@/lib/osm");
+      // Descarga anticipada del entorno (la caché por tesela la reutiliza al anclar).
+      void osm.then((m) => m.prefetchOsmContext(incident)).catch(() => undefined);
+      // Las cámaras con GPS no se mueven; la escena previa conserva la nota de ajuste.
+      return async (scene, media) =>
+        (await (await osm).anchorSceneToOsm(scene, incident, { media, previous: incident.scene })).scene;
+    },
   });
 }
 

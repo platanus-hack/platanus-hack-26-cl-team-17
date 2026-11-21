@@ -521,6 +521,8 @@ export function runStoreContract(label: string, setup: () => Promise<StoreHarnes
         assertIso(first.at, "comm.at");
         assertIso(first.created_at, "comm.created_at");
 
+        assert.equal(first.audio_path, null, "sin grabación → null");
+
         const noAt = await s().addComm({ incident_id: a.id, text: "Sin hora", speaker: "", channel: "", source: "manual" });
         assert.equal(noAt.seq, 2);
         assertIso(noAt.at, "comm.at por defecto");
@@ -545,6 +547,21 @@ export function runStoreContract(label: string, setup: () => Promise<StoreHarnes
         );
         assert.deepEqual(list[0], first);
         assert.deepEqual(await s().listComms(randomUUID()), []);
+      });
+
+      it("addComm guarda la grabación de la transmisión (audio_path)", async () => {
+        const inc = await s().createIncident(newIncidentInput());
+        const audioPath = `incidents/${inc.id}/comms/grabacion.weba`;
+        const withAudio = await s().addComm({
+          incident_id: inc.id,
+          text: "B-3 6-3",
+          speaker: "B-3",
+          channel: "5-2",
+          source: "simulated",
+          audio_path: audioPath,
+        });
+        assert.equal(withAudio.audio_path, audioPath);
+        assert.equal((await s().listComms(inc.id))[0].audio_path, audioPath);
       });
     });
 

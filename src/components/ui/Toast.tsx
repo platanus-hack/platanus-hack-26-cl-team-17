@@ -165,11 +165,11 @@ function ToastItem({ toast: t, onDismiss }: ToastItemProps) {
         const next = event.relatedTarget;
         if (!(next instanceof Node) || !event.currentTarget.contains(next)) setPaused(false);
       }}
-      className="pointer-events-auto animate-enter overflow-hidden rounded-lg bg-surface"
+      className="pointer-events-auto animate-enter overflow-hidden rounded-2xl bg-surface"
     >
       <div
         className={cn(
-          "flex items-start gap-3 rounded-lg border p-3",
+          "flex items-start gap-3 rounded-2xl border p-3",
           critical ? "border-critical bg-critical-soft" : toneBorder[t.tone],
         )}
       >
@@ -178,10 +178,10 @@ function ToastItem({ toast: t, onDismiss }: ToastItemProps) {
         )}
         {Icon && <Icon aria-hidden="true" size={18} className={cn("mt-px shrink-0", toneText[t.tone])} />}
         <div className="min-w-0 flex-1">
-          <p className={cn("text-sm font-semibold break-words", critical ? "text-critical" : "text-text")}>
+          <p className={cn("line-clamp-2 text-sm font-semibold break-words", critical ? "text-critical" : "text-text")}>
             {t.title}
           </p>
-          {t.description && <div className="mt-0.5 text-sm break-words text-muted">{t.description}</div>}
+          {t.description && <div className="mt-0.5 line-clamp-3 text-sm break-words text-muted">{t.description}</div>}
           {t.action && (
             <Button
               size="sm"

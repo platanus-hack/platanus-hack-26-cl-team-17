@@ -128,6 +128,7 @@ export interface NewComm {
   channel: string;
   source: CommSource;
   at?: string;
+  audio_path?: string | null;
 }
 
 export interface NewMission {
@@ -235,9 +236,13 @@ export const storagePaths = {
     `incidents/${incidentId}/media/${mediaId}/video.${ext}`,
   frame: (incidentId: string, mediaId: string, idx: number) =>
     `incidents/${incidentId}/media/${mediaId}/frames/${String(idx).padStart(3, "0")}.jpg`,
+  /** Último cuadro del video en vivo de una misión (se sobrescribe; no es evidencia). */
+  live: (incidentId: string, missionId: string) => `incidents/${incidentId}/live/${missionId}.jpg`,
   /** Carpeta de una reconstrucción 3DGS (manifiesto de entrada y archivo de splats de salida). */
   reconstruction: (incidentId: string, reconstructionId: string) =>
     `incidents/${incidentId}/reconstructions/${reconstructionId}/`,
+  /** Grabación de una transmisión de radio. */
+  commAudio: (incidentId: string, audioId: string, ext: string) => `incidents/${incidentId}/comms/${audioId}.${ext}`,
   /** Extrae el id de incidente de una ruta del bucket, o null si no sigue la convención. */
   incidentIdOf: (path: string): string | null => {
     const m = /^incidents\/([0-9a-fA-F-]{8,64})\//.exec(path);

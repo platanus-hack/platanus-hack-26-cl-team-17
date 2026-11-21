@@ -323,6 +323,7 @@ function comm(seq: number, text: string, extra: Partial<CommEntry> = {}): CommEn
     speaker: "B-3",
     text,
     source: "manual",
+    audio_path: null,
     created_at: `2026-11-21T00:1${seq}:05.000Z`,
     ...extra,
   };

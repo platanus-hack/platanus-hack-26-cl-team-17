@@ -17,7 +17,7 @@ export interface LegendItem {
 
 const FILL: Record<Tone, string> = {
   critical: "bg-critical/30 border-critical",
-  accent: "bg-accent/35 border-accent",
+  accent: "bg-fire/35 border-fire",
   warning: "bg-warning/25 border-warning",
   info: "bg-info/20 border-info",
   ok: "bg-ok/25 border-ok",
@@ -27,7 +27,7 @@ const FILL: Record<Tone, string> = {
 
 const BORDER: Record<Tone, string> = {
   critical: "border-critical",
-  accent: "border-accent",
+  accent: "border-fire",
   warning: "border-warning",
   info: "border-info",
   ok: "border-ok",

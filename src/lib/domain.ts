@@ -896,6 +896,8 @@ export interface CommEntry {
   speaker: string;
   text: string;
   source: CommSource;
+  /** Grabación de la transmisión en el bucket (incidents/<id>/comms/…); null si es solo texto. */
+  audio_path: string | null;
   created_at: string;
 }
 
@@ -1012,6 +1014,10 @@ export const LIMITS = {
   FRAME_LONG_EDGE_PX: 1280,
   FRAME_JPEG_QUALITY: 0.82,
   MAX_FRAME_BYTES: 3_000_000,
+  /** Video en vivo del dron: cuadros chicos, varias veces por segundo. */
+  LIVE_FRAME_LONG_EDGE_PX: 640,
+  LIVE_FRAME_JPEG_QUALITY: 0.6,
+  MAX_LIVE_FRAME_BYTES: 400_000,
   /** Tope del video original; el análisis no depende de él (se analiza con fotogramas). */
   MAX_VIDEO_BYTES: 250 * 1024 * 1024,
   MAX_NOTE_CHARS: 600,
@@ -1019,10 +1025,15 @@ export const LIMITS = {
   AUTO_ATTACH_RADIUS_M: 250,
   NEARBY_RADIUS_M: 3000,
   DRONE_BATCH_FRAMES: 6,
-  /** Máximo de cuadros que entran a una reconstrucción 3DGS (la GPU de 96 GB aguanta ~200 a 518 px). */
-  SPLAT_MAX_FRAMES: 160,
+  /**
+   * Máximo de cuadros que entran a una reconstrucción 3DGS. VGGT corre por medio, así que el tope
+   * de memoria de la GPU (~400 cuadros a 518 px en 96 GB) aplica a cada video, no al total.
+   */
+  SPLAT_MAX_FRAMES: 300,
   /** Cuadros por segundo al muestrear los videos originales para la reconstrucción. */
   SPLAT_SAMPLE_FPS: 3,
+  /** Tope de una grabación de radio (una transmisión dura segundos). */
+  MAX_COMM_AUDIO_BYTES: 4 * 1024 * 1024,
 } as const;
 
 export const CreateReportInputSchema = z.object({
@@ -1054,6 +1065,8 @@ export const AddCommInputSchema = z.object({
   channel: z.string().trim().max(40).default(""),
   source: z.enum(["manual", "dictation", "simulated", "import"]).default("manual"),
   at: z.string().datetime().optional(),
+  /** Ruta devuelta por POST /api/incidents/[id]/comms/audio. */
+  audio_path: z.string().max(512).optional(),
 });
 export type AddCommInput = z.infer<typeof AddCommInputSchema>;
 

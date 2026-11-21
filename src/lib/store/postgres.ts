@@ -120,6 +120,7 @@ interface CommRow {
   speaker: string;
   text: string;
   source: CommEntry["source"];
+  audio_path: string | null;
   created_at: Date;
 }
 
@@ -185,7 +186,7 @@ const MEDIA_SELECT = `select ${MEDIA_BASE_COLS.split(",")
   ), '[]'::jsonb) as frames
   from media m`;
 
-const COMM_COLS = `id, incident_id, seq, at, channel, speaker, text, source, created_at`;
+const COMM_COLS = `id, incident_id, seq, at, channel, speaker, text, source, audio_path, created_at`;
 
 const MISSION_COLS = `id, incident_id, label, status, mode, pattern, radius_m, altitude_m,
   speed_ms, home_lat, home_lng, waypoints, command, last, track, frames_received, created_at,
@@ -284,6 +285,7 @@ function toComm(r: CommRow): CommEntry {
     speaker: r.speaker,
     text: r.text,
     source: r.source,
+    audio_path: r.audio_path ?? null,
     created_at: iso(r.created_at),
   };
 }
@@ -740,8 +742,8 @@ export function createPostgresStore(): Store {
       try {
         // seq lo asigna el trigger comms_assign_seq (next_seq).
         const rows = await query<CommRow>(
-          `insert into comms (incident_id, at, channel, speaker, text, source)
-           values ($1, coalesce($2::timestamptz, now()), $3, $4, $5, $6)
+          `insert into comms (incident_id, at, channel, speaker, text, source, audio_path)
+           values ($1, coalesce($2::timestamptz, now()), $3, $4, $5, $6, $7)
            returning ${COMM_COLS}`,
           [
             input.incident_id,
@@ -750,6 +752,7 @@ export function createPostgresStore(): Store {
             input.speaker,
             input.text,
             input.source,
+            input.audio_path ?? null,
           ],
         );
         return toComm(rows[0]);

@@ -1,13 +1,14 @@
 import type { Metadata, Viewport } from "next";
-import { JetBrains_Mono, Outfit } from "next/font/google";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import "./globals.css";
 
-const outfit = Outfit({
+/** Inter: lo más parecido, con licencia libre, a Chirp (la fuente de X). */
+const inter = Inter({
   subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
-  variable: "--font-outfit",
+  weight: ["400", "500", "600", "700", "800"],
+  variable: "--font-inter",
   display: "swap",
 });
 
@@ -43,7 +44,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="es-CL"
       data-theme="mando"
-      className={cn(outfit.variable, jetbrainsMono.variable)}
+      className={cn(inter.variable, jetbrainsMono.variable)}
     >
       <body className="min-h-dvh bg-bg font-sans text-text antialiased">
         <ToastProvider>{children}</ToastProvider>

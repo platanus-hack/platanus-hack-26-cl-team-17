@@ -57,7 +57,7 @@ export type UserContentBlock =
 export type UserContent = UserContentBlock[];
 
 /** Tareas de IA; sirven para registrar uso y para elegir prompt. */
-export type AITask = "media" | "comms" | "situation" | "scene";
+export type AITask = "media" | "comms" | "situation" | "scene" | "live";
 
 /** Datos del incidente que necesitan los motores. */
 export type IncidentContext = Pick<

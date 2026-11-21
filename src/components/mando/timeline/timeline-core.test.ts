@@ -9,6 +9,7 @@ import {
   initSeen,
   isTrivialDroneEvent,
   matchesFilter,
+  splitEngineNote,
   type TimelineBurstRow,
 } from "./timeline-core";
 import { droneTick, ev } from "./fixtures.test-helpers";
@@ -140,4 +141,13 @@ test("initSeen con eventos marca la base de inmediato", () => {
   assert.equal(s.baseline, true);
   assert.equal(s.seen.size, 2);
   assert.equal(s.fresh.size, 0);
+});
+
+test("splitEngineNote: quita el sufijo del motor de reglas (completo o recortado) y lo marca simulado", () => {
+  assert.deepEqual(splitEngineNote("Escena actualizada (motor de reglas, sin modelo)"), { text: "Escena actualizada", simulated: true });
+  assert.deepEqual(splitEngineNote("Atrapados: posible. Indicio (motor de re…"), { text: "Atrapados: posible. Indicio…", simulated: true });
+  // Paréntesis que no son el sufijo quedan intactos.
+  assert.deepEqual(splitEngineNote("Silueta en ventana (M2 · cuadro 3)"), { text: "Silueta en ventana (M2 · cuadro 3)", simulated: false });
+  assert.deepEqual(splitEngineNote("Humo negro (M…"), { text: "Humo negro (M…", simulated: false });
+  assert.deepEqual(splitEngineNote(""), { text: "", simulated: false });
 });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardPaste, Mic, PenLine, RadioTower } from "lucide-react";
+import { ClipboardPaste, Mic, PenLine, Radio, RadioTower } from "lucide-react";
 import { Badge, EmptyState, Panel, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { api, errorMessage } from "@/lib/client/api";
@@ -44,6 +44,13 @@ function CommsEmpty() {
             </span>
           </li>
           <li className="flex items-start gap-2">
+            <Radio aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
+            <span>
+              <strong className="text-text">Habla</strong> con «Hablar»: mantén apretado y habla por el micrófono;
+              al soltar se sube la grabación con su transcripción.
+            </span>
+          </li>
+          <li className="flex items-start gap-2">
             <ClipboardPaste aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
             <span>
               <strong className="text-text">Importa</strong> una transcripción pegada, p. ej.{" "}
@@ -66,6 +73,8 @@ export function CommsPanel({
   pipeline,
   onChanged,
   highlightSeq = null,
+  incidentCode,
+  demoRadio = false,
   className,
 }: CommsPanelProps) {
   // Entradas ya guardadas que el snapshot aún no trae, y entradas en vuelo o fallidas.
@@ -104,7 +113,9 @@ export function CommsPanel({
   const deliver = useCallback((p: Pick<PendingComm, "localId" | "incidentId" | "input">) => {
     queue.current = queue.current.then(async () => {
       try {
-        const { entry } = await api.comms.add(p.incidentId, p.input);
+        const { audio, ...input } = p.input;
+        const audioPath = audio ? (await api.comms.uploadAudio(p.incidentId, audio)).audio_path : undefined;
+        const { entry } = await api.comms.add(p.incidentId, { ...input, audio_path: audioPath });
         setPending((list) => list.filter((x) => x.localId !== p.localId));
         setConfirmed((list) => [...list, entry]);
         onChangedRef.current();
@@ -224,6 +235,7 @@ export function CommsPanel({
         channelOptions={channels}
         onSend={send}
         onOpenImport={() => setImportOpen(true)}
+        demoRadioHref={demoRadio && incidentCode ? `/radio/${encodeURIComponent(incidentCode)}` : null}
       />
 
       {importOpen && (

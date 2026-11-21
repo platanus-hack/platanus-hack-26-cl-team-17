@@ -113,6 +113,11 @@ export function channelSuggestions(entries: readonly CommEntry[], limit = 8): st
   );
 }
 
+/** URL estable (/api/files) de la grabación de una entrada. */
+export function commAudioUrl(audioPath: string): string {
+  return `/api/files/${audioPath.split("/").map(encodeURIComponent).join("/")}`;
+}
+
 /** Entrada que el panel envía (forma ya normalizada de AddCommInput). */
 export interface DraftComm {
   text: string;
@@ -121,6 +126,8 @@ export interface DraftComm {
   source: CommSource;
   /** ISO; si falta, el servidor usa la hora de ingreso. */
   at?: string;
+  /** Grabación de la transmisión: se sube primero y la entrada queda con su audio_path. */
+  audio?: Blob | null;
 }
 
 /** Entrada mostrada de inmediato mientras el servidor la confirma (o si falló). */

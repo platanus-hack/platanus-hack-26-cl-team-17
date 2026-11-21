@@ -23,12 +23,13 @@ interface RoleStyle {
 
 function roleStyle(role: NStructure["role"], p: Palette): RoleStyle {
   switch (role) {
+    // Maqueta blanca: muros claros semitransparentes (se ve lo que hay adentro); el rol se lee en el contorno.
     case "involved":
-      return { edge: p.accent, wall: p.accent, wallOpacity: 0.16, facadeOpacity: 0.3, edgeOpacity: 1 };
+      return { edge: p.accent, wall: p.surface, wallOpacity: 0.42, facadeOpacity: 0.5, edgeOpacity: 1 };
     case "exposure":
-      return { edge: p.warning, wall: p.warning, wallOpacity: 0.08, facadeOpacity: 0.16, edgeOpacity: 0.65 };
+      return { edge: p.warning, wall: p.surface, wallOpacity: 0.38, facadeOpacity: 0.45, edgeOpacity: 0.8 };
     default:
-      return { edge: p.lineStrong, wall: p.muted, wallOpacity: 0.07, facadeOpacity: 0.12, edgeOpacity: 0.9 };
+      return { edge: p.faint, wall: p.surface, wallOpacity: 0.34, facadeOpacity: 0.4, edgeOpacity: 0.9 };
   }
 }
 

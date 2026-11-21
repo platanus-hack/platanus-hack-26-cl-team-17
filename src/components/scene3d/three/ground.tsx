@@ -1,10 +1,11 @@
 "use client";
-/** Suelo con grilla de 10 m, anillos de 25/50 m y calles (bloqueadas con rayado). */
+/** Suelo punteado (lámina técnica), anillos de 25/50 m y calles lisas (bloqueadas con rayado). */
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Line } from "@react-three/drei";
 import type { XY } from "../geometry";
 import type { NRoad } from "../model";
+import { SCENE_BG, SCENE_DOT } from "../palette";
 import { useIsSelected, usePick, useSceneCtx } from "./context";
 import { Chip, HALO, Label } from "./label";
 import { roadLabelPoint } from "./pose";
@@ -17,22 +18,50 @@ const Y_ROAD = 0.05;
 const Y_HATCH = 0.08;
 const Y_RING = 0.1;
 
+/**
+ * Puntos del suelo: hasta ~220 × 220 con un leve desorden fijo (semilla constante, no cambia
+ * entre renders). Se desvanecen con la distancia al foco (descarte aleatorio): a lo lejos
+ * se amontonan en pantalla y se ven como ruido.
+ */
+function stippleDots(size: number, center: XY, focus: XY): { positions: Float32Array; step: number } {
+  const step = Math.max(1, size / 220);
+  const n = Math.floor(size / step);
+  const half = size / 2;
+  let seed = 7;
+  const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const r0 = 50;
+  const r1 = 170;
+  const pos = new Float32Array((n + 1) * (n + 1) * 3);
+  let k = 0;
+  for (let i = 0; i <= n; i++) {
+    for (let j = 0; j <= n; j++) {
+      const x = center.x - half + i * step + (rnd() - 0.5) * step * 0.7;
+      const y = center.y - half + j * step + (rnd() - 0.5) * step * 0.7;
+      const d = Math.hypot(x - focus.x, y - focus.y);
+      if (rnd() > 1 - (d - r0) / (r1 - r0)) continue;
+      pos[k++] = x;
+      pos[k++] = 0.01;
+      pos[k++] = -y;
+    }
+  }
+  return { positions: pos.slice(0, k), step };
+}
+
 export function Ground({ size, center, focus }: { size: number; center: XY; focus: XY }) {
   const { palette, labels } = useSceneCtx();
-  const grid = useMemo(() => {
-    const g = new THREE.GridHelper(size, Math.max(1, Math.round(size / 10)), palette.lineStrong, palette.line);
-    const m = g.material as THREE.LineBasicMaterial;
-    m.transparent = true;
-    m.opacity = 0.75;
-    m.depthWrite = false;
-    return g;
-  }, [size, palette.lineStrong, palette.line]);
+  const dots = useMemo(() => {
+    const { positions, step } = stippleDots(size, center, focus);
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const material = new THREE.PointsMaterial({ color: SCENE_DOT, size: step * 0.32, transparent: true, opacity: 0.6, depthWrite: false });
+    return { geometry, material };
+  }, [size, center, focus]);
   useEffect(
     () => () => {
-      grid.geometry.dispose();
-      (grid.material as THREE.Material).dispose();
+      dots.geometry.dispose();
+      dots.material.dispose();
     },
-    [grid],
+    [dots],
   );
   const rings = useMemo(() => [25, 50].map((r) => ({ r, pts: circlePoints(r, focus.x, Y_RING, -focus.y, 96) })), [focus.x, focus.y]);
 
@@ -40,12 +69,12 @@ export function Ground({ size, center, focus }: { size: number; center: XY; focu
     <group>
       <mesh rotation-x={-Math.PI / 2} position={[center.x, Y_GROUND, -center.y]}>
         <planeGeometry args={[size, size]} />
-        <meshLambertMaterial color={palette.surface} />
+        <meshBasicMaterial color={SCENE_BG} />
       </mesh>
-      <primitive object={grid} position={[center.x, 0, -center.y]} />
+      <points geometry={dots.geometry} material={dots.material} />
       {rings.map(({ r, pts }) => (
         <group key={r}>
-          <Line points={pts} color={palette.lineStrong} lineWidth={1.2} dashed dashSize={2.2} gapSize={2.2} transparent opacity={0.9} />
+          <Line points={pts} color={palette.faint} lineWidth={1} dashed dashSize={1.6} gapSize={2.4} transparent opacity={0.7} />
           {labels && (
             <Label position={[focus.x, Y_RING, -(focus.y + r)]} align="center" priority={8}>
               <span className="font-mono text-[10px] text-faint" style={HALO}>
@@ -71,7 +100,7 @@ function RoadMesh({ road, focus }: { road: NRoad; focus: XY }) {
   const hatch = useMemo(() => {
     if (!road.blocked) return null;
     const t = hatchTexture(palette.warning).clone();
-    t.repeat.set(road.length / 3, Math.max(1, road.width / 3));
+    t.repeat.set(road.length / 4, Math.max(1, road.width / 4));
     t.needsUpdate = true;
     return t;
   }, [road.blocked, road.length, road.width, palette.warning]);
@@ -92,7 +121,7 @@ function RoadMesh({ road, focus }: { road: NRoad; focus: XY }) {
         {hatch && (
           <mesh rotation-x={-Math.PI / 2} position-y={Y_HATCH}>
             <planeGeometry args={[road.length, road.width]} />
-            <meshBasicMaterial map={hatch} transparent opacity={0.42} depthWrite={false} />
+            <meshBasicMaterial map={hatch} transparent opacity={0.3} depthWrite={false} />
           </mesh>
         )}
       </group>

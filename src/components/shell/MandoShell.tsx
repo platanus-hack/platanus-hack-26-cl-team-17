@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { ChevronDown, ChevronLeft, CircleAlert, Loader2, LogOut, Siren, Users, type LucideIcon } from "lucide-react";
+import { ArrowLeft, ChevronDown, CircleAlert, Ellipsis, Loader2, LogOut, Siren, Users, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { LiveClock } from "@/components/ui/time";
 import type { RuntimeMode, StaffPublic } from "@/lib/contract";
@@ -52,7 +52,10 @@ const NAV_PERSONAL: NavItem = {
   isActive: (p) => p === PERSONAL_PATH || p.startsWith(`${PERSONAL_PATH}/`),
 };
 
-/** Marco del puesto de mando: barra superior compacta (marca, navegación, reloj, modo, sesión) y contenido a pantalla completa. */
+/**
+ * Marco del puesto de mando al estilo de X: barra lateral con marca, navegación y sesión
+ * (solo íconos en pantallas medianas; arriba en teléfonos) y una columna con encabezado y contenido.
+ */
 export function MandoShell({
   children,
   title,
@@ -71,100 +74,147 @@ export function MandoShell({
 
   return (
     // relative: los elementos absolutos (p. ej. sr-only) quedan recortados aquí y no alargan el documento.
-    <div className={cn("relative flex h-dvh flex-col overflow-hidden bg-bg text-text", className)}>
+    <div className={cn("relative flex h-dvh overflow-hidden bg-bg text-text", className)}>
       <a
         href={`#${contentId}`}
-        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:border focus:border-line-strong focus:bg-surface-2 focus:px-3 focus:py-2 focus:text-sm focus:text-text"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-full focus:border focus:border-line-strong focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:text-text"
       >
         Saltar al contenido
       </a>
 
-      <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-surface px-2 sm:gap-3 sm:px-3">
+      <aside className="hidden w-[76px] shrink-0 flex-col items-center border-r border-line px-2 md:flex xl:w-64 xl:items-stretch xl:px-3">
         <Link
           href="/mando"
           aria-label="Vigía: ir a incidentes"
-          className="flex h-9 shrink-0 items-center gap-2 rounded-md px-1 text-text"
+          className="mt-1 flex size-[52px] shrink-0 items-center justify-center rounded-full text-text transition-colors hover:bg-surface-2"
         >
-          <Logo size={24} title="" />
-          <span className="hidden font-display text-lg leading-none font-semibold xl:inline">
-            Vigía
-          </span>
+          <Logo size={30} title="" />
         </Link>
 
-        <nav aria-label="Principal" className="shrink-0">
-          <ul className="flex items-center gap-0.5">
-            {nav.map((item) => {
-              const active = item.isActive(pathname);
-              const Icon = item.icon;
-              return (
-                <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    aria-current={active ? "page" : undefined}
-                    title={item.label}
-                    className={cn(
-                      "label-caps flex h-8 items-center gap-1.5 rounded-md px-2 text-xs transition-colors",
-                      active ? "bg-surface-2 text-text" : "text-muted hover:bg-surface-2 hover:text-text",
-                    )}
-                  >
-                    <Icon aria-hidden className={cn("size-4 shrink-0", active && "text-accent")} />
-                    <span className="max-sm:sr-only">{item.label}</span>
-                  </Link>
-                </li>
-              );
-            })}
+        <nav aria-label="Principal" className="mt-1">
+          <ul className="flex flex-col gap-1">
+            {nav.map((item) => (
+              <li key={item.href}>
+                <SideNavLink item={item} active={item.isActive(pathname)} />
+              </li>
+            ))}
           </ul>
         </nav>
 
-        <span aria-hidden className="h-6 w-px shrink-0 bg-line" />
-
-        {back ? (
-          <Link
-            href={back.href}
-            title={back.label}
-            className="flex h-8 max-w-48 shrink-0 items-center gap-1 rounded-md pr-2 pl-1 text-sm text-muted transition-colors hover:bg-surface-2 hover:text-text"
-          >
-            <ChevronLeft aria-hidden className="size-4 shrink-0" />
-            <span className="truncate max-sm:sr-only">{back.label}</span>
-          </Link>
-        ) : null}
-
-        <div className="min-w-0 flex-1">
-          {title ? (
-            <h1 className="truncate font-display text-base leading-tight font-semibold">{title}</h1>
-          ) : null}
-          {subtitle ? <div className="truncate text-xs leading-tight text-muted">{subtitle}</div> : null}
-        </div>
-
-        {actions ? <div className="flex shrink-0 items-center gap-1.5">{actions}</div> : null}
-
-        <div className="hidden shrink-0 text-sm text-muted sm:block">
-          <LiveClock />
-        </div>
-
-        {mode ? (
-          <>
-            <div className="hidden shrink-0 lg:block">
-              <ModeBadges mode={mode} />
-            </div>
-            <div className="shrink-0 lg:hidden">
+        <div className="mt-auto flex flex-col gap-3 pb-3 xl:items-stretch">
+          {mode ? (
+            <div className="hidden px-3 xl:block">
               <ModeBadges mode={mode} compact />
             </div>
-          </>
-        ) : null}
+          ) : null}
+          <div className="hidden px-3 text-sm text-muted xl:block">
+            <LiveClock />
+          </div>
+          {staffAuth && staff ? <UserMenu staff={staff} placement="sidebar" /> : null}
+        </div>
+      </aside>
 
-        {staffAuth && staff ? <UserMenu staff={staff} /> : null}
-      </header>
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-[53px] shrink-0 items-center gap-2 border-b border-line bg-bg/85 px-2 backdrop-blur-md sm:gap-3 sm:px-4">
+          {/* Teléfono: la barra lateral no cabe; marca y navegación van aquí, solo con íconos. */}
+          <Link
+            href="/mando"
+            aria-label="Vigía: ir a incidentes"
+            className="flex size-9 shrink-0 items-center justify-center rounded-full text-text transition-colors hover:bg-surface-2 md:hidden"
+          >
+            <Logo size={22} title="" />
+          </Link>
+          <nav aria-label="Principal" className="shrink-0 md:hidden">
+            <ul className="flex items-center">
+              {nav.map((item) => {
+                const active = item.isActive(pathname);
+                const Icon = item.icon;
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      aria-current={active ? "page" : undefined}
+                      title={item.label}
+                      className="flex size-9 items-center justify-center rounded-full transition-colors hover:bg-surface-2"
+                    >
+                      <Icon aria-hidden className="size-5" strokeWidth={active ? 2.5 : 1.75} />
+                      <span className="sr-only">{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
 
-      <main id={contentId} tabIndex={-1} className={cn("relative min-h-0 flex-1 outline-none", contentClassName)}>
-        {children}
-      </main>
+          {back ? (
+            <Link
+              href={back.href}
+              title={back.label}
+              className="flex size-9 shrink-0 items-center justify-center rounded-full text-text transition-colors hover:bg-surface-2"
+            >
+              <ArrowLeft aria-hidden className="size-5" />
+              <span className="sr-only">{back.label}</span>
+            </Link>
+          ) : null}
+
+          <div className="min-w-0 flex-1">
+            {title ? <h1 className="truncate text-xl leading-6 font-extrabold">{title}</h1> : null}
+            {subtitle ? <div className="truncate text-[13px] leading-4 text-muted">{subtitle}</div> : null}
+          </div>
+
+          {actions ? <div className="flex shrink-0 items-center gap-2">{actions}</div> : null}
+
+          <div className="hidden shrink-0 text-sm text-muted sm:block xl:hidden">
+            <LiveClock />
+          </div>
+
+          {mode ? (
+            <>
+              <div className="hidden shrink-0 lg:block xl:hidden">
+                <ModeBadges mode={mode} />
+              </div>
+              <div className="shrink-0 lg:hidden">
+                <ModeBadges mode={mode} compact />
+              </div>
+            </>
+          ) : null}
+
+          {staffAuth && staff ? (
+            <div className="shrink-0 md:hidden">
+              <UserMenu staff={staff} placement="header" />
+            </div>
+          ) : null}
+        </header>
+
+        <main id={contentId} tabIndex={-1} className={cn("relative min-h-0 flex-1 outline-none", contentClassName)}>
+          {children}
+        </main>
+      </div>
     </div>
   );
 }
 
+/** Enlace de la barra lateral: ícono grande y texto de 20 px (solo ícono bajo xl); el activo va en negrita. */
+function SideNavLink({ item, active }: { item: NavItem; active: boolean }) {
+  const Icon = item.icon;
+  return (
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      title={item.label}
+      className="group flex justify-center text-xl text-text xl:justify-start"
+    >
+      <span className="flex items-center gap-5 rounded-full p-3 transition-colors group-hover:bg-surface-2 xl:pr-6">
+        <Icon aria-hidden className="size-[26px] shrink-0" strokeWidth={active ? 2.5 : 1.75} />
+        <span className={cn("sr-only xl:not-sr-only", active ? "font-bold" : "font-normal")}>{item.label}</span>
+      </span>
+    </Link>
+  );
+}
+
 /** Menú de la sesión del personal con la opción de cerrar sesión. */
-function UserMenu({ staff }: { staff: StaffPublic }) {
+function UserMenu({ staff, placement }: { staff: StaffPublic; placement: "sidebar" | "header" }) {
+  const inSidebar = placement === "sidebar";
   const router = useRouter();
   const menuId = useId();
   const [open, setOpen] = useState(false);
@@ -222,7 +272,7 @@ function UserMenu({ staff }: { staff: StaffPublic }) {
   return (
     <div
       ref={rootRef}
-      className="relative shrink-0"
+      className={cn("relative shrink-0", inSidebar && "xl:w-full")}
       onKeyDown={onKeyDown}
       onBlur={(e) => {
         if (open && !e.currentTarget.contains(e.relatedTarget)) setOpen(false);
@@ -237,24 +287,32 @@ function UserMenu({ staff }: { staff: StaffPublic }) {
         onClick={() => setOpen((v) => !v)}
         onKeyDown={onButtonKeyDown}
         className={cn(
-          "flex h-8 max-w-52 items-center gap-2 rounded-md border px-2 text-left transition-colors",
-          open ? "border-line-strong bg-surface-2" : "border-transparent hover:bg-surface-2",
+          "flex items-center text-left transition-colors hover:bg-surface-2",
+          inSidebar ? "w-full justify-center gap-3 rounded-full p-3 xl:justify-start" : "h-9 gap-1.5 rounded-full px-1",
+          open && "bg-surface-2",
         )}
       >
         <span
           aria-hidden
-          className="flex size-6 shrink-0 items-center justify-center rounded-full bg-surface-2 font-display text-xs font-bold text-muted uppercase ring-1 ring-line"
+          className={cn(
+            "flex shrink-0 items-center justify-center rounded-full bg-surface-2 font-bold text-muted uppercase ring-1 ring-line",
+            inSidebar ? "size-10 text-sm" : "size-7 text-xs",
+          )}
         >
           {initials(staff.name)}
         </span>
-        <span className="hidden min-w-0 flex-col md:flex">
-          <span className="truncate text-sm leading-tight">{staff.name}</span>
-          <span className="truncate text-[11px] leading-tight text-muted">{roleLabel}</span>
+        <span className={cn("min-w-0 flex-1 flex-col", inSidebar ? "hidden xl:flex" : "hidden")}>
+          <span className="truncate text-[15px] leading-5 font-bold">{staff.name}</span>
+          <span className="truncate text-[15px] leading-5 text-muted">{roleLabel}</span>
         </span>
-        <span className="sr-only md:hidden">
+        <span className={cn("sr-only", inSidebar && "xl:hidden")}>
           {staff.name}, {roleLabel}
         </span>
-        <ChevronDown aria-hidden className={cn("size-3.5 shrink-0 text-muted transition-transform", open && "rotate-180")} />
+        {inSidebar ? (
+          <Ellipsis aria-hidden className="hidden size-5 shrink-0 xl:block" />
+        ) : (
+          <ChevronDown aria-hidden className={cn("size-3.5 shrink-0 text-muted transition-transform", open && "rotate-180")} />
+        )}
       </button>
 
       {open ? (
@@ -262,7 +320,10 @@ function UserMenu({ staff }: { staff: StaffPublic }) {
           id={menuId}
           role="menu"
           aria-label="Sesión"
-          className="absolute top-full right-0 z-40 mt-1 w-64 animate-fade-in overflow-hidden rounded-lg border border-line-strong bg-surface"
+          className={cn(
+            "absolute z-40 w-64 animate-fade-in overflow-hidden rounded-2xl border border-line bg-surface shadow-[0_0_15px_rgb(101_119_134/0.2),0_0_3px_1px_rgb(101_119_134/0.15)]",
+            inSidebar ? "bottom-full left-0 mb-2" : "top-full right-0 mt-1",
+          )}
         >
           <div role="none" className="border-b border-line px-3 py-2.5">
             <p className="truncate text-sm font-semibold">{staff.name}</p>
@@ -280,7 +341,7 @@ function UserMenu({ staff }: { staff: StaffPublic }) {
               aria-busy={pending || undefined}
               aria-disabled={pending || undefined}
               onClick={logout}
-              className="flex h-9 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-text transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 aria-disabled:cursor-wait aria-disabled:text-muted"
+              className="flex h-10 w-full items-center gap-2 rounded-xl px-3 text-left text-[15px] font-bold text-text transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 aria-disabled:cursor-wait aria-disabled:text-muted"
             >
               {pending ? (
                 <Loader2 aria-hidden className="size-4 shrink-0 animate-spin" />

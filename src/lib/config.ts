@@ -58,12 +58,42 @@ export const config = {
   get adminPassword() {
     return env("VIGIA_ADMIN_PASSWORD");
   },
+  /**
+   * Radio de demostración sin sesión (/radio/<código>): cualquiera con el código de
+   * un incidente abierto puede hablar por el micrófono y su transmisión entra a la
+   * bitácora como dictado. VIGIA_DEMO_RADIO=1 la activa, =0 la apaga; sin valor,
+   * solo está activa en modo local (sin Postgres).
+   */
+  get demoRadio() {
+    const v = env("VIGIA_DEMO_RADIO");
+    if (v === "1") return true;
+    if (v === "0") return false;
+    return !env("DATABASE_URL");
+  },
   get hasAnthropic() {
     return Boolean(env("ANTHROPIC_API_KEY") || env("ANTHROPIC_AUTH_TOKEN"));
   },
   /** Modelo de Claude para todos los análisis. */
   get aiModel() {
     return env("VIGIA_AI_MODEL") || "claude-opus-5-5";
+  },
+  /**
+   * Modelo del observador en vivo del dron (una mirada cada 15 s a cuadros chicos).
+   * Corre todo el vuelo: por eso no es el modelo principal de análisis.
+   */
+  get aiLiveModel() {
+    return env("VIGIA_AI_LIVE_MODEL") || "claude-opus-5-5";
+  },
+  get aiLiveEffort(): "low" | "medium" | "high" | "xhigh" | "max" {
+    const v = env("VIGIA_AI_LIVE_EFFORT");
+    return v === "medium" || v === "high" || v === "xhigh" || v === "max" ? v : "low";
+  },
+  /**
+   * Modo rápido en el observador (por defecto sí; VIGIA_AI_LIVE_FAST=0 lo apaga).
+   * Solo existe en Opus: con otro modelo se ignora. Medido: ~2,2 s por mirada.
+   */
+  get aiLiveFast() {
+    return env("VIGIA_AI_LIVE_FAST") !== "0";
   },
   /** low | medium | high | xhigh | max. En una emergencia importa la latencia: por defecto medium. */
   get aiEffort(): "low" | "medium" | "high" | "xhigh" | "max" {
@@ -101,10 +131,13 @@ export const config = {
   get splatJob() {
     return env("SPLAT_JOB");
   },
-  /** Iteraciones de entrenamiento por defecto de una reconstrucción. */
+  /**
+   * Iteraciones de entrenamiento por defecto de una reconstrucción (las del paper original).
+   * El job termina antes si se le acaba el tiempo de la tarea, así que es un techo, no un costo fijo.
+   */
   get splatIterations() {
     const n = Number(env("SPLAT_ITERATIONS"));
-    return Number.isInteger(n) && n >= 500 && n <= 30000 ? n : 7000;
+    return Number.isInteger(n) && n >= 500 && n <= 30000 ? n : 30000;
   },
 };
 
@@ -131,5 +164,6 @@ export function runtimeMode(): RuntimeMode {
     model: ai === "claude" ? config.aiModel : null,
     // El job lee y escribe en el bucket: sin Cloud Storage no hay GPU aunque haya job.
     splat: config.splatJob && isGcsConfigured() ? "cloud_run_gpu" : "off",
+    demo_radio: config.demoRadio,
   };
 }

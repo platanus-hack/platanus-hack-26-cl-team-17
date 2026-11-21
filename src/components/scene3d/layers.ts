@@ -10,7 +10,8 @@ export type LayerKey =
   | "access"
   | "cameras"
   | "drone"
-  | "labels";
+  | "labels"
+  | "surroundings";
 
 export type LayerState = Record<LayerKey, boolean>;
 
@@ -24,6 +25,7 @@ export const LAYERS: { key: LayerKey; label: string }[] = [
   { key: "cameras", label: "Cámaras" },
   { key: "drone", label: "Dron" },
   { key: "labels", label: "Etiquetas" },
+  { key: "surroundings", label: "Entorno real (OSM)" },
 ];
 
 export const DEFAULT_LAYERS: LayerState = {
@@ -36,6 +38,7 @@ export const DEFAULT_LAYERS: LayerState = {
   cameras: true,
   drone: true,
   labels: true,
+  surroundings: true,
 };
 
 /** Capa de cada tipo de entidad (las calles son parte del plano base y siempre se ven). */

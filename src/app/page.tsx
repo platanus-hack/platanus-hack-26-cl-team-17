@@ -6,7 +6,6 @@ import {
   ArrowDown,
   Drone,
   MonitorDot,
-  Phone,
   Radio,
   Route,
   ScanEye,
@@ -55,13 +54,6 @@ export default function Home() {
       <header className="border-b border-line">
         <div className="mx-auto flex h-12 w-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
           <span className="label-caps truncate text-xs text-faint">Apoyo al mando · Bomberos</span>
-          <a
-            href="tel:132"
-            className="flex shrink-0 items-center gap-1.5 rounded-md px-1 text-sm font-semibold text-critical hover:underline"
-          >
-            <Phone aria-hidden className="size-4" />
-            Emergencias: 132
-          </a>
         </div>
       </header>
 
@@ -87,21 +79,6 @@ export default function Home() {
                   Soy vecino: enviar video
                 </Button>
               </div>
-
-              <p
-                role="note"
-                className="flex max-w-xl items-start gap-2.5 rounded-md border border-critical/40 bg-critical-soft px-3 py-2.5 text-sm text-text"
-              >
-                <Phone aria-hidden className="mt-0.5 size-4 shrink-0 text-critical" />
-                <span>
-                  <strong className="font-semibold">Vigía no reemplaza el llamado al 132.</strong> Si hay peligro
-                  inmediato, llama primero:{" "}
-                  <a href="tel:132" className="font-semibold text-critical underline underline-offset-2">
-                    132 (Bomberos)
-                  </a>
-                  .
-                </span>
-              </p>
             </div>
 
             <FlowDiagram />
@@ -158,13 +135,6 @@ export default function Home() {
       <footer className="border-t border-line">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-1 px-4 py-5 text-xs text-faint sm:flex-row sm:items-center sm:justify-between sm:px-6">
           <span>Vigía · Puesto de mando asistido por IA para Bomberos</span>
-          <span>
-            Ante una emergencia, llama al{" "}
-            <a href="tel:132" className="font-semibold text-muted underline underline-offset-2 hover:text-text">
-              132
-            </a>
-            .
-          </span>
         </div>
       </footer>
     </div>

@@ -1,10 +1,10 @@
 "use client";
 
 import { memo, type ReactNode } from "react";
-import { ChevronDown, Drone, OctagonAlert, Radio, TriangleAlert } from "lucide-react";
+import { ChevronDown, Drone, FlaskConical, OctagonAlert, Radio, TriangleAlert, type LucideIcon } from "lucide-react";
 import type { TimelineEvent } from "@/lib/domain";
 import type { MediaView } from "@/lib/contract";
-import { Badge, Button, TimeAgo, toneSolidBg, toneSoftBg, toneText } from "@/components/ui";
+import { Badge, toneSolidBg, toneSoftBg, toneText } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatClock, formatDateTime, pluralize } from "@/lib/format";
 import {
@@ -15,7 +15,7 @@ import {
   timelineSeverityLabel,
   timelineSeverityTone,
 } from "@/lib/labels";
-import type { TimelineBurstRow } from "./timeline-core";
+import { splitEngineNote, type TimelineBurstRow } from "./timeline-core";
 
 export interface RowHandlers {
   onOpenMedia?: (mediaId: string) => void;
@@ -23,15 +23,17 @@ export interface RowHandlers {
   onOpenMission?: (missionId: string) => void;
 }
 
-function EventTime({ at }: { at: string }) {
+function EventTime({ at, title }: { at: string; title?: string }) {
   return (
-    <div className="flex shrink-0 flex-col items-end gap-0.5 text-right">
-      {/* La hora depende de la zona del navegador; el servidor puede renderizar otra. */}
-      <time dateTime={at} title={formatDateTime(at)} suppressHydrationWarning className="font-mono tabular text-xs text-text">
-        {formatClock(at, { seconds: true })}
-      </time>
-      <TimeAgo iso={at} className="text-[11px] text-muted" />
-    </div>
+    // La hora depende de la zona del navegador; el servidor puede renderizar otra.
+    <time
+      dateTime={at}
+      title={title ?? formatDateTime(at)}
+      suppressHydrationWarning
+      className="shrink-0 pt-0.5 font-mono tabular text-[11px] text-muted"
+    >
+      {formatClock(at, { seconds: true })}
+    </time>
   );
 }
 
@@ -43,57 +45,81 @@ function FreshBadge() {
   );
 }
 
-function SeverityBadge({ severity }: { severity: TimelineEvent["severity"] }) {
+/** Severidad con ícono y texto, sin caja salvo lo crítico. */
+function SeverityMark({ severity }: { severity: TimelineEvent["severity"] }) {
   if (severity === "critical") {
     return (
-      <Badge tone="critical" variant="solid" icon={OctagonAlert}>
+      <Badge tone="critical" icon={OctagonAlert}>
         {timelineSeverityLabel.critical}
       </Badge>
     );
   }
   if (severity === "warning") {
     return (
-      <Badge tone="warning" icon={TriangleAlert}>
+      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-warning">
+        <TriangleAlert aria-hidden="true" className="size-3 shrink-0" />
         {timelineSeverityLabel.warning}
-      </Badge>
+      </span>
     );
   }
   return null;
 }
 
-function References({ event, media, handlers }: { event: TimelineEvent; media: MediaView | null; handlers: RowHandlers }) {
+function SimulatedMark() {
+  return (
+    <span
+      title="Generado por el motor de reglas, sin el modelo de IA"
+      className="inline-flex items-center gap-1 text-[11px] font-medium text-muted"
+    >
+      <FlaskConical aria-hidden="true" className="size-3 shrink-0" />
+      Simulado
+    </span>
+  );
+}
+
+const refChip = "inline-flex h-6 max-w-full items-center gap-1 rounded-full border border-line px-2 text-xs font-medium";
+
+function RefButton({ icon: Icon, label, ariaLabel, onClick }: { icon: LucideIcon; label: string; ariaLabel: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-label={ariaLabel}
+      onClick={onClick}
+      className={cn(refChip, "text-text transition-colors hover:border-line-strong hover:bg-surface-2")}
+    >
+      <Icon aria-hidden="true" className="size-3 shrink-0" />
+      {label}
+    </button>
+  );
+}
+
+function RefTag({ icon: Icon, label, title, unavailable = false }: { icon?: LucideIcon; label: string; title?: string; unavailable?: boolean }) {
+  return (
+    <span title={title} className={cn(refChip, unavailable ? "border-dashed text-faint opacity-60" : "text-text")}>
+      {Icon ? <Icon aria-hidden="true" className="size-3 shrink-0" /> : null}
+      {label}
+    </span>
+  );
+}
+
+function references(event: TimelineEvent, media: MediaView | null, handlers: RowHandlers): ReactNode[] {
   const { onOpenMedia, onOpenComm, onOpenMission } = handlers;
   const items: ReactNode[] = [];
 
   if (event.media_id !== null) {
     if (media) {
-      const MediaIcon = mediaSourceIcon[media.source];
       const what = `${mediaKindLabel[media.kind]} ${media.label}`;
+      const icon = mediaSourceIcon[media.source];
       items.push(
         onOpenMedia ? (
-          <Button
-            key="media"
-            size="sm"
-            variant="secondary"
-            icon={MediaIcon}
-            aria-label={`Abrir ${what}`}
-            onClick={() => onOpenMedia(media.id)}
-          >
-            {media.label}
-          </Button>
+          <RefButton key="media" icon={icon} label={media.label} ariaLabel={`Abrir ${what}`} onClick={() => onOpenMedia(media.id)} />
         ) : (
-          <Badge key="media" icon={MediaIcon} title={what}>
-            {media.label}
-          </Badge>
+          <RefTag key="media" icon={icon} label={media.label} title={what} />
         ),
       );
     } else {
       // El medio referido no está en la lista: se muestra atenuado y sin acción.
-      items.push(
-        <Badge key="media" variant="outline" className="opacity-60" title="Este medio no está disponible">
-          Medio no disponible
-        </Badge>,
-      );
+      items.push(<RefTag key="media" label="Medio no disponible" title="Este medio no está disponible" unavailable />);
     }
   }
 
@@ -101,13 +127,9 @@ function References({ event, media, handlers }: { event: TimelineEvent; media: M
     const commId = event.comm_id;
     items.push(
       onOpenComm ? (
-        <Button key="comm" size="sm" variant="secondary" icon={Radio} aria-label="Abrir la comunicación radial" onClick={() => onOpenComm(commId)}>
-          Radio
-        </Button>
+        <RefButton key="comm" icon={Radio} label="Radio" ariaLabel="Abrir la comunicación radial" onClick={() => onOpenComm(commId)} />
       ) : (
-        <Badge key="comm" icon={Radio}>
-          Radio
-        </Badge>
+        <RefTag key="comm" icon={Radio} label="Radio" />
       ),
     );
   }
@@ -116,19 +138,14 @@ function References({ event, media, handlers }: { event: TimelineEvent; media: M
     const missionId = event.mission_id;
     items.push(
       onOpenMission ? (
-        <Button key="mission" size="sm" variant="secondary" icon={Drone} aria-label="Abrir la misión del dron" onClick={() => onOpenMission(missionId)}>
-          Misión
-        </Button>
+        <RefButton key="mission" icon={Drone} label="Misión" ariaLabel="Abrir la misión del dron" onClick={() => onOpenMission(missionId)} />
       ) : (
-        <Badge key="mission" tone="drone" icon={Drone}>
-          Misión
-        </Badge>
+        <RefTag key="mission" icon={Drone} label="Misión" />
       ),
     );
   }
 
-  if (items.length === 0) return null;
-  return <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{items}</div>;
+  return items;
 }
 
 export interface EventItemProps {
@@ -140,11 +157,16 @@ export interface EventItemProps {
   nested?: boolean;
 }
 
-/** Fila de un evento: ícono por tipo, color por severidad, texto, referencias y hora. */
+/** Fila de un evento: ícono por tipo, color por severidad, título y detalle en 2 líneas, referencias y hora. */
 export const EventItem = memo(function EventItem({ event, media, fresh, handlers, nested = false }: EventItemProps) {
   const tone = timelineSeverityTone[event.severity];
   const Icon = timelineKindIcon[event.kind];
-  const strong = event.severity === "critical" || event.severity === "warning";
+  const critical = event.severity === "critical";
+  const title = splitEngineNote(event.title);
+  const detail = splitEngineNote(event.detail);
+  const simulated = title.simulated || detail.simulated;
+  const refs = references(event, media, handlers);
+  const hasMeta = event.severity === "warning" || critical || simulated || fresh || refs.length > 0;
 
   return (
     <li
@@ -153,20 +175,25 @@ export const EventItem = memo(function EventItem({ event, media, fresh, handlers
       className={cn(
         "relative flex gap-2.5 border-b border-line py-2.5 pr-3 transition-colors duration-1000",
         nested ? "pl-8" : "pl-3",
-        fresh ? "bg-accent-soft animate-enter" : strong && toneSoftBg[tone],
+        fresh ? "bg-accent-soft animate-enter" : critical && toneSoftBg.critical,
       )}
     >
       {tone !== "neutral" && <span aria-hidden="true" className={cn("absolute inset-y-0 left-0 w-0.5", toneSolidBg[tone])} />}
       <Icon aria-hidden="true" className={cn("mt-0.5 size-4 shrink-0", toneText[tone])} />
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="sr-only">{timelineKindLabel[event.kind]}:</span>
-          <p className={cn("min-w-0 text-sm leading-snug text-text", strong && "font-semibold")}>{event.title}</p>
-          <SeverityBadge severity={event.severity} />
-          {fresh && <FreshBadge />}
-        </div>
-        {event.detail !== "" && <p className="mt-0.5 line-clamp-3 text-sm leading-snug text-muted">{event.detail}</p>}
-        <References event={event} media={media} handlers={handlers} />
+        <span className="sr-only">{timelineKindLabel[event.kind]}:</span>
+        <p className={cn("line-clamp-2 text-sm leading-snug text-text", critical ? "font-semibold" : "font-medium")}>
+          {title.text}
+        </p>
+        {detail.text !== "" && <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{detail.text}</p>}
+        {hasMeta && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            <SeverityMark severity={event.severity} />
+            {simulated && <SimulatedMark />}
+            {fresh && <FreshBadge />}
+            {refs}
+          </div>
+        )}
       </div>
       <EventTime at={event.at} />
     </li>
@@ -187,6 +214,7 @@ export const BurstItem = memo(function BurstItem({ row, expanded, onToggle, fres
   const freshCount = row.events.reduce((n, e) => (freshIds.has(e.id) ? n + 1 : n), 0);
   const latest = row.events[0];
   const missions = row.missionIds.length;
+  const range = `${formatClock(row.oldestAt, { seconds: true })} – ${formatClock(row.newestAt, { seconds: true })}`;
 
   return (
     <li className="border-b border-line">
@@ -196,19 +224,18 @@ export const BurstItem = memo(function BurstItem({ row, expanded, onToggle, fres
         aria-controls={listId}
         onClick={() => onToggle(row.key)}
         className={cn(
-          "relative flex w-full gap-2.5 py-2.5 pl-3 pr-3 text-left transition-colors duration-1000 hover:bg-surface-2",
+          "flex w-full gap-2.5 py-2.5 pl-3 pr-3 text-left transition-colors duration-1000 hover:bg-surface-2",
           "focus-visible:-outline-offset-2",
           freshCount > 0 && !expanded && "bg-accent-soft",
         )}
       >
-        <span aria-hidden="true" className={cn("absolute inset-y-0 left-0 w-0.5", toneSolidBg.drone)} />
-        <Drone aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-drone" />
+        <Drone aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-muted" />
         <span className="min-w-0 flex-1">
           <span className="flex flex-wrap items-center gap-1.5">
             <span className="text-sm font-medium leading-snug text-text">
               {pluralize(row.events.length, "evento de rutina del dron", "eventos de rutina del dron")}
             </span>
-            {missions > 1 && <Badge tone="drone">{pluralize(missions, "misión", "misiones")}</Badge>}
+            {missions > 1 && <span className="text-xs text-muted">· {pluralize(missions, "misión", "misiones")}</span>}
             {freshCount > 0 && (
               <Badge tone="accent" variant="solid">
                 {pluralize(freshCount, "nuevo", "nuevos")}
@@ -216,12 +243,9 @@ export const BurstItem = memo(function BurstItem({ row, expanded, onToggle, fres
             )}
           </span>
           <span className="mt-0.5 block truncate text-sm text-muted">Último: {latest.title}</span>
-          <span className="mt-0.5 block font-mono tabular text-[11px] text-muted" suppressHydrationWarning>
-            {formatClock(row.oldestAt, { seconds: true })} – {formatClock(row.newestAt, { seconds: true })}
-          </span>
         </span>
         <span className="flex shrink-0 flex-col items-end gap-1">
-          <TimeAgo iso={row.newestAt} className="text-[11px] text-muted" />
+          <EventTime at={row.newestAt} title={range} />
           <span className="inline-flex items-center gap-1 text-xs text-muted">
             {expanded ? "Ocultar" : "Ver"}
             <ChevronDown aria-hidden="true" className={cn("size-3.5 transition-transform", expanded && "rotate-180")} />

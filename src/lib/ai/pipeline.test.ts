@@ -812,6 +812,7 @@ test("requestCommsAnalysis: MAYDAY y víctimas reportadas generan alerta crític
     speaker: "B-3",
     text,
     source: "manual",
+    audio_path: null,
     created_at: "2026-11-21T11:30:00.000Z",
   });
   ctx.store.comms.push(comm(1, "Central, vecina informa niño en el segundo piso"), comm(2, "Mayday mayday, B-3"));
@@ -855,6 +856,7 @@ test("requestCommsAnalysis: si Claude falla usa reglas y lo dice", async () => {
     speaker: "B-3",
     text: "B-3 en el lugar",
     source: "manual",
+    audio_path: null,
     created_at: "2026-11-21T11:30:00.000Z",
   });
   await ctx.pipeline.requestCommsAnalysis(INC);

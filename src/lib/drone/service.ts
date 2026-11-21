@@ -12,7 +12,7 @@ import {
   type TelemetryInput,
   type TelemetryPoint,
 } from "@/lib/domain";
-import { errors } from "@/lib/http";
+import { errors, readLimitedBody as readLimitedBodyBase } from "@/lib/http";
 import { newToken, sha256Hex } from "@/lib/ids";
 import { storagePaths, type FileStorage, type Store } from "@/lib/store/types";
 import { jpegSize } from "./jpeg";
@@ -351,29 +351,7 @@ export async function ingestFrame(
 }
 
 /** Lee el cuerpo crudo con tope de tamaño sin cargar más de lo permitido. */
-export async function readLimitedBody(req: Request, maxBytes: number): Promise<Uint8Array> {
-  const declared = Number(req.headers.get("content-length") ?? "");
-  if (Number.isFinite(declared) && declared > maxBytes) throw errors.tooLarge("El cuadro supera los 3 MB.");
-  if (!req.body) return new Uint8Array(0);
-  const reader = req.body.getReader();
-  const chunks: Uint8Array[] = [];
-  let total = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.byteLength;
-    if (total > maxBytes) {
-      await reader.cancel().catch(() => undefined);
-      throw errors.tooLarge("El cuadro supera los 3 MB.");
-    }
-    chunks.push(value);
-  }
-  const out = new Uint8Array(total);
-  let off = 0;
-  for (const c of chunks) {
-    out.set(c, off);
-    off += c.byteLength;
-  }
-  return out;
+export function readLimitedBody(req: Request, maxBytes: number): Promise<Uint8Array> {
+  return readLimitedBodyBase(req, maxBytes, "El cuadro supera los 3 MB.");
 }
 

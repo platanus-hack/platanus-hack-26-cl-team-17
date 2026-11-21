@@ -254,7 +254,11 @@ function fromFile(raw: unknown): Db {
     m.ingest_token_hash = typeof m.ingest_token_hash === "string" ? m.ingest_token_hash : "";
     db.missions.set(m.id, m);
   }
-  for (const c of rowsOf<CommEntry>(raw.comms, hasIncident)) db.comms.get(c.incident_id)?.push(c);
+  for (const c of rowsOf<CommEntry>(raw.comms, hasIncident)) {
+    // Archivos de .data anteriores a las grabaciones de radio.
+    c.audio_path = typeof c.audio_path === "string" ? c.audio_path : null;
+    db.comms.get(c.incident_id)?.push(c);
+  }
   for (const list of db.comms.values()) list.sort((a, b) => a.seq - b.seq);
   for (const e of rowsOf<TimelineEvent>(raw.events, hasIncident)) {
     db.events.get(e.incident_id)?.push(e);
@@ -733,6 +737,7 @@ export function createLocalStore(): Store {
         speaker: input.speaker,
         text: input.text,
         source: input.source,
+        audio_path: input.audio_path ?? null,
         created_at: at,
       };
       const list = db.comms.get(entry.incident_id);

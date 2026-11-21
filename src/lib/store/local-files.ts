@@ -33,6 +33,11 @@ const CONTENT_TYPES = new Map<string, string>([
   ["mov", "video/quicktime"],
   ["webm", "video/webm"],
   ["3gp", "video/3gpp"],
+  // Grabaciones de radio (las sube el servidor; no hay subida directa desde el navegador).
+  ["weba", "audio/webm"],
+  ["ogg", "audio/ogg"],
+  ["m4a", "audio/mp4"],
+  ["mp3", "audio/mpeg"],
 ]);
 
 const UPLOAD_FRAME_EXTENSIONS = new Set(["jpg", "jpeg"]);

@@ -2,12 +2,15 @@
 
 /*
  * Vigía — tokens de diseño.
- * Blanco y minimalista: el acento es tinta casi negra y el color queda solo para lo que significa
- * algo (crítico, advertencia, ok, info, dron). Fuente única: Outfit; mono solo para códigos y horas.
+ * Estilo X (Twitter): blanco y negro más un celeste (`accent` = `info`) para lo activo, enlaces y foco.
+ * Los botones principales van en negro (`bg-text text-bg`). Rojo, ámbar, verde y morado solo con
+ * significado (crítico, advertencia, ok, dron). Fuente: Inter (Chirp, la de X, es propietaria);
+ * mono solo para códigos y horas. Controles en píldora, paneles con 16 px de radio.
  *   data-theme="mando"  (por defecto en <html>): puesto de mando.
  *   data-theme="vecino" (en un contenedor): mismos colores, texto base más grande.
- * Contraste (WCAG) medido contra bg/surface/surface-2: text ≥ 14:1, muted ≥ 6:1, semánticos ≥ 4.5:1.
- * `faint` (≈ 3.5–4.7:1) es solo para texto auxiliar no esencial o ≥ 18 px.
+ * Contraste (WCAG) contra bg/surface/surface-2: text ≥ 14:1, muted ≥ 6:1, semánticos ≥ 4.5:1;
+ * el celeste queda en 3:1 (como en X): sirve para indicadores y rellenos, no para texto esencial.
+ * `faint` (≈ 3:1) es solo para texto auxiliar no esencial o ≥ 18 px.
  * `on-solid` es el color del texto sobre rellenos sólidos de acento/semánticos.
  */
 
@@ -28,6 +31,7 @@
   --color-ok: var(--v-ok);
   --color-info: var(--v-info);
   --color-drone: var(--v-drone);
+  --color-fire: var(--v-fire);
 
   --color-accent-soft: color-mix(in oklab, var(--v-accent) var(--v-soft), transparent);
   --color-critical-soft: color-mix(in oklab, var(--v-critical) var(--v-soft), transparent);
@@ -35,13 +39,28 @@
   --color-ok-soft: color-mix(in oklab, var(--v-ok) var(--v-soft), transparent);
   --color-info-soft: color-mix(in oklab, var(--v-info) var(--v-soft), transparent);
   --color-drone-soft: color-mix(in oklab, var(--v-drone) var(--v-soft), transparent);
+  --color-fire-soft: color-mix(in oklab, var(--v-fire) var(--v-soft), transparent);
 
-  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
-  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  /* Ficha del incidente (mapa 3D claro): colores con significado y grises cálidos. */
+  --color-f-red: #e5484d;
+  --color-f-orange: #f76b15;
+  --color-f-orange-ink: #cc4e00;
+  --color-f-amber: #ffb224;
+  --color-f-amber-ink: #915930;
+  --color-f-blue: #0090ff;
+  --color-f-green: #30a46c;
+  --color-f-ink: #21201c;
+  --color-f-muted: #63635e;
+  --color-f-faint: #8d8d86;
+  --color-f-line: #e9e8e6;
+  --color-f-wash: #f1f0ef;
+
+  --font-display: var(--font-inter), -apple-system, "Segoe UI", ui-sans-serif, sans-serif;
+  --font-sans: var(--font-inter), -apple-system, "Segoe UI", ui-sans-serif, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", monospace;
 
-  --radius-panel: 8px;
-  --radius-control: 6px;
+  --radius-panel: 16px;
+  --radius-control: 9999px;
 
   --animate-pulse-critical: pulse-critical 1.6s ease-in-out infinite;
   --animate-enter: enter 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -55,21 +74,23 @@
   color-scheme: light;
   --v-bg: #ffffff;
   --v-surface: #ffffff;
-  --v-surface-2: #f6f7f9;
-  --v-line: #e8eaee;
-  --v-line-strong: #d3d7de;
-  --v-text: #0f1217;
-  --v-muted: #5a6372;
-  --v-faint: #7d8594;
+  --v-surface-2: #f7f9f9;
+  --v-line: #eff3f4;
+  --v-line-strong: #cfd9de;
+  --v-text: #0f1419;
+  --v-muted: #536471;
+  --v-faint: #8b98a5;
   --v-on-solid: #ffffff;
-  --v-accent: #0f1217;
-  --v-critical: #cc2a1e;
+  --v-accent: #1d9bf0;
+  --v-critical: #dc1f2c;
   --v-warning: #b54708;
-  --v-ok: #067647;
-  --v-info: #1d5fd1;
-  --v-drone: #6941c6;
+  --v-ok: #00875a;
+  --v-info: #1d9bf0;
+  --v-drone: #7856ff;
+  /* Fuego y estructuras afectadas (mapa, plano y escena 3D); el celeste es solo de interfaz. */
+  --v-fire: #ea580c;
   --v-soft: 8%;
-  --v-scrollbar: #d3d7de;
+  --v-scrollbar: #cfd9de;
 }
 
 [data-theme="vecino"] {

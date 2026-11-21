@@ -76,7 +76,7 @@ export function IconButton({
   const inactive = Boolean(disabled) || loading;
 
   const classes = cn(
-    "relative inline-flex shrink-0 select-none items-center justify-center rounded-md border transition-colors duration-150",
+    "relative inline-flex shrink-0 select-none items-center justify-center rounded-full border transition-colors duration-150",
     "disabled:cursor-not-allowed disabled:not-aria-busy:opacity-50",
     "aria-disabled:cursor-not-allowed aria-disabled:not-aria-busy:opacity-50 aria-busy:cursor-wait",
     active ? activeClasses[variant] : buttonVariantClasses[variant],

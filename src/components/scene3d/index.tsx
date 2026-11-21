@@ -11,6 +11,7 @@ import { LoaderCircle } from "lucide-react";
 import type { ViewPreset } from "./geometry";
 import { DEFAULT_LAYERS, type LayerState } from "./layers";
 import { useSceneView, useSelection, useStableByKey, useWebGLSupport } from "./hooks";
+import { useSceneSurroundings } from "./surroundings-data";
 import { SceneEmpty, SceneFrame } from "./frame";
 import { PlanSvg } from "./plan2d";
 import { ViewerErrorBoundary } from "./error-boundary";
@@ -52,6 +53,8 @@ export function Scene3D(props: Scene3DProps) {
   const view = useSceneView(scene, updatedAt, incident, media, missions);
   const [sel, select] = useSelection(selection, onSelect);
   const [layers, setLayers] = useState<LayerState>(DEFAULT_LAYERS);
+  // Entorno real (OSM) alrededor del GPS del incidente; referencial y secundario.
+  const env = useSceneSurroundings(incident, view?.scene.structures, layers.surroundings && !!view);
   const webgl = useWebGLSupport();
   const [chosen, setChosen] = useState<ViewerMode | null>(null);
   const [failed, setFailed] = useState(false);
@@ -72,7 +75,7 @@ export function Scene3D(props: Scene3DProps) {
   if (!view) {
     body = <SceneEmpty updating={updating} />;
   } else if (mode === "2d") {
-    body = <PlanSvg view={view} layers={layers} selection={sel} onSelect={select} onOpenMedia={onOpenMedia} />;
+    body = <PlanSvg view={view} layers={layers} selection={sel} onSelect={select} onOpenMedia={onOpenMedia} surroundings={env.data} />;
   } else if (webgl === null) {
     body = <Loading3D />;
   } else {
@@ -89,6 +92,7 @@ export function Scene3D(props: Scene3DProps) {
           poseRef={poseRef}
           compact={compact}
           onViewPreset={onViewPreset}
+          surroundings={env.data}
         />
       </ViewerErrorBoundary>
     );
@@ -113,6 +117,8 @@ export function Scene3D(props: Scene3DProps) {
       toggleDisabledReason={blocked}
       layers={layers}
       onLayersChange={setLayers}
+      surroundingsStatus={env.status}
+      surroundingsCount={env.data.buildings.length}
       selection={sel}
       onSelect={select}
       onOpenMedia={onOpenMedia}

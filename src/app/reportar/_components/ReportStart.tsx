@@ -14,7 +14,6 @@ import { incidentTypeIcon } from "@/lib/labels";
 import { CodeEntry } from "./CodeEntry";
 import { NearbyIncidents } from "./NearbyIncidents";
 import { PrivacyNote, RecordingTips } from "./RecordingTips";
-import { SafetyNotice } from "./SafetyNotice";
 import { TypePicker, reportTypeLabel } from "./TypePicker";
 
 /** Sobre esta precisión (m) avisamos que la ubicación es aproximada. */
@@ -78,7 +77,6 @@ export function ReportStart({ invalidCode }: ReportStartProps) {
     const TypeIcon = incidentTypeIcon[chosenType];
     return (
       <div className="flex flex-col gap-5">
-        <SafetyNotice />
         <header className="flex flex-col gap-3">
           <h1 className="font-display text-3xl leading-none font-bold text-text">Envía tu video</h1>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line bg-surface px-4 py-3">
@@ -125,7 +123,6 @@ export function ReportStart({ invalidCode }: ReportStartProps) {
         </p>
       </header>
 
-      <SafetyNotice />
 
       {/* Ubicación */}
       <section aria-labelledby="ubicacion-titulo" className="flex flex-col gap-3">

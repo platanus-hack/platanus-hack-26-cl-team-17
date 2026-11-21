@@ -6,7 +6,7 @@ import { Badge, Button, Spinner } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { CommEntry } from "@/lib/domain";
 import { formatClock, formatDateTime } from "@/lib/format";
-import { commSourceShort, type EntryTag, type PendingComm } from "./comms-model";
+import { commAudioUrl, commSourceShort, type EntryTag, type PendingComm } from "./comms-model";
 
 /** Solicitud de llevar una entrada a la vista; `nonce` permite repetir la misma. */
 export interface LogFocus {
@@ -168,6 +168,15 @@ export function CommsLog({ entries, pending, tags, focus, onRetry, onDiscard, em
                     source={e.source}
                   />
                   <p className="mt-0.5 text-sm leading-snug break-words whitespace-pre-wrap text-text">{e.text}</p>
+                  {e.audio_path && (
+                    <audio
+                      controls
+                      preload="none"
+                      src={commAudioUrl(e.audio_path)}
+                      aria-label={`Grabación de C${e.seq}`}
+                      className="mt-1 h-8 w-full max-w-sm"
+                    />
+                  )}
                   {entryTags.length > 0 && (
                     <div className="mt-1 flex flex-wrap gap-1">
                       {entryTags.map((t) => (
@@ -199,7 +208,7 @@ export function CommsLog({ entries, pending, tags, focus, onRetry, onDiscard, em
                 {p.status === "sending" ? (
                   <p className="mt-1 flex items-center gap-1.5 text-xs text-muted">
                     <Spinner size="xs" label="" />
-                    Enviando…
+                    {p.input.audio ? "Subiendo grabación…" : "Enviando…"}
                   </p>
                 ) : (
                   <div className="mt-1 flex flex-wrap items-center gap-2">

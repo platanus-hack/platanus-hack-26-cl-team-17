@@ -192,12 +192,12 @@ export function IncidentHeader({ incident, mode, onShare, onAddMedia, onChanged,
                 icon={FlaskConical}
                 title="Incidente de demostración: videos, radio y dron ficticios"
               >
-                DEMO · datos ficticios
+                Demo · datos ficticios
               </Badge>
             )}
             {!incident.verified && (
               <Badge tone="warning" variant="solid" title="Nació de un reporte de vecino y aún no lo confirma el mando">
-                SIN VERIFICAR
+                Sin verificar
               </Badge>
             )}
           </div>
@@ -234,7 +234,7 @@ export function IncidentHeader({ incident, mode, onShare, onAddMedia, onChanged,
             </div>
           ) : (
             <div className="flex min-w-0 items-center gap-1">
-              <p className="min-w-0 truncate font-display text-xl font-semibold leading-tight text-text" title={incident.title}>
+              <p className="min-w-0 truncate font-display text-2xl font-extrabold leading-tight text-text" title={incident.title}>
                 {incident.title}
               </p>
               <IconButton ref={editButtonRef} icon={Pencil} label="Editar título" size="sm" onClick={startEdit} />
@@ -277,28 +277,22 @@ export function IncidentHeader({ incident, mode, onShare, onAddMedia, onChanged,
             Verificar
           </Button>
         )}
-        <Button size="md" icon={Share2} onClick={onShare}>
-          Compartir
-        </Button>
-        <Button size="md" icon={Upload} onClick={onAddMedia}>
-          Agregar video
-        </Button>
-        <Button
-          size="md"
+        <IconButton icon={Share2} label="Compartir" size="md" onClick={onShare} />
+        <IconButton icon={Upload} label="Agregar video" size="md" onClick={onAddMedia} />
+        <IconButton
           icon={RefreshCw}
-          loading={analyzing}
+          label={
+            fusionRunning
+              ? "Analizando…"
+              : simulated
+                ? "Reanalizar (IA simulada: el análisis es de demostración)"
+                : "Reanalizar todas las fuentes"
+          }
+          size="md"
+          loading={analyzing || fusionRunning}
           disabled={fusionRunning || analyzing}
           onClick={() => void reanalyze()}
-          title={
-            fusionRunning
-              ? "El análisis ya está en curso"
-              : simulated
-                ? "IA simulada: el análisis es de demostración"
-                : "Volver a fusionar todas las fuentes"
-          }
-        >
-          {fusionRunning ? "Analizando…" : "Reanalizar"}
-        </Button>
+        />
       </div>
 
       <ConfirmDialog

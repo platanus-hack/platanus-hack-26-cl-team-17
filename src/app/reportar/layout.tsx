@@ -5,7 +5,7 @@ import { VecinoShell } from "@/components/shell";
 export const metadata: Metadata = {
   title: { absolute: "Enviar video a Bomberos — Vigía" },
   description:
-    "Envía a Bomberos un video o fotos de la emergencia desde tu teléfono, sin crear cuenta. Primero llama al 132.",
+    "Envía a Bomberos un video o fotos de la emergencia desde tu teléfono, sin crear cuenta.",
 };
 
 /** Tema claro: la barra del navegador acompaña el fondo de las pantallas de vecinos. */

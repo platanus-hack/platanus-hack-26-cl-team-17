@@ -128,3 +128,30 @@ export function rateLimit(key: string, max: number, windowMs: number): void {
   b.count += 1;
   if (b.count > max) throw errors.rateLimited();
 }
+
+/** Lee un cuerpo binario crudo cortando apenas supera `maxBytes` (413). */
+export async function readLimitedBody(req: Request, maxBytes: number, tooLargeMessage?: string): Promise<Uint8Array> {
+  const declared = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > maxBytes) throw errors.tooLarge(tooLargeMessage);
+  if (!req.body) return new Uint8Array(0);
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel().catch(() => undefined);
+      throw errors.tooLarge(tooLargeMessage);
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) {
+    out.set(c, off);
+    off += c.byteLength;
+  }
+  return out;
+}

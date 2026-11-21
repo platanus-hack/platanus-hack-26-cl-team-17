@@ -11,6 +11,7 @@
 import { after } from "next/server";
 import type { ScenarioStepResponse } from "@/lib/contract";
 import { processMedia, requestCommsAnalysis, requestFusion } from "@/lib/ai/pipeline";
+import { anchorSceneToOsm } from "@/lib/osm";
 import { getFiles, getStore } from "@/lib/store";
 import { runScenarioStepCore, seedDemoWith } from "./core";
 import type { DemoDeps } from "./types";
@@ -22,6 +23,15 @@ function deps(): DemoDeps {
     pipeline: { processMedia, requestFusion, requestCommsAnalysis },
     now: Date.now,
     defer: (task) => after(task),
+    // Corre en paralelo con la siembra: puede esperar más que en la fusión.
+    // Todos los medios de la demo traen GPS: sus cámaras no se mueven con la escena.
+    anchorScene: async (scene, incident) =>
+      (
+        await anchorSceneToOsm(scene, incident, {
+          timeoutMs: 10_000,
+          fixedCameras: scene.cameras.map((c) => ({ media_ref: c.media_ref, tolerance_m: 20 })),
+        })
+      ).scene,
   };
 }
 

@@ -10,6 +10,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { clamp, niceScaleLength, type Bounds, type Vec3, type ViewPreset } from "../geometry";
 import { clampTarget, easeInOut, fitBox, metersPerPixel, viewHeadingDeg } from "./pose";
+import { safeRect, type Insets } from "./viewport";
 
 type Controls = ComponentRef<typeof OrbitControls>;
 
@@ -43,6 +44,8 @@ export interface CameraRigProps {
   poseRef: RefObject<CameraPose | null>;
   apiRef: RefObject<RigApi | null>;
   reducedMotion: boolean;
+  /** Márgenes tapados por paneles: el encuadre se calcula para el hueco visible. */
+  insetsRef: RefObject<Insets>;
 }
 
 interface Anim {
@@ -54,7 +57,7 @@ interface Anim {
   dur: number;
 }
 
-export function CameraRig({ frame, core, extent, frontHeadingDeg, groundSize, request, poseRef, apiRef, reducedMotion }: CameraRigProps) {
+export function CameraRig({ frame, core, extent, frontHeadingDeg, groundSize, request, poseRef, apiRef, reducedMotion, insetsRef }: CameraRigProps) {
   const get = useThree((s) => s.get);
   const controls = useRef<Controls>(null);
   const anim = useRef<Anim | null>(null);
@@ -97,9 +100,10 @@ export function CameraRig({ frame, core, extent, frontHeadingDeg, groundSize, re
     (preset: ViewPreset): CameraPose => {
       const { size, camera } = get();
       const fov = camera instanceof THREE.PerspectiveCamera ? camera.fov : 45;
-      return fitBox(preset === "top" ? frame : core, preset, frontHeadingDeg, size.width / Math.max(1, size.height), fov);
+      const r = safeRect(size, insetsRef.current);
+      return fitBox(preset === "top" ? frame : core, preset, frontHeadingDeg, r.w / Math.max(1, r.h), fov);
     },
-    [get, frame, core, frontHeadingDeg],
+    [get, frame, core, frontHeadingDeg, insetsRef],
   );
 
   // Primer encuadre: la pose previa del usuario (si vuelve desde la planta) o isométrica al contenido.
@@ -181,10 +185,17 @@ export function HudUpdater({
   compassRef,
   scaleBarRef,
   scaleTextRef,
+  tapeRef,
+  headingTextRef,
+  tapePxPerDeg = 4,
 }: {
   compassRef: RefObject<HTMLElement | null>;
   scaleBarRef: RefObject<HTMLElement | null>;
   scaleTextRef: RefObject<HTMLElement | null>;
+  /** Tira de la cinta de rumbo: se desplaza para dejar el rumbo actual al centro. */
+  tapeRef: RefObject<HTMLElement | null>;
+  headingTextRef: RefObject<HTMLElement | null>;
+  tapePxPerDeg?: number;
 }) {
   const last = useRef({ heading: NaN, len: NaN, px: NaN });
   useFrame((state) => {
@@ -194,12 +205,21 @@ export function HudUpdater({
     const cam = state.camera;
     const heading = Math.round(viewHeadingDeg(tuple(cam.position), tuple(target)));
     const fov = cam instanceof THREE.PerspectiveCamera ? cam.fov : 45;
-    const mpp = metersPerPixel(cam.position.distanceTo(target), fov, state.size.height);
+    // Con el hueco visible activo, el campo vertical abarca el alto del hueco, no del lienzo.
+    const viewH = cam instanceof THREE.PerspectiveCamera && cam.view?.enabled ? cam.view.fullHeight : state.size.height;
+    const mpp = metersPerPixel(cam.position.distanceTo(target), fov, viewH);
     const len = niceScaleLength(mpp, 80);
     const px = Math.round(len / mpp);
     const prev = last.current;
     const compass = compassRef.current;
     if (heading !== prev.heading && compass) compass.style.transform = `rotate(${-heading}deg)`;
+    if (heading !== prev.heading) {
+      const deg = ((heading % 360) + 360) % 360;
+      const tape = tapeRef.current;
+      if (tape) tape.style.transform = `translateX(${-(deg + 360) * tapePxPerDeg}px)`;
+      const ht = headingTextRef.current;
+      if (ht) ht.textContent = `${String(deg).padStart(3, "0")}°`;
+    }
     const bar = scaleBarRef.current;
     const text = scaleTextRef.current;
     if ((len !== prev.len || px !== prev.px) && bar && text) {

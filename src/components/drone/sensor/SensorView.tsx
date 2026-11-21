@@ -29,6 +29,7 @@ import { distanceM } from "@/lib/geo";
 import { formatDistance, formatDuration, formatHeading, pluralize } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import { SensorController, type SensorInputs, type SensorTransport } from "./controller";
+import { useLiveStream } from "./use-live-stream";
 import {
   BATCH_SIZE,
   commandView,
@@ -116,6 +117,13 @@ export function SensorView({ token, mission, incident }: SensorViewProps) {
   const controllerRef = useRef<SensorController | null>(null);
   const active = session.phase === "running" || session.phase === "stopping";
   const wake = useWakeLock(active);
+  const live = useLiveStream({
+    active: session.phase === "running",
+    videoRef,
+    cameraReadyRef: camera.readyRef,
+    missionId: mission.id,
+    token,
+  });
 
   const { readyRef: cameraReadyRef, stop: stopCamera } = camera;
   const { fixRef, stop: stopGps } = gps;
@@ -220,7 +228,6 @@ export function SensorView({ token, mission, incident }: SensorViewProps) {
           ? { tone: "warning" as const, text: "Sin brújula" }
           : { tone: "neutral" as const, text: "Brújula" };
 
-  const sending = session.phase === "running" && session.inFlight !== null;
 
   return (
     <SensorFrame>
@@ -302,9 +309,15 @@ export function SensorView({ token, mission, incident }: SensorViewProps) {
           )}
           {active && (
             <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between gap-1">
-              <OverlayChip icon={Camera} tone={sending ? "ok" : "neutral"}>
-                <span className={cn("inline-block size-2 rounded-full bg-critical", "animate-pulse")} aria-hidden="true" />
-                EN VIVO
+              <OverlayChip icon={Camera} tone={live.status === "live" ? "ok" : live.status === "retrying" ? "warning" : "neutral"}>
+                <span className={cn("inline-block size-2 rounded-full bg-critical", live.status === "live" && "animate-pulse")} aria-hidden="true" />
+                {live.status === "live"
+                  ? `EN VIVO · ${live.fps.toLocaleString("es-CL")} c/s`
+                  : live.status === "retrying"
+                    ? "VIDEO: REINTENTANDO"
+                    : live.status === "ended"
+                      ? "VIDEO CORTADO"
+                      : "CONECTANDO VIDEO"}
               </OverlayChip>
               {camera.state.rear === false && (
                 <OverlayChip icon={TriangleAlert} tone="warning">
@@ -319,7 +332,8 @@ export function SensorView({ token, mission, incident }: SensorViewProps) {
         {session.phase === "idle" ? (
           <section aria-label="Antes de empezar" className="flex flex-col gap-1">
             <p className="text-base leading-relaxed text-muted">
-              Este teléfono enviará al puesto de mando su <strong className="text-text">ubicación y rumbo cada 2 s</strong> y{" "}
+              Este teléfono enviará al puesto de mando su <strong className="text-text">ubicación y rumbo cada 2 s</strong>,{" "}
+              <strong className="text-text">video en vivo</strong> (unos 3 cuadros por segundo, en baja resolución) y{" "}
               <strong className="text-text">una foto cada 5 s</strong> (la IA las analiza en lotes de {BATCH_SIZE}). Apunta la cámara
               trasera al incidente y mantén la pantalla encendida.
             </p>

@@ -7,7 +7,6 @@ import {
   CircleHelp,
   Drone,
   FlaskConical,
-  MapPin,
   Radio,
   ShieldCheck,
   Siren,
@@ -19,7 +18,6 @@ import type { IncidentSummary } from "@/lib/contract";
 import type { TrappedStatus } from "@/lib/domain";
 import {
   incidentStatusLabel,
-  incidentStatusTone,
   incidentTypeIcon,
   incidentTypeLabel,
   isTrappedAlarm,
@@ -67,7 +65,7 @@ export function TrappedBadge({ status, size = "lg" }: { status: TrappedStatus | 
   return (
     <Badge
       tone={trappedTone[status]}
-      variant={alarm ? "solid" : "soft"}
+      variant="soft"
       size={size}
       icon={trappedIcon[status]}
       pulse={alarm}
@@ -78,18 +76,24 @@ export function TrappedBadge({ status, size = "lg" }: { status: TrappedStatus | 
 }
 
 /** Confianza del informe y aviso de simulación junto al estado de atrapados (lo que dice la IA siempre muestra cuánto confía). */
-export function ReportMeta({ incident: i }: { incident: IncidentSummary }) {
+export function ReportMeta({ incident: i, compact = false }: { incident: IncidentSummary; compact?: boolean }) {
   const confidence = i.situation_confidence ?? null;
   const simulated = i.situation_engine === "simulated" && i.origin !== "demo";
   if (!confidence && !simulated) return null;
   return (
     <span className="inline-flex flex-wrap items-center gap-1.5">
-      {confidence && <ConfidenceMeter level={confidence} size="sm" />}
-      {simulated && (
-        <Badge tone="warning" icon={FlaskConical} title="Informe del motor de reglas, no del modelo de IA">
-          Simulado
-        </Badge>
-      )}
+      {confidence && <ConfidenceMeter level={confidence} size="sm" showLabel={!compact} />}
+      {simulated &&
+        (compact ? (
+          <span className="inline-flex text-warning" title="Informe del motor de reglas, no del modelo de IA">
+            <FlaskConical aria-hidden="true" className="size-3.5" />
+            <span className="sr-only">Simulado</span>
+          </span>
+        ) : (
+          <Badge tone="warning" icon={FlaskConical} title="Informe del motor de reglas, no del modelo de IA">
+            Simulado
+          </Badge>
+        ))}
     </span>
   );
 }
@@ -112,7 +116,7 @@ function Count({ icon: Icon, n, label }: { icon: LucideIcon; n: number; label: s
   );
 }
 
-/** Tarjeta densa de un incidente para el tablero; enlaza a `/mando/<id>`. */
+/** Tarjeta de un incidente para el tablero (al estilo de un post de X); enlaza a `/mando/<id>`. */
 export const IncidentCard = memo(function IncidentCard({ incident: i, selected = false, onHover }: IncidentCardProps) {
   const TypeIcon = incidentTypeIcon[i.type] ?? CircleHelp;
   const closed = i.status === "closed";
@@ -131,61 +135,53 @@ export const IncidentCard = memo(function IncidentCard({ incident: i, selected =
         tone={stripeTone(i)}
         selected={selected}
         padding="sm"
-        className={cn("flex flex-col gap-2", selected && "bg-surface-2/60", closed && "opacity-80")}
+        className={cn("flex items-start gap-3", selected && "bg-surface-2/60", closed && "opacity-70")}
       >
-        <div className="flex items-center gap-2 text-xs text-muted">
-          <TypeIcon aria-hidden="true" className="size-4 shrink-0 text-text" />
-          <span className="label-caps truncate">{labelOr(incidentTypeLabel, i.type)}</span>
-          <span className="font-mono text-faint">{i.code}</span>
-          <span className="ml-auto inline-flex items-center gap-1.5">
+        <span
+          className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-surface-2 text-text"
+          title={labelOr(incidentTypeLabel, i.type)}
+        >
+          <TypeIcon aria-hidden="true" className="size-[18px]" />
+          <span className="sr-only">{labelOr(incidentTypeLabel, i.type)}</span>
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2">
+            <h3 className="min-w-0 flex-1 truncate text-[15px] leading-5 font-bold">{i.title || "Sin título"}</h3>
             <span className="sr-only">{closed ? "Duración" : "Tiempo transcurrido"}</span>
-            <Elapsed since={i.created_at} until={closed ? i.updated_at : null} className="text-sm text-text" />
-          </span>
-        </div>
+            <Elapsed since={i.created_at} until={closed ? i.updated_at : null} className="shrink-0 text-sm text-muted" />
+          </div>
+          <p className="truncate text-[15px] leading-5 text-muted">{i.address || "Sin dirección"}</p>
 
-        <div className="min-w-0">
-          <h3 className="truncate font-display text-lg font-semibold leading-tight">{i.title || "Sin título"}</h3>
-          <p className="flex min-w-0 items-center gap-1 text-sm text-muted">
-            <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
-            <span className="truncate">{i.address || "Sin dirección"}</span>
-          </p>
-        </div>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <TrappedBadge status={i.trapped_status} size="md" />
+            {i.trapped_status !== null && <ReportMeta incident={i} compact />}
+            {/* La gravedad ya va en el color del borde; el texto queda para lectores de pantalla. */}
+            {i.severity && <span className="sr-only">Gravedad {labelOr(severityLabel, i.severity).toLowerCase()}</span>}
+            <span className="sr-only">{labelOr(incidentStatusLabel, i.status)}</span>
 
-        {i.headline && <p className="line-clamp-2 text-sm text-text">{i.headline}</p>}
-
-        <div className="flex flex-wrap items-center gap-1.5">
-          <TrappedBadge status={i.trapped_status} />
-          {i.severity && (
-            <Badge tone={severityTone[i.severity] ?? "neutral"} size="md">
-              Gravedad {labelOr(severityLabel, i.severity).toLowerCase()}
-            </Badge>
-          )}
-          {i.trapped_status !== null && <ReportMeta incident={i} />}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted">
-          <Badge tone={incidentStatusTone[i.status] ?? "neutral"} variant="outline" dot>
-            {labelOr(incidentStatusLabel, i.status)}
-          </Badge>
-          {!i.verified && (
-            <Badge tone="warning" variant="outline">
-              Sin verificar
-            </Badge>
-          )}
-          {i.origin === "demo" && (
-            <Badge tone="info" icon={FlaskConical} title="Datos ficticios de demostración">
-              Demo
-            </Badge>
-          )}
-          <span className="ml-auto inline-flex items-center gap-3">
-            <Count icon={Video} n={i.media_count} label={pluralize(i.media_count, "medio", "medios")} />
-            <Count icon={Radio} n={i.comms_count} label={pluralize(i.comms_count, "comunicación", "comunicaciones")} />
-            {i.active_missions > 0 && (
-              <span className="text-drone">
-                <Count icon={Drone} n={i.active_missions} label={pluralize(i.active_missions, "dron activo", "drones activos")} />
-              </span>
-            )}
-          </span>
+            <span className="ml-auto inline-flex items-center gap-3 text-xs text-muted">
+              {!i.verified && (
+                <span className="inline-flex text-warning" title="Sin verificar">
+                  <CircleDashed aria-hidden="true" className="size-3.5" />
+                  <span className="sr-only">Sin verificar</span>
+                </span>
+              )}
+              {i.origin === "demo" && (
+                <span className="inline-flex" title="Datos ficticios de demostración">
+                  <FlaskConical aria-hidden="true" className="size-3.5" />
+                  <span className="sr-only">Demo</span>
+                </span>
+              )}
+              <Count icon={Video} n={i.media_count} label={pluralize(i.media_count, "medio", "medios")} />
+              <Count icon={Radio} n={i.comms_count} label={pluralize(i.comms_count, "comunicación", "comunicaciones")} />
+              {i.active_missions > 0 && (
+                <span className="text-drone">
+                  <Count icon={Drone} n={i.active_missions} label={pluralize(i.active_missions, "dron activo", "drones activos")} />
+                </span>
+              )}
+            </span>
+          </div>
         </div>
       </Card>
     </div>

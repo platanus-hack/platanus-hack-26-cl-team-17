@@ -1,10 +1,9 @@
 /**
- * Estilos base: el vectorial configurado (OpenFreeMap por defecto) y un respaldo ráster
+ * Estilos base: satélite (imágenes de Esri con calles y nombres encima) y un respaldo ráster
  * mínimo de OpenStreetMap definido en línea, que carga sin pedir ningún JSON a la red.
  * Si tampoco hay teselas, la capa de fondo deja un color liso y los marcadores siguen visibles.
  */
 import type { StyleSpecification } from "maplibre-gl";
-import { publicConfig } from "@/lib/public-config";
 import type { MapPalette } from "./palette";
 import type { MapTheme } from "./types";
 
@@ -12,8 +11,32 @@ import type { MapTheme } from "./types";
 export const OVERLAY_PREFIX = "vg-";
 export const FALLBACK_SOURCE_ID = "osm-raster";
 
-export function vectorStyleUrl(theme: MapTheme): string {
-  return theme === "light" ? publicConfig.mapStyleLight : publicConfig.mapStyleDark;
+const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
+
+/** Estilo principal: vista satelital, igual en ambos temas (los marcadores usan la paleta del tema). */
+export function satelliteStyle(): StyleSpecification {
+  const raster = (service: string, attribution?: string) => ({
+    type: "raster" as const,
+    tiles: [`${ESRI}/${service}/MapServer/tile/{z}/{y}/{x}`],
+    tileSize: 256,
+    maxzoom: 19,
+    ...(attribution ? { attribution } : {}),
+  });
+  return {
+    version: 8,
+    name: "Vigía · satélite",
+    sources: {
+      "esri-imagery": raster("World_Imagery", "Imágenes © Esri, Maxar, Earthstar Geographics"),
+      "esri-roads": raster("Reference/World_Transportation"),
+      "esri-places": raster("Reference/World_Boundaries_and_Places"),
+    },
+    layers: [
+      { id: "sat-background", type: "background", paint: { "background-color": "#0b1016" } },
+      { id: "sat-imagery", type: "raster", source: "esri-imagery" },
+      { id: "sat-roads", type: "raster", source: "esri-roads", paint: { "raster-opacity": 0.75 } },
+      { id: "sat-places", type: "raster", source: "esri-places" },
+    ],
+  };
 }
 
 export function rasterFallbackStyle(theme: MapTheme, palette: MapPalette): StyleSpecification {

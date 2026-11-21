@@ -4,7 +4,8 @@ import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { BellRing, Drone, History, LayoutList, Radio, Video } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { MediaView } from "@/lib/contract";
-import { Badge, Button, EmptyState, Panel, TabPanel, Tabs, type TabItem } from "@/components/ui";
+import { Button, EmptyState, TabPanel, Tabs, type TabItem } from "@/components/ui";
+import { cn } from "@/lib/cn";
 import { pluralize } from "@/lib/format";
 import type { TimelinePanelProps } from "./types";
 import {
@@ -28,6 +29,7 @@ const FRESH_MS = 6000;
 /** Filas que se montan de entrada; el resto se pide con "Mostrar más". */
 const PAGE_ROWS = 80;
 
+/** Ícono del estado vacío de cada filtro (las pestañas van solo con texto). */
 const filterIcon: Record<TimelineFilter, LucideIcon> = {
   all: LayoutList,
   alerts: BellRing,
@@ -37,13 +39,16 @@ const filterIcon: Record<TimelineFilter, LucideIcon> = {
 };
 
 const emptyByFilter: Record<Exclude<TimelineFilter, "all">, { title: string; description: string }> = {
-  alerts: { title: "Sin alertas", description: "Aquí aparecen las alertas, advertencias y errores del incidente." },
-  media: { title: "Sin videos ni fotos", description: "Aquí aparecen los medios recibidos y sus análisis." },
-  comms: { title: "Sin eventos de radio", description: "Aquí aparecen las comunicaciones y alertas radiales." },
-  drone: { title: "Sin actividad del dron", description: "Aquí aparecen las misiones del dron y sus avisos." },
+  alerts: { title: "Sin alertas", description: "Alertas, advertencias y errores." },
+  media: { title: "Sin videos ni fotos", description: "Medios recibidos y sus análisis." },
+  comms: { title: "Sin eventos de radio", description: "Comunicaciones y alertas radiales." },
+  drone: { title: "Sin actividad del dron", description: "Misiones del dron y sus avisos." },
 };
 
-/** Línea de tiempo del incidente: recientes arriba, filtros, resaltado de novedades y ráfagas del dron plegadas. */
+/**
+ * Línea de tiempo del incidente: recientes arriba, filtros, resaltado de novedades y ráfagas del dron plegadas.
+ * Sin barra de título propia: la pestaña que la contiene ya la nombra y el conteo va en el filtro "Todo".
+ */
 export function TimelinePanel({ events, media, onOpenMedia, onOpenComm, onOpenMission, className }: TimelinePanelProps) {
   const baseId = useId();
   const tabsPrefix = `${baseId}-timeline`;
@@ -95,11 +100,14 @@ export function TimelinePanel({ events, media, onOpenMedia, onOpenComm, onOpenMi
     setLimit(PAGE_ROWS);
   };
 
-  const tabs: TabItem<TimelineFilter>[] = TIMELINE_FILTERS.map((id) => ({
+  // Filtros vacíos se ocultan (salvo "Todo" y el activo); así una pestaña visible ya implica que tiene
+  // eventos y el conteo queda solo donde se usa: el total y las alertas. Las cinco caben sin scroll.
+  const tabs: TabItem<TimelineFilter>[] = TIMELINE_FILTERS.filter(
+    (id) => id === "all" || id === filter || counts[id] > 0,
+  ).map((id) => ({
     id,
     label: timelineFilterLabel[id],
-    icon: filterIcon[id],
-    count: counts[id],
+    count: id === "all" || id === "alerts" ? counts[id] : undefined,
     alert: id === "alerts" && hasCritical,
   }));
 
@@ -107,21 +115,11 @@ export function TimelinePanel({ events, media, onOpenMedia, onOpenComm, onOpenMi
   const hidden = rows.length - visible.length;
 
   return (
-    <Panel
-      title="Línea de tiempo"
-      icon={History}
-      badge={
-        events.length > 0 ? (
-          <Badge>
-            <span className="tabular">{pluralize(events.length, "evento")}</span>
-          </Badge>
-        ) : undefined
-      }
-      scroll
-      flush
-      className={className}
+    <section
+      aria-label={events.length > 0 ? `Línea de tiempo · ${pluralize(events.length, "evento")}` : "Línea de tiempo"}
+      className={cn("flex min-h-0 flex-col bg-surface", className)}
     >
-      <div className="sticky top-0 z-10 bg-surface">
+      <div className="shrink-0">
         <Tabs
           tabs={tabs}
           value={filter}
@@ -131,12 +129,12 @@ export function TimelinePanel({ events, media, onOpenMedia, onOpenComm, onOpenMi
           idPrefix={tabsPrefix}
         />
       </div>
-      <TabPanel id={filter} idPrefix={tabsPrefix} active keepMounted={false}>
+      <TabPanel id={filter} idPrefix={tabsPrefix} active keepMounted={false} className="min-h-0 flex-1 overflow-y-auto">
         {events.length === 0 ? (
           <EmptyState
             icon={History}
             title="Todavía no hay eventos"
-            description="Aquí aparecerán los videos recibidos, los análisis de la IA, las alertas, la radio y el dron, con los más recientes arriba."
+            description="Videos, análisis, alertas, radio y dron, los más recientes arriba."
           />
         ) : rows.length === 0 && filter !== "all" ? (
           <EmptyState compact icon={filterIcon[filter]} {...emptyByFilter[filter]} />
@@ -175,6 +173,6 @@ export function TimelinePanel({ events, media, onOpenMedia, onOpenComm, onOpenMi
           </>
         )}
       </TabPanel>
-    </Panel>
+    </section>
   );
 }

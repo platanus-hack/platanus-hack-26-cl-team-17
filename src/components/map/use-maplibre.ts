@@ -26,7 +26,7 @@ import {
 import type { FeatureCollection } from "geojson";
 import type { LatLng } from "@/lib/geo";
 import type { Bounds } from "./geojson";
-import { MAP_LOCALE_ES, OVERLAY_PREFIX, rasterFallbackStyle, vectorStyleUrl } from "./base-style";
+import { MAP_LOCALE_ES, OVERLAY_PREFIX, rasterFallbackStyle, satelliteStyle } from "./base-style";
 import { FALLBACK_PALETTE, readPalette, type MapPalette } from "./palette";
 import type { MapTheme } from "./types";
 
@@ -311,7 +311,8 @@ export class MapController {
   }
 
   private styleFor(attempt: Attempt, palette: MapPalette): StyleSpecification | string {
-    return attempt === "vector" ? vectorStyleUrl(this.theme) : rasterFallbackStyle(this.theme, palette);
+    // "vector" es el intento principal (hoy, la vista satelital); "raster" es el respaldo de OpenStreetMap.
+    return attempt === "vector" ? satelliteStyle() : rasterFallbackStyle(this.theme, palette);
   }
 
   private applyStyle(map: MapLibreMap) {

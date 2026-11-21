@@ -40,6 +40,8 @@ export interface DemoDeps {
   now: () => number;
   /** Agenda trabajo para después de responder (en las rutas: `after()` de Next). */
   defer: (task: () => Promise<void>) => void;
+  /** Ancla la escena sembrada al mapa real (OSM); debe resolver siempre. Sin inyectar, no se ancla. */
+  anchorScene?: (scene: SceneModel, incident: { lat: number; lng: number; type: IncidentType }) => Promise<SceneModel>;
 }
 
 /* ───────────── Pósters (bocetos SVG rotulados como demostración) ───────────── */

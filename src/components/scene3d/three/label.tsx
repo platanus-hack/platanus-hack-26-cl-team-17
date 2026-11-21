@@ -30,7 +30,14 @@ export class LabelRegistry {
   private items = new Map<number, Entry>();
   private seq = 0;
   private wake: (() => void) | null = null;
+  /** Zona visible en coordenadas de pantalla; lo que cae fuera se oculta y no compite en el despeje. */
+  private clip: (() => DOMRect | null) | null = null;
   dirty = true;
+
+  setClip(fn: (() => DOMRect | null) | null) {
+    this.clip = fn;
+    this.touch();
+  }
 
   setWake(fn: (() => void) | null) {
     this.wake = fn;
@@ -52,12 +59,23 @@ export class LabelRegistry {
   }
 
   layout() {
-    const entries = [...this.items.values()];
+    const all = [...this.items.values()];
+    const clip = this.clip?.() ?? null;
     // Caja en su lugar natural (sin el corrimiento del despeje anterior).
-    const boxes = entries.map((e) => {
+    const measured = all.map((e) => {
       const r = e.el.getBoundingClientRect();
       return { x: r.left - e.dx, y: r.top - e.dy, w: r.width, h: r.height, priority: e.priority, pinned: e.pinned };
     });
+    const inside = (b: (typeof measured)[number]) => {
+      if (!clip) return true;
+      const cx = b.x + b.w / 2;
+      const cy = b.y + b.h / 2;
+      return cx >= clip.left && cx <= clip.right && cy >= clip.top && cy <= clip.bottom;
+    };
+    const outside = all.filter((_, i) => !inside(measured[i]));
+    for (const e of outside) if (e.el.style.visibility !== "hidden") e.el.style.visibility = "hidden";
+    const entries = all.filter((_, i) => inside(measured[i]));
+    const boxes = measured.filter((b) => inside(b));
     const placement = declutter(boxes);
     entries.forEach((e, i) => {
       const p = placement[i];
@@ -193,7 +211,7 @@ export function Chip({
   return (
     <span
       className={cx(
-        "inline-flex items-center gap-1 rounded border px-1.5 py-0.5 text-[11px] leading-tight font-semibold shadow-[0_1px_4px_rgb(0_0_0/0.45)]",
+        "inline-flex items-center gap-1 rounded-[2px] border px-1.5 py-0.5 font-mono text-[10.5px] leading-tight font-medium shadow-[0_1px_2px_rgb(15_20_25/0.12)]",
         TONE_CHIP[tone],
         selected && "outline-2 outline-offset-1 outline-info",
         className,

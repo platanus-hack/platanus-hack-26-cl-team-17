@@ -50,7 +50,7 @@ export function Card({
   ...rest
 }: CardProps) {
   const classes = cn(
-    "block rounded-lg border bg-surface text-text",
+    "block rounded-2xl border bg-surface text-text",
     selected ? "border-accent" : "border-line",
     toneLeftBorder[tone],
     paddingClass[padding],

@@ -12,5 +12,9 @@ export interface CommsPanelProps {
   onChanged: () => void;
   /** Entrada a resaltar y llevar a la vista (cuando el usuario hace clic en una evidencia "C12"). */
   highlightSeq?: number | null;
+  /** Código del incidente (VG-XXXX) para el enlace a la radio de demostración. */
+  incidentCode?: string;
+  /** true si la radio de demostración sin sesión está activa en el servidor. */
+  demoRadio?: boolean;
   className?: string;
 }

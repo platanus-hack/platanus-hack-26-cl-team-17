@@ -220,7 +220,7 @@ export function DashboardView() {
       <div className="flex flex-col gap-5">
         {unverified.length > 0 && (
           <section aria-labelledby="unverified-heading" className="flex flex-col gap-2">
-            <h2 id="unverified-heading" className="label-caps flex items-center gap-2 text-xs text-critical">
+            <h2 id="unverified-heading" className="label-caps flex items-center gap-2 text-xs text-warning">
               Reporte ciudadano sin verificar
               <Badge tone="critical" size="sm">
                 {unverified.length}

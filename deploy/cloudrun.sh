@@ -63,6 +63,8 @@ SPLAT_ITERATIONS="${SPLAT_ITERATIONS:-4000}"
 VIGIA_AI_MODEL="${VIGIA_AI_MODEL:-}"
 VIGIA_AI_EFFORT="${VIGIA_AI_EFFORT:-}"
 VIGIA_AI_FAST="${VIGIA_AI_FAST:-1}"
+# Radio de demostración sin sesión en /radio/<código> (micrófono → bitácora). 0 = apagada.
+VIGIA_DEMO_RADIO="${VIGIA_DEMO_RADIO:-1}"
 
 # 1 → falla si el secreto de Anthropic no tiene valor (por defecto se despliega con IA simulada).
 REQUIRE_ANTHROPIC="${REQUIRE_ANTHROPIC:-0}"
@@ -409,6 +411,7 @@ info "Desplegando $SERVICE en Cloud Run"
   [[ -n "$VIGIA_AI_MODEL" ]] && printf 'VIGIA_AI_MODEL: %s\n' "$(yaml_quote "$VIGIA_AI_MODEL")"
   [[ -n "$VIGIA_AI_EFFORT" ]] && printf 'VIGIA_AI_EFFORT: %s\n' "$(yaml_quote "$VIGIA_AI_EFFORT")"
   [[ -n "$VIGIA_AI_FAST" ]] && printf 'VIGIA_AI_FAST: %s\n' "$(yaml_quote "$VIGIA_AI_FAST")"
+  [[ -n "$VIGIA_DEMO_RADIO" ]] && printf 'VIGIA_DEMO_RADIO: %s\n' "$(yaml_quote "$VIGIA_DEMO_RADIO")"
   true
 } >"$WORK_DIR/env.yaml"
 

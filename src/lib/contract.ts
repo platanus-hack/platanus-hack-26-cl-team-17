@@ -17,6 +17,8 @@
  *          (el mando extrae fotogramas en su navegador para un medio que llegó sin ellos; registra
  *           los cuadros y devuelve destinos de subida; luego se llama a /analyze con media_id)
  *   POST   /api/incidents/[id]/comms           AddCommInput → { entry }
+ *   POST   /api/incidents/[id]/comms/audio     audio crudo (webm/ogg/mp4/mp3, ≤ 4 MB) → { audio_path }
+ *          (grabación de una transmisión; luego se registra la entrada con ese audio_path)
  *   POST   /api/incidents/[id]/reconstruction  StartReconstructionInput → { reconstruction }
  *          (lanza la reconstrucción 3D Gaussian Splatting en el job de GPU; 409 si ya hay una en curso
  *           o si no hay GPU configurada; el progreso llega en incident.reconstruction del snapshot)
@@ -39,6 +41,7 @@
  *   POST   /api/drone/[missionId]/telemetry    TelemetryInput → TelemetryResponse
  *   POST   /api/drone/[missionId]/frame?lat=&lng=&alt=&heading=&t=&flush=0|1
  *          body = image/jpeg crudo (≤ 3 MB)  → DroneFrameResponse
+ *   POST   /api/drone/[missionId]/live         body = image/jpeg chico (video en vivo, sin guardar) → LiveFrameAck
  *
  * Job de GPU (Authorization: Bearer <token de la reconstrucción, HMAC del servidor>)
  *   POST   /api/internal/reconstruction/[incidentId]   ReconstructionUpdate → { ok: true, cancel: boolean }
@@ -67,6 +70,7 @@ import type {
   SceneModel,
   SituationReport,
   TimelineEvent,
+  TimelineSeverity,
   TrappedStatus,
   Severity,
   AnalysisEngine,
@@ -93,6 +97,8 @@ export interface RuntimeMode {
   model: string | null;
   /** cloud_run_gpu = hay job de GPU configurado para 3D Gaussian Splatting; off = no disponible. */
   splat?: "cloud_run_gpu" | "off";
+  /** true = radio de demostración sin sesión activa en /radio/<código> (VIGIA_DEMO_RADIO). */
+  demo_radio?: boolean;
 }
 
 /* ───────────── Personal ───────────── */
@@ -324,6 +330,38 @@ export interface DroneFrameResponse {
   /** true si este cuadro cerró el lote y se envió a análisis. */
   flushed: boolean;
   command: DroneMission["command"];
+}
+
+/** Respuesta a un cuadro del video en vivo. */
+export interface LiveFrameAck {
+  ok: true;
+  seq: number;
+  command: DroneMission["command"];
+}
+
+/** Observación del video en vivo del dron (cada ~15 s, en memoria del servidor). */
+export interface LiveInsightView {
+  id: string;
+  at: string;
+  summary: string;
+  severity: TimelineSeverity;
+  changed: boolean;
+  observations: string[];
+  /** "simulated" = sin IA real; "error" = la ventana no se pudo analizar. */
+  engine: "claude" | "simulated" | "error";
+  /** Cuadros que miró el observador. */
+  frames: number;
+}
+
+/**
+ * Personal:
+ *   GET /api/drone/[missionId]/live?after=<seq>  → image/jpeg (X-Live-Seq, X-Live-At) · 204 sin cuadro nuevo · 404 sin video
+ *   GET /api/drone/[missionId]/live/insights     → LiveInsightsResponse
+ */
+export interface LiveInsightsResponse {
+  insights: LiveInsightView[];
+  analyzing: boolean;
+  every_s: number;
 }
 
 /* ───────────── Reconstrucción 3DGS: manifiesto para el job de GPU ───────────── */

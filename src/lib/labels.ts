@@ -650,6 +650,9 @@ export const commSourceLabel: Record<CommSource, string> = {
   import: "Importada",
 };
 
+/** Texto de una transmisión hablada que llegó con grabación pero sin transcripción. */
+export const UNTRANSCRIBED_COMM_TEXT = "[Transmisión sin transcribir: escuchar la grabación]";
+
 /* ═══════════════════════════ Informe de situación ═══════════════════════════ */
 
 /** Categoría de un hallazgo. */

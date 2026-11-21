@@ -1,9 +1,9 @@
 "use client";
 /** Piezas compartidas por la franja crítica y el panel de situación. */
-import { useId, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { ChevronDown, CircleAlert, Clock, FileQuestion, MessageSquare, Video, type LucideIcon } from "lucide-react";
 import { Spinner, TimeAgo } from "@/components/ui";
-import { toneBorder, toneSoftBg, toneText, type Tone } from "@/components/ui/tone";
+import { toneText, type Tone } from "@/components/ui/tone";
 import type { CommEntry, EvidenceRef, PipelineState } from "@/lib/domain";
 import type { MediaView } from "@/lib/contract";
 import { cn } from "@/lib/cn";
@@ -91,6 +91,8 @@ export interface EvidenceChipsProps {
   comms?: readonly CommEntry[];
   onEvidence?: (ref: EvidenceRef) => void;
   size?: "sm" | "md";
+  /** Chips visibles antes de plegar el resto en "+N" (sin límite si se omite). */
+  max?: number;
   /** Rótulo accesible de la lista. */
   label?: string;
   className?: string;
@@ -103,19 +105,63 @@ export function EvidenceChips({
   comms,
   onEvidence,
   size,
+  max,
   label = "Evidencia",
   className,
 }: EvidenceChipsProps) {
+  const [showAll, setShowAll] = useState(false);
   if (refs.length === 0) return null;
   const items = refs.map((ref) => resolveEvidence(ref, { media, comms }));
+  const folded = max !== undefined && !showAll && items.length > max;
+  const visible = folded ? items.slice(0, max) : items;
+  const hidden = items.length - visible.length;
   return (
     <ul aria-label={label} className={cn("flex flex-wrap items-center gap-1.5", className)}>
-      {items.map((item, i) => (
+      {visible.map((item, i) => (
         <li key={`${item.label}-${i}`} className="max-w-full">
           <EvidenceChip item={item} onEvidence={onEvidence} size={size} />
         </li>
       ))}
+      {hidden > 0 ? (
+        <li>
+          <button
+            type="button"
+            onClick={() => setShowAll(true)}
+            aria-label={`Ver ${hidden} ${hidden === 1 ? "evidencia más" : "evidencias más"}`}
+            className={cn(
+              "rounded-md px-1.5 font-medium text-muted transition-colors hover:bg-surface-2 hover:text-text",
+              size === "md" ? "h-8 text-sm" : "h-7 text-xs",
+            )}
+          >
+            +{hidden}
+          </button>
+        </li>
+      ) : null}
     </ul>
+  );
+}
+
+/* ─────────────────────────── Texto plegado ─────────────────────────── */
+
+/** Desde este largo el texto se pliega a 2 líneas y se abre con un clic. */
+const CLAMP_CHARS = 100;
+
+/** Párrafo de apoyo en 2 líneas como máximo; un clic lo muestra completo. */
+export function ClampText({ text, className }: { text: string; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const value = text.trim();
+  if (!value) return null;
+  if (value.length < CLAMP_CHARS) return <p className={className}>{value}</p>;
+  return (
+    <button
+      type="button"
+      aria-expanded={open}
+      title={open ? "Mostrar menos" : "Mostrar completo"}
+      onClick={() => setOpen((v) => !v)}
+      className={cn("block w-full cursor-pointer text-left hover:text-text", className)}
+    >
+      <span className={cn(!open && "line-clamp-2")}>{value}</span>
+    </button>
   );
 }
 
@@ -208,14 +254,7 @@ export function CollapsibleSection({
           <span className="label-caps min-w-0 flex-1 truncate text-sm text-text">{title}</span>
           {aside}
           {count !== undefined ? (
-            <span
-              className={cn(
-                "tabular inline-flex h-5 min-w-5 items-center justify-center rounded border px-1 text-xs font-semibold",
-                toneSoftBg[tone],
-                toneText[tone === "neutral" ? "neutral" : tone],
-                toneBorder[tone],
-              )}
-            >
+            <span className={cn("tabular min-w-4 text-right text-xs font-semibold", toneText[tone])}>
               <span className="sr-only">Elementos: </span>
               {count}
             </span>

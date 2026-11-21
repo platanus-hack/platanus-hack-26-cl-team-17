@@ -48,6 +48,30 @@ export function trappedCountText(trapped: SituationReport["trapped"]): string | 
   return `${min}–${max} personas`;
 }
 
+/** Fuente entre paréntesis al final de una ubicación: "2º piso (nota M1)". */
+const SOURCE_SUFFIX_RE = /\s*\(([^()]*)\)\s*$/;
+const SOURCE_REF_RE = /\b[MC]\d+\b/i;
+
+/**
+ * Lugares únicos en orden de aparición. Quita la fuente entre paréntesis para que el mismo
+ * lugar citado por varias fuentes ("2º piso (nota M1)", "2º piso (nota M2)") se lea una vez.
+ */
+export function uniqueLocations(locations: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of locations) {
+    let place = raw.trim();
+    const m = SOURCE_SUFFIX_RE.exec(place);
+    if (m && SOURCE_REF_RE.test(m[1])) place = place.slice(0, m.index).trim();
+    if (!place) continue;
+    const key = place.toLocaleLowerCase("es");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(place);
+  }
+  return out;
+}
+
 /* ─────────────────────────── Estado del pipeline ─────────────────────────── */
 
 export interface PipelineView {

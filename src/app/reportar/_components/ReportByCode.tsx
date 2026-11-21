@@ -11,7 +11,6 @@ import { incidentTypeIcon } from "@/lib/labels";
 import { cn } from "@/lib/cn";
 import { CodeEntry } from "./CodeEntry";
 import { PrivacyNote, RecordingTips } from "./RecordingTips";
-import { SafetyNotice } from "./SafetyNotice";
 import { reportTypeLabel } from "./TypePicker";
 
 export interface ReportByCodeProps {
@@ -58,7 +57,6 @@ function Ready({ incident }: { incident: PublicIncident }) {
   const address = incident.address.trim();
   return (
     <div className="flex flex-col gap-5">
-      <SafetyNotice />
       <header className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
         <p className="label-caps text-sm text-muted">
           Emergencia <span className="font-mono tracking-wider text-text">{incident.code}</span>
@@ -98,7 +96,6 @@ function Ready({ incident }: { incident: PublicIncident }) {
 function LoadingState({ code }: { code: string }) {
   return (
     <div className="flex flex-col gap-5" aria-busy="true">
-      <SafetyNotice />
       <div className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
         <p role="status" className="label-caps text-sm text-muted">
           Buscando la emergencia <span className="font-mono tracking-wider text-text">{code}</span>…
@@ -134,7 +131,6 @@ function Problem({
 }) {
   return (
     <div className="flex flex-col gap-5">
-      <SafetyNotice />
       <div
         role="alert"
         className={cn(
@@ -198,7 +194,7 @@ function Closed({ code }: { code: string }) {
     >
       <p>
         Bomberos ya cerró la emergencia <span className="font-mono font-semibold tracking-wider">{code}</span> y no
-        recibe más videos. Si ves fuego o un accidente ahora, llama al 132.
+        recibe más videos.
       </p>
     </Problem>
   );

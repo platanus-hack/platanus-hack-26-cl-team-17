@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
-import { CircleAlert, ClipboardPaste, Info, Mic, MicOff, Send } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type KeyboardEvent } from "react";
+import { CircleAlert, ClipboardPaste, ExternalLink, Info, Mic, MicOff, Send } from "lucide-react";
 import { Badge, Button, Input, Textarea } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { createDictation, isDictationSupported, type Dictation } from "@/lib/client/speech";
+import { UNTRANSCRIBED_COMM_TEXT } from "@/lib/labels";
 import type { DraftComm } from "./comms-model";
+import { PttButton, PttLive } from "./PushToTalk";
+import { usePushToTalk, type PttTransmission } from "./use-push-to-talk";
 
 /** Límites de AddCommInputSchema. */
 const MAX_TEXT = 2000;
@@ -19,14 +22,16 @@ export interface ComposerProps {
   channelOptions: string[];
   onSend: (draft: DraftComm) => void;
   onOpenImport: () => void;
+  /** Enlace a la radio de demostración sin sesión (/radio/<código>); null si está apagada. */
+  demoRadioHref?: string | null;
   className?: string;
 }
 
 const noopSubscribe = () => () => {};
 const serverSupport = (): boolean | null => null;
 
-/** Redacción rápida (Enter envía) y dictado en vivo de la radio. */
-export function Composer({ speakerOptions, channelOptions, onSend, onOpenImport, className }: ComposerProps) {
+/** Redacción rápida (Enter envía), dictado en vivo de la radio y botón de radio con el micrófono. */
+export function Composer({ speakerOptions, channelOptions, onSend, onOpenImport, demoRadioHref = null, className }: ComposerProps) {
   const baseId = useId();
   const speakerListId = `${baseId}-speakers`;
   const channelListId = `${baseId}-channels`;
@@ -52,6 +57,21 @@ export function Composer({ speakerOptions, channelOptions, onSend, onOpenImport,
   }, [speaker, channel, onSend]);
 
   useEffect(() => () => dictationRef.current?.abort(), []);
+
+  // Botón de radio: cada transmisión hablada (audio + transcripción) se envía al soltar.
+  const onPtt = useCallback((t: PttTransmission) => {
+    const { speaker: sp, channel: ch, onSend: send } = latest.current;
+    send({
+      text: (t.text || UNTRANSCRIBED_COMM_TEXT).slice(0, MAX_TEXT),
+      speaker: sp.trim() || DICTATION_DEFAULT_SPEAKER,
+      channel: ch.trim(),
+      source: "dictation",
+      at: t.at,
+      audio: t.audio,
+    });
+  }, []);
+  const ptt = usePushToTalk(onPtt, { disabled: listening });
+  const pttActive = ptt.state.status !== "idle";
 
   const trimmed = text.trim();
   const tooLong = trimmed.length > MAX_TEXT;
@@ -134,6 +154,20 @@ export function Composer({ speakerOptions, channelOptions, onSend, onOpenImport,
         </div>
       )}
 
+      {ptt.state.status === "recording" && (
+        <PttLive
+          state={ptt.state}
+          who={`${speaker.trim() || DICTATION_DEFAULT_SPEAKER}${channel.trim() ? ` · ${channel.trim()}` : ""}`}
+          dictation={supported === true}
+        />
+      )}
+      {(ptt.state.error || ptt.state.hint) && (
+        <p className={cn("flex items-start gap-1.5 text-xs", ptt.state.error ? "text-critical" : "text-muted")} role={ptt.state.error ? "alert" : undefined}>
+          {ptt.state.error ? <CircleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" /> : <Info aria-hidden className="mt-0.5 size-3.5 shrink-0" />}
+          {ptt.state.error ?? ptt.state.hint}
+        </p>
+      )}
+
       {dictationError && (
         <p className="flex items-start gap-1.5 text-xs text-critical" role="alert">
           <CircleAlert aria-hidden className="mt-0.5 size-3.5 shrink-0" />
@@ -207,17 +241,29 @@ export function Composer({ speakerOptions, channelOptions, onSend, onOpenImport,
             variant={listening ? "danger" : "secondary"}
             icon={listening ? MicOff : Mic}
             onClick={toggleListening}
-            disabled={supported !== true}
+            disabled={supported !== true || pttActive}
             aria-pressed={listening}
             title={supported === false ? "Este navegador no permite dictar; prueba con Chrome" : undefined}
           >
             {listening ? "Dejar de escuchar" : "Escuchar radio"}
           </Button>
+          <PttButton state={ptt.state} buttonProps={ptt.buttonProps} disabled={listening} />
           <Button size="sm" variant="secondary" icon={ClipboardPaste} onClick={onOpenImport}>
             Importar
           </Button>
         </span>
       </div>
+      {demoRadioHref && (
+        <a
+          href={demoRadioHref}
+          target="_blank"
+          rel="noopener"
+          className="flex items-center gap-1.5 self-start text-xs text-accent hover:underline"
+        >
+          <ExternalLink aria-hidden className="size-3.5" />
+          Radio sin sesión para la demo (ábrela en el teléfono)
+        </a>
+      )}
     </div>
   );
 }

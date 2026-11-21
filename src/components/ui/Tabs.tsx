@@ -125,14 +125,14 @@ export function Tabs<T extends string>({
             data-tab-id={tab.id}
             onClick={() => select(tab.id)}
             className={cn(
-              "relative -mb-px inline-flex shrink-0 items-center justify-center whitespace-nowrap border-b-2 label-caps transition-colors",
+              "relative inline-flex shrink-0 items-center justify-center whitespace-nowrap transition-colors hover:bg-surface-2",
               "focus-visible:-outline-offset-2",
               sizeClass[size],
               fullWidth && "flex-1",
               selected
-                ? "border-accent text-text"
-                : "border-transparent text-muted hover:border-line-strong hover:text-text",
-              tab.disabled && "cursor-not-allowed opacity-50 hover:border-transparent hover:text-muted",
+                ? "font-bold text-text after:absolute after:inset-x-3 after:bottom-0 after:h-1 after:rounded-full after:bg-accent"
+                : "font-medium text-muted hover:text-text",
+              tab.disabled && "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted",
             )}
           >
             {Icon && <Icon aria-hidden="true" size={iconSize[size]} className="shrink-0" />}

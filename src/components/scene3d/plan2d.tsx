@@ -50,6 +50,8 @@ import { TONE_FILL, TONE_STROKE, TONE_TEXT, cx } from "./tones";
 import { SMOKE_HEX } from "./palette";
 import { useElementSize, useSceneView, useSelection } from "./hooks";
 import { coreBounds, declutter } from "./three/pose";
+import { buildingPath, type Surroundings } from "./surroundings";
+import { useSceneSurroundings } from "./surroundings-data";
 import { SceneEmpty, SceneFrame } from "./frame";
 
 /** Redondeo a centímetros (markup más liviano y estable). */
@@ -58,7 +60,7 @@ const r2 = (v: number) => Math.round(v * 100) / 100 + 0;
 const sv = (p: XY) => `${r2(p.x)},${r2(-p.y)}`;
 
 const ROLE_CLASS: Record<NStructure["role"], { fill: string; stroke: string; facade: string; text: string }> = {
-  involved: { fill: "fill-accent/15", stroke: "stroke-accent", facade: "stroke-accent", text: "fill-accent" },
+  involved: { fill: "fill-fire/15", stroke: "stroke-fire", facade: "stroke-fire", text: "fill-fire" },
   exposure: { fill: "fill-warning/10", stroke: "stroke-warning/70", facade: "stroke-warning", text: "fill-warning" },
   reference: { fill: "fill-muted/10", stroke: "stroke-line-strong", facade: "stroke-muted", text: "fill-muted" },
 };
@@ -277,7 +279,7 @@ function FireShape({ f, fireGradId, ctx }: { f: NFire; fireGradId: string; ctx: 
       )}
       {selected && <SelRing r={r} k={k} />}
       {ctx.labels && (
-        <Halo x={r + 4 * k} y={-r * 0.4} k={k} size={10} className="fill-accent" weight={600} lines={[fireCaption(f)]} priority={f.intensity === "heavy" ? 72 : f.intensity === "smoke_only" ? 48 : 62} pinned={selected} />
+        <Halo x={r + 4 * k} y={-r * 0.4} k={k} size={10} className="fill-fire" weight={600} lines={[fireCaption(f)]} priority={f.intensity === "heavy" ? 72 : f.intensity === "smoke_only" ? 48 : 62} pinned={selected} />
       )}
     </g>
   );
@@ -330,7 +332,7 @@ function VehicleShape({ v, ctx }: { v: NVehicle; ctx: Ctx }) {
       )}
       <polygon
         points={c.map(sv).join(" ")}
-        className={cx(v.burning ? "fill-accent/40 stroke-accent" : "fill-line-strong/70 stroke-muted", selected && "stroke-info")}
+        className={cx(v.burning ? "fill-fire/40 stroke-fire" : "fill-line-strong/70 stroke-muted", selected && "stroke-info")}
         strokeWidth={selected ? 2.5 : 1.2}
         strokeDasharray={tipped ? "3 2" : undefined}
         vectorEffect="non-scaling-stroke"
@@ -548,11 +550,13 @@ export interface PlanSvgProps {
   onSelect: (sel: SceneSelection | null) => void;
   onOpenMedia?: (mediaLabel: string, frame?: number) => void;
   className?: string;
+  /** Entorno real (OSM): contornos tenues bajo la escena, sin interacción. */
+  surroundings?: Surroundings;
 }
 
 const DEFAULT_SIZE = { width: 640, height: 420 };
 
-export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, className }: PlanSvgProps) {
+export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, className, surroundings }: PlanSvgProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const size = useElementSize(hostRef, DEFAULT_SIZE);
@@ -671,6 +675,14 @@ export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, classN
     });
   });
 
+  const envPath = useMemo(() => (surroundings?.buildings ?? []).map(buildingPath).join(""), [surroundings]);
+  const envRoads = useMemo(() => {
+    const g = surroundings?.roadSegments ?? [];
+    let d = "";
+    for (let i = 0; i + 3 < g.length; i += 4) d += `M${r2(g[i])} ${r2(-g[i + 1])}L${r2(g[i + 2])} ${r2(-g[i + 3])}`;
+    return d;
+  }, [surroundings]);
+
   const scaleLen = niceScaleLength(k, 80);
   const scalePx = scaleLen / k;
   const focus = s.focus;
@@ -701,7 +713,7 @@ export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, classN
           </pattern>
           <radialGradient id={fireGradId}>
             <stop offset="0%" stopColor="currentColor" stopOpacity={0.95} className="text-warning" />
-            <stop offset="55%" stopColor="currentColor" stopOpacity={0.7} className="text-accent" />
+            <stop offset="55%" stopColor="currentColor" stopOpacity={0.7} className="text-fire" />
             <stop offset="100%" stopColor="currentColor" stopOpacity={0} className="text-critical" />
           </radialGradient>
         </defs>
@@ -726,6 +738,15 @@ export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, classN
           </g>
         ))}
 
+        {/* Entorno real (OSM): referencial, por debajo de todo lo inferido */}
+        {layers.surroundings && (envPath || envRoads) && (
+          <g pointerEvents="none" aria-hidden="true">
+            {envRoads && <path d={envRoads} className="fill-none stroke-faint/40" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
+            {envPath && (
+              <path d={envPath} fillRule="evenodd" className="fill-faint/10 stroke-faint/45" strokeWidth={0.75} vectorEffect="non-scaling-stroke" />
+            )}
+          </g>
+        )}
         {s.roads.map((r) => (
           <RoadShape key={r.id} road={r} k={k} labels={layers.labels} hatchId={hatchId} ctx={ctx} />
         ))}
@@ -751,7 +772,7 @@ export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, classN
       </svg>
 
       {/* Norte y escala */}
-      <div className="pointer-events-none absolute bottom-2 left-2 z-10 flex items-end gap-3 rounded border border-line bg-surface/85 px-2 py-1 text-[10px] text-muted">
+      <div className="pointer-events-none absolute bottom-[calc(var(--scene-hud-b,0px)+0.5rem)] left-[calc(var(--scene-hud-l,0px)+0.5rem)] z-10 flex items-end gap-3 rounded border border-line bg-surface/85 px-2 py-1 text-[10px] text-muted">
         <div className="flex flex-col items-center leading-none" aria-label="Norte hacia arriba">
           <svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true">
             <path d="M6 0 L11 14 L6 10.5 L1 14 Z" className="fill-text" />
@@ -767,7 +788,7 @@ export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, classN
       </div>
 
       {/* Zoom */}
-      <div className="absolute right-2 bottom-2 z-10 flex flex-col overflow-hidden rounded border border-line bg-surface/90">
+      <div className="absolute right-[calc(var(--scene-hud-r,0px)+0.5rem)] bottom-[calc(var(--scene-hud-b,0px)+0.5rem)] z-10 flex flex-col overflow-hidden rounded border border-line bg-surface/90">
         <button type="button" onClick={() => zoomBy(1.5)} className="grid size-8 place-items-center text-muted hover:bg-surface-2 hover:text-text" aria-label="Acercar">
           <ZoomIn className="size-4" aria-hidden="true" />
         </button>
@@ -824,6 +845,7 @@ export function ScenePlan2D(props: ScenePlan2DProps) {
   const view = useSceneView(scene, updatedAt, incident, media, missions);
   const [sel, select] = useSelection(selection, onSelect);
   const [layers, setLayers] = useState<LayerState>(initialLayers ?? DEFAULT_LAYERS);
+  const env = useSceneSurroundings(incident, view?.scene.structures, layers.surroundings && !!view);
   return (
     <SceneFrame
       view={view}
@@ -835,12 +857,14 @@ export function ScenePlan2D(props: ScenePlan2DProps) {
       mode="2d"
       layers={layers}
       onLayersChange={setLayers}
+      surroundingsStatus={env.status}
+      surroundingsCount={env.data.buildings.length}
       selection={sel}
       onSelect={select}
       onOpenMedia={onOpenMedia}
     >
       {view ? (
-        <PlanSvg view={view} layers={layers} selection={sel} onSelect={select} onOpenMedia={onOpenMedia} />
+        <PlanSvg view={view} layers={layers} selection={sel} onSelect={select} onOpenMedia={onOpenMedia} surroundings={env.data} />
       ) : (
         <SceneEmpty updating={updating} />
       )}

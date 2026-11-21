@@ -90,7 +90,7 @@ export function BriefingBlock({ briefing }: BriefingBlockProps) {
   return (
     <div className="flex flex-col gap-3">
       {spoken ? (
-        <blockquote className="rounded-md border border-line bg-surface-2 px-3 py-2.5 text-base leading-relaxed text-text">
+        <blockquote className="border-l-2 border-line-strong pl-3 text-base leading-relaxed text-text">
           {spoken}
         </blockquote>
       ) : null}

@@ -1,17 +1,15 @@
 /**
- * RADIO_GLOSSARY — términos radiales que la IA puede interpretar con seguridad.
+ * RADIO_GLOSSARY — términos radiales en lenguaje claro que la IA puede interpretar con seguridad.
  *
- * ADVERTENCIA: las claves y la nomenclatura de unidades varían entre Cuerpos de
- * Bomberos de Chile, y la investigación de radio quedó incompleta. Por eso aquí
- * solo hay lenguaje claro y términos de alta certeza. No se incluye ninguna
- * clave numérica (10-x, 6-x…): el único listado hallado es no oficial e
- * inconsistente (ver .coord/research-doctrina.md). Si un Cuerpo necesita sus
- * claves, deben configurarse explícitamente, nunca adivinarse.
+ * Las claves numéricas (6-7, 10-0-2…) varían entre Cuerpos de Bomberos y no van
+ * aquí: viven en ./radio-claves.ts, el libro de claves configurado para esta
+ * instalación (CBLA, RC-03/2022). Una clave fuera de ese libro nunca se adivina.
  *
  * Lo usan el prompt de comunicaciones (texto) y el motor de reglas
- * (codes_interpreted solo para términos de esta lista).
+ * (codes_interpreted solo para términos de esta lista y claves del libro).
  */
 import type { Confidence } from "@/lib/domain";
+import { CLAVES_SOURCE } from "./radio-claves";
 
 export interface RadioGlossaryEntry {
   /** Forma canónica, tal como se mostraría en el panel. */
@@ -79,7 +77,7 @@ export const RADIO_GLOSSARY: readonly RadioGlossaryEntry[] = [
   },
   {
     term: "Fuego controlado",
-    aliases: ["fuego controlado", "incendio controlado", "emergencia controlada", "fuego dominado", "incendio dominado"],
+    aliases: ["fuego controlado", "incendio controlado", "emergencia controlada", "situacion controlada", "fuego dominado", "incendio dominado"],
     meaning: "El fuego dejó de avanzar; aún puede haber trabajo de remoción y riesgo de reignición.",
     certainty: "high",
   },
@@ -96,10 +94,11 @@ export const RADIO_GLOSSARY: readonly RadioGlossaryEntry[] = [
     certainty: "high",
   },
   {
-    term: "Lado Alfa",
-    aliases: ["lado alfa", "lado principal"],
-    meaning: "Lado principal del incidente, normalmente la fachada hacia la calle principal. Bravo/Charlie/Delta siguen en sentido horario (convención SCI, no verificada en Chile).",
-    certainty: "medium",
+    term: "Sectores Alfa, Bravo, Charlie, Delta",
+    aliases: ["sector alfa", "sector bravo", "sector charlie", "sector delta", "lado alfa", "lado bravo", "lado charlie", "lado delta", "lado principal"],
+    meaning:
+      "Sectorización del lugar. Alfa = frente o fachada principal (hacia la calle); Bravo, Charlie y Delta siguen en sentido horario visto desde arriba: Bravo a la izquierda mirando la fachada, Charlie el fondo, Delta a la derecha. Si el OBAC fija otra referencia por radio, manda lo que dijo.",
+    certainty: "high",
   },
   {
     term: "Puesto de Comando",
@@ -119,6 +118,6 @@ export const RADIO_GLOSSARY: readonly RadioGlossaryEntry[] = [
 /** Bloque de texto para incluir en el prompt de sistema de comunicaciones. */
 export const RADIO_GLOSSARY_TEXT: string = [
   "RADIO_GLOSSARY — términos que puedes interpretar (lista cerrada):",
-  "Advertencia: las claves radiales varían entre Cuerpos de Bomberos. NO interpretes claves numéricas (10-x, 6-x u otras): si aparecen, regístralas en codes_interpreted con certainty=low y meaning \"Clave no verificada para este Cuerpo; confirmar\". No deduzcas la especialidad de una unidad por su letra.",
+  `Claves numéricas: interpreta solo las del libro de claves (${CLAVES_SOURCE}) que viene aparte. Cualquier otra clave numérica va en codes_interpreted con certainty=low y meaning "Clave no verificada para este Cuerpo; confirmar". No deduzcas la especialidad de una unidad por su letra.`,
   ...RADIO_GLOSSARY.map((e) => `- ${e.term} (certeza ${e.certainty}): ${e.meaning}`),
 ].join("\n");

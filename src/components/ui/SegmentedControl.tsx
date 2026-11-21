@@ -86,7 +86,7 @@ export function SegmentedControl<T extends string>({
       aria-label={ariaLabel}
       onKeyDown={onKeyDown}
       className={cn(
-        "items-stretch gap-0.5 rounded-md border border-line bg-surface-2 p-0.5",
+        "items-stretch gap-0.5 rounded-full border border-line bg-surface-2 p-0.5",
         fullWidth ? "flex w-full" : "inline-flex",
         className,
       )}
@@ -109,11 +109,11 @@ export function SegmentedControl<T extends string>({
             data-value={option.value}
             onClick={() => select(option.value)}
             className={cn(
-              "inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-[4px] border transition-colors",
+              "inline-flex min-w-0 items-center justify-center whitespace-nowrap rounded-full border transition-colors",
               sizeClass[size],
               fullWidth && "flex-1",
               checked
-                ? "border-line-strong bg-surface text-text"
+                ? "border-line-strong bg-surface font-semibold text-text"
                 : "border-transparent text-muted hover:bg-surface hover:text-text",
               option.disabled && "cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted",
             )}

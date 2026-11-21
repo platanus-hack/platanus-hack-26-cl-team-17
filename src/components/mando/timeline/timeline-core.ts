@@ -68,6 +68,26 @@ export function countByFilter(events: readonly TimelineEvent[]): FilterCounts {
   return { counts, hasCritical };
 }
 
+/* ═══════════════════════════ Texto ═══════════════════════════ */
+
+/** Sufijo que el pipeline agrega a lo producido por el motor de reglas. */
+const ENGINE_NOTE = " (motor de reglas, sin modelo)";
+
+/**
+ * Separa el sufijo del motor de reglas para mostrarlo como rótulo "Simulado" en vez de texto.
+ * Reconoce también el sufijo cortado por el recorte del detalle (" (motor de re…").
+ */
+export function splitEngineNote(text: string): { text: string; simulated: boolean } {
+  const t = text.trimEnd();
+  if (t.endsWith(ENGINE_NOTE)) return { text: t.slice(0, -ENGINE_NOTE.length), simulated: true };
+  if (t.endsWith("…")) {
+    const at = t.lastIndexOf(" (");
+    const tail = at >= 0 ? t.slice(at, -1) : "";
+    if (tail.length >= 4 && ENGINE_NOTE.startsWith(tail)) return { text: `${t.slice(0, at)}…`, simulated: true };
+  }
+  return { text, simulated: false };
+}
+
 /* ═══════════════════════════ Agrupación ═══════════════════════════ */
 
 /** Largo mínimo de una racha de eventos triviales del dron para plegarla en una fila. */

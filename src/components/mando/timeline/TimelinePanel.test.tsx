@@ -12,10 +12,15 @@ function count(html: string, needle: string): number {
 
 test("sin eventos: explica qué aparecerá, sin inventar estado", () => {
   const html = renderToStaticMarkup(<TimelinePanel events={[]} media={[]} />);
-  assert.match(html, /Línea de tiempo/);
+  // Sin barra de título propia (la pestaña de afuera ya la nombra): el nombre queda accesible.
+  assert.match(html, /<section[^>]*aria-label="Línea de tiempo"/);
+  assert.doesNotMatch(html, /<h2/);
   assert.match(html, /Todavía no hay eventos/);
   assert.match(html, /role="tablist"/);
   assert.doesNotMatch(html, /<li/);
+  // Filtros vacíos ocultos: solo "Todo".
+  assert.match(html, />Todo</);
+  assert.doesNotMatch(html, />Radio<|>Dron<|>Alertas<|>Videos</);
 });
 
 test("feed realista: iconos, severidad con texto, referencias como botones y ráfaga plegada", () => {
@@ -38,7 +43,7 @@ test("feed realista: iconos, severidad con texto, referencias como botones y rá
   // Pestañas con conteos y alerta crítica.
   for (const label of ["Todo", "Alertas", "Videos", "Radio", "Dron"]) assert.match(html, new RegExp(`>${label}<`));
   assert.match(html, /requiere atención/);
-  assert.match(html, /9 eventos/);
+  assert.match(html, /aria-label="Línea de tiempo · 9 eventos"/);
 
   // Severidad con color + icono + texto.
   assert.match(html, /Crítico/);
@@ -87,6 +92,22 @@ test("200 eventos: se renderiza paginado y con ráfagas agrupadas", () => {
   const ms = performance.now() - started;
   assert.equal(count(html, "data-event-id="), 80);
   assert.match(html, /Mostrar 80 más \(120 ocultos\)/);
-  assert.match(html, /200 eventos/);
+  assert.match(html, /aria-label="Línea de tiempo · 200 eventos"/);
   assert.ok(ms < 2000, `render de 200 eventos tardó ${ms.toFixed(0)} ms`);
+});
+
+test("texto compacto: título y detalle en 2 líneas; el sufijo del motor de reglas pasa a rótulo 'Simulado'", () => {
+  const events = [
+    ev({ kind: "scene_updated", title: "Reconstrucción de la escena actualizada (motor de reglas, sin modelo)", detail: "Casa de 1 piso al centro." }),
+    ev({ kind: "situation_updated", severity: "warning", title: "Situación: posible persona atrapada", detail: "Personas atrapadas: posible. Indicio sin corroborar (motor…" }),
+    ev({ kind: "media_received", severity: "notice", title: "Nuevo video de vecino — M7", detail: "Nota: hay personas adentro" }),
+  ];
+  const html = renderToStaticMarkup(<TimelinePanel events={events} media={[]} />);
+  assert.doesNotMatch(html, /motor de reglas, sin modelo\)/);
+  assert.doesNotMatch(html, /\(motor…/);
+  assert.equal(count(html, ">Simulado<"), 2, "cada evento simulado sigue rotulado");
+  assert.equal(count(html, "line-clamp-2"), 6);
+  // La advertencia se lee con texto, pero sin caja ni fondo tintado en la fila.
+  assert.match(html, /Advertencia/);
+  assert.doesNotMatch(html, /bg-warning-soft/);
 });

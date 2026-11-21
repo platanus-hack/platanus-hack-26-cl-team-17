@@ -38,7 +38,7 @@ export function hatchTexture(color: string): THREE.CanvasTexture {
   if (g) {
     g.clearRect(0, 0, 64, 64);
     g.strokeStyle = color;
-    g.lineWidth = 14;
+    g.lineWidth = 6;
     g.lineCap = "square";
     for (let k = -64; k <= 128; k += 32) {
       g.beginPath();

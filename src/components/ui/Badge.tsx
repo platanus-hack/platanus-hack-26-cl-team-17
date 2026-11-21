@@ -10,9 +10,9 @@ export type BadgeVariant = "soft" | "solid" | "outline";
 export type BadgeSize = "sm" | "md" | "lg";
 
 const sizeClasses: Record<BadgeSize, string> = {
-  sm: "min-h-5 gap-1 rounded px-1.5 py-0.5 text-[11px]",
-  md: "min-h-6 gap-1.5 rounded px-2 py-1 text-xs",
-  lg: "gap-2 rounded-md px-3 py-1.5 text-base",
+  sm: "min-h-5 gap-1 rounded-full px-2 py-0.5 text-[11px]",
+  md: "min-h-6 gap-1.5 rounded-full px-2.5 py-1 text-xs",
+  lg: "gap-2 rounded-full px-3.5 py-1.5 text-base",
 };
 const iconPx: Record<BadgeSize, number> = { sm: 12, md: 13, lg: 18 };
 const dotSize: Record<BadgeSize, string> = { sm: "size-1.5", md: "size-1.5", lg: "size-2.5" };

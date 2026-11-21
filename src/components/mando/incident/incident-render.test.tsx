@@ -138,11 +138,12 @@ test("cabecera: demo y sin verificar quedan rotulados, con código y acciones", 
     />,
   );
   const t = text(html);
-  assert.match(t, /DEMO · datos ficticios/);
-  assert.match(t, /SIN VERIFICAR/);
+  assert.match(t, /Demo · datos ficticios/);
+  assert.match(t, /Sin verificar/);
   assert.match(t, /Verificar/);
   assert.match(t, /VG-7K3Q/);
-  for (const action of ["Compartir", "Agregar video", "Reanalizar"]) assert.match(t, new RegExp(action));
+  // Acciones secundarias solo con ícono: el nombre va en aria-label.
+  for (const action of ["Compartir", "Agregar video", "Reanalizar"]) assert.match(html, new RegExp(`aria-label="${action}`));
   assert.match(t, /Activo/);
   assert.match(t, /Controlado/);
   assert.match(t, /Cerrado/);

@@ -284,6 +284,8 @@ export interface ModelSettings {
   model: string;
   effort: "low" | "medium" | "high" | "xhigh" | "max";
   fast: boolean;
+  /** Respaldo del servidor ante un rechazo por política. Por defecto sí; Haiku no lo ofrece. */
+  fallback?: boolean;
 }
 
 // El JSON Schema se genera una vez por esquema: bytes idénticos entre llamadas
@@ -345,9 +347,11 @@ export function buildRequestParams(
     output_config: structured
       ? { effort: settings.effort, format: outputFormatFor(opts.schema) }
       : { effort: settings.effort },
-    betas: structured ? [FALLBACK_BETA, STRUCTURED_OUTPUTS_BETA] : [FALLBACK_BETA],
-    fallbacks: "default",
   };
+  const fallback = settings.fallback !== false;
+  const betas = [...(fallback ? [FALLBACK_BETA] : []), ...(structured ? [STRUCTURED_OUTPUTS_BETA] : [])];
+  if (betas.length > 0) params.betas = betas;
+  if (fallback) params.fallbacks = "default";
   if (settings.fast) params.speed = "fast";
   return params;
 }
@@ -707,10 +711,13 @@ export async function callStructuredWith<S extends z.ZodType>(
  * Llama a Claude con un prompt de sistema estable y contenido de usuario, y
  * devuelve la salida validada con `schema`. Lanza siempre AIError.
  */
-export function callStructured<S extends z.ZodType>(opts: CallStructuredOptions<S>): Promise<z.infer<S>> {
+export function callStructured<S extends z.ZodType>(
+  opts: CallStructuredOptions<S>,
+  settings?: ModelSettings,
+): Promise<z.infer<S>> {
   return callStructuredWith(
     sdkTransport,
-    { model: config.aiModel, effort: config.aiEffort, fast: config.aiFast },
+    settings ?? { model: config.aiModel, effort: config.aiEffort, fast: config.aiFast },
     opts,
   );
 }

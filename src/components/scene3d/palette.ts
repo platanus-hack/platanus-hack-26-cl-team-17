@@ -23,23 +23,27 @@ export type PaletteKey =
 
 export type Palette = Record<PaletteKey, string>;
 
-/** Respaldo: valores del tema "mando" (globals.css). */
+/** Respaldo: valores del tema "mando" (globals.css). En el visor, `accent` es el color del fuego. */
 export const DEFAULT_PALETTE: Palette = {
-  bg: "#0a0e13",
-  surface: "#10161d",
-  surface2: "#161e27",
-  line: "#223040",
-  lineStrong: "#33465c",
-  text: "#e8eef4",
-  muted: "#8fa0b4",
-  faint: "#647487",
-  accent: "#ff6a47",
-  critical: "#ff4d4d",
-  warning: "#ffb224",
-  ok: "#35d49a",
-  info: "#48b8ff",
-  drone: "#a78bfa",
+  bg: "#ffffff",
+  surface: "#ffffff",
+  surface2: "#f7f9f9",
+  line: "#eff3f4",
+  lineStrong: "#cfd9de",
+  text: "#0f1419",
+  muted: "#536471",
+  faint: "#8b98a5",
+  accent: "#ea580c",
+  critical: "#dc1f2c",
+  warning: "#b54708",
+  ok: "#00875a",
+  info: "#1d9bf0",
+  drone: "#7856ff",
 };
+
+/** Fondo del lienzo 3D (gris claro: las estructuras blancas se recortan sobre él) y color de los puntos del suelo. */
+export const SCENE_BG = "#eceff1";
+export const SCENE_DOT = "#8d969f";
 
 const TOKEN: Record<PaletteKey, string> = {
   bg: "bg",
@@ -50,7 +54,7 @@ const TOKEN: Record<PaletteKey, string> = {
   text: "text",
   muted: "muted",
   faint: "faint",
-  accent: "accent",
+  accent: "fire",
   critical: "critical",
   warning: "warning",
   ok: "ok",

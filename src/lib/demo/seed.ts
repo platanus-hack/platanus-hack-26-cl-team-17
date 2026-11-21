@@ -132,6 +132,10 @@ export async function seedShowcase(deps: DemoDeps, spec: ShowcaseSpec): Promise<
   const { store } = deps;
   const t0 = deps.now() - spec.started_min_ago * 60_000;
   const at = (s: number) => iso(t0 + s * 1000);
+  // Anclaje al mapa real en paralelo con la siembra: sin red (o si falla) queda la escena tal cual.
+  const anchoredScene = deps.anchorScene
+    ? deps.anchorScene(spec.scene, { lat: spec.lat, lng: spec.lng, type: spec.type }).catch(() => spec.scene)
+    : Promise.resolve(spec.scene);
 
   const incident = await store.createIncident({
     type: spec.type,
@@ -240,12 +244,13 @@ export async function seedShowcase(deps: DemoDeps, spec: ShowcaseSpec): Promise<
   const lastComm = spec.comms.length ? spec.comms[spec.comms.length - 1].at_s : 0;
   const lastMedia = spec.media.reduce((s, m) => Math.max(s, m.analyzed_at_s), 0);
   const fusedAt = at(Math.max(lastComm, lastMedia) + 20);
+  const scene = await anchoredScene;
   return store.updateIncident(incident.id, {
     status: spec.status,
     comms_analysis: spec.comms_analysis,
     comms_engine: "simulated",
     comms_analysis_updated_at: at(lastComm + 8),
-    scene: spec.scene,
+    scene,
     scene_engine: "simulated",
     scene_updated_at: fusedAt,
     situation: spec.situation,

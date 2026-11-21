@@ -14,6 +14,7 @@ function entry(seq: number, hhmmss: string, speaker: string, text: string, sourc
     speaker,
     text,
     source,
+    audio_path: null,
     created_at: at,
   };
 }

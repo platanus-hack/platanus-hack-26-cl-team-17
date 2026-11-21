@@ -6,3 +6,6 @@
 export type { DronePanelProps } from "./types";
 export { DronePanel } from "./DronePanel";
 export { useSimulatedMissionTicker } from "./use-mission-ticker";
+
+export { LiveFeed } from "./LiveFeed";
+export type { LiveFeedProps } from "./LiveFeed";

@@ -26,6 +26,8 @@ import type {
   CreateReportResponse,
   CreateStaffRequest,
   DroneFrameResponse,
+  LiveFrameAck,
+  LiveInsightsResponse,
   IncidentListResponse,
   IncidentSnapshot,
   LoginRequest,
@@ -265,6 +267,15 @@ export const api = {
   comms: {
     add: (incidentId: string, input: AddCommBody, o?: RequestOptions) =>
       post<{ entry: CommEntry }>(`/api/incidents/${seg(incidentId)}/comms`, input, o),
+    /** Sube la grabación de una transmisión; devuelve la ruta para `add({ audio_path })`. */
+    uploadAudio: (incidentId: string, audio: Blob, o?: RequestOptions) =>
+      request<{ audio_path: string }>({
+        method: "POST",
+        path: `/api/incidents/${seg(incidentId)}/comms/audio`,
+        body: audio,
+        ...o,
+        headers: { "Content-Type": audio.type.split(";")[0] || "audio/webm", ...(o?.headers ?? {}) },
+      }),
   },
 
   missions: {
@@ -341,6 +352,16 @@ export const api = {
           "Content-Type": "image/jpeg",
         },
       }),
+    live: (missionId: string, token: string, blob: Blob, o?: RequestOptions) =>
+      request<LiveFrameAck>({
+        method: "POST",
+        path: `/api/drone/${seg(missionId)}/live`,
+        body: blob,
+        ...o,
+        headers: { ...(o?.headers ?? {}), Authorization: `Bearer ${token}`, "Content-Type": "image/jpeg" },
+      }),
+    liveInsights: (missionId: string, o?: RequestOptions) =>
+      get<LiveInsightsResponse>(`/api/drone/${seg(missionId)}/live/insights`, undefined, o),
   },
 
   demo: {

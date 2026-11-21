@@ -12,7 +12,7 @@ export type ButtonSize = "sm" | "md" | "lg" | "xl";
 
 /** Clases de color por variante (fondo, borde, texto y hover), reutilizables por otros controles. */
 export const buttonVariantClasses: Record<ButtonVariant, string> = {
-  primary: "border-transparent bg-accent text-on-solid hover:bg-accent/90 active:bg-accent/80",
+  primary: "border-transparent bg-text text-bg hover:bg-text/85 active:bg-text/75",
   secondary:
     "border-line bg-surface-2 text-text hover:border-line-strong hover:bg-line/50 active:bg-line/70",
   ghost: "border-transparent bg-transparent text-muted hover:bg-surface-2 hover:text-text active:bg-line/50",
@@ -20,9 +20,9 @@ export const buttonVariantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-7 gap-1.5 px-2.5 font-display text-[13px] font-medium",
-  md: "h-9 gap-2 px-3.5 font-display text-[15px] font-medium",
-  lg: "h-11 gap-2 px-4 font-display text-[17px] font-medium",
+  sm: "h-8 gap-1.5 px-3 font-display text-[13px] font-bold",
+  md: "h-9 gap-2 px-4 font-display text-[15px] font-bold",
+  lg: "h-12 gap-2 px-5 font-display text-[17px] font-bold",
   // Vecinos: texto normal (sin mayúsculas condensadas), legible al sol; puede ocupar dos líneas.
   xl: "min-h-14 gap-2.5 px-6 py-3 font-sans text-lg font-bold leading-tight whitespace-normal text-center",
 };
@@ -84,7 +84,7 @@ export function Button({
   const px = iconPx[size];
 
   const classes = cn(
-    "relative inline-flex shrink-0 select-none items-center justify-center rounded-md border",
+    "relative inline-flex shrink-0 select-none items-center justify-center rounded-full border",
     "whitespace-nowrap transition-colors duration-150",
     "disabled:cursor-not-allowed disabled:not-aria-busy:opacity-50",
     "aria-disabled:cursor-not-allowed aria-disabled:not-aria-busy:opacity-50 aria-busy:cursor-wait",

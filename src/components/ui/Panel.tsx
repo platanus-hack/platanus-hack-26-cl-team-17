@@ -60,7 +60,7 @@ export function Panel({
       aria-labelledby={labelledBy}
       {...rest}
       className={cn(
-        "overflow-hidden rounded-lg border border-line bg-surface",
+        "overflow-hidden rounded-2xl border border-line bg-surface",
         scroll && "flex h-full min-h-0 flex-col",
         className,
       )}

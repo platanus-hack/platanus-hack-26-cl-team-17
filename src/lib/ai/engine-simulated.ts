@@ -40,6 +40,7 @@ import type {
   VehicleState,
 } from "@/lib/domain";
 import { cardinalOf, distanceM, isValidLatLng, toLocal } from "@/lib/geo";
+import { expandClaves, findClaves, type RadioClave } from "./radio-claves";
 import { RADIO_GLOSSARY } from "./radio-glossary";
 import type {
   CommsAnalysisInput,
@@ -707,7 +708,7 @@ interface ResourceGroup {
 const RESOURCE_GROUPS: readonly ResourceGroup[] = [
   { id: "ambulance", re: /\bambulancias?\b|\bsamu\b|\bsapu\b|\bparamedic\w*/ },
   { id: "police", re: /\bcarabineros\b|\bpolicia\b|\bpdi\b/ },
-  { id: "ladder", re: /\bescalas?\b|\bmecanicas?\b|\bportaescalas?\b|\bbrazo\b/ },
+  { id: "ladder", re: /\bescalas?\b|\bmecanicas?\b|\bporta ?escalas?\b|\bbrazo\b/ },
   { id: "rescue", re: /\b(unidad|carro|material) de rescate\b|\brescate vehicular\b|\bextricacion\b/ },
   { id: "water", re: /\baljibes?\b|\bcisternas?\b|\babastecimiento\b|\bagua\b/ },
   {
@@ -724,7 +725,7 @@ const RESOURCE_GROUPS: readonly ResourceGroup[] = [
 ];
 
 const REQUEST_RE =
-  /\b(solicito|solicita|solicitamos|se solicita|solicitar|requiero|requerimos|se requiere|necesito|necesitamos|se necesita|se necesitan|pido|pedimos|envien)\b/;
+  /\b(solicito|solicita|solicitamos|se solicita|solicitar|requiero|requerimos|se requiere|necesito|necesitamos|se necesita|se necesitan|pido|pedimos|envien|despache|despachen)\b/;
 const NON_RESOURCE_RE = /^(informacion|informe|confirmar|confirmacion|que |si |datos|reporte|nombre|antecedentes|ver |saber )/;
 const ARRIVAL_RE = /\b(en el lugar|llego|llegaron|llegando|arribo|arribaron|presente|se encuentra en el lugar|en la escena|recibe|recibimos)\b/;
 const CANCEL_RE = /\bcancel\w*|\bse anula\b|\bya no (se )?(requiere|necesita)\b|\bsin necesidad de\b|\bno se requiere\b/;
@@ -737,7 +738,7 @@ function groupsIn(text: string): string[] {
 
 const ALARM_RE = /\b(segunda|2a|2da|tercera|3a|3ra|cuarta|4a|quinta|5a) alarma\b|\balarma general\b/;
 const FIRE_CONTROLLED_RE =
-  /\b(fuego|incendio|emergencia) (controlad[oa]|dominad[oa]|circunscrit[oa]|confinad[oa]|extinguid[oa])\b|\bcontrolado el (fuego|incendio)\b|\bremocion\b/;
+  /\b(fuego|incendio|emergencia|situacion) (controlad[oa]|dominad[oa]|circunscrit[oa]|confinad[oa]|extinguid[oa])\b|\bcontrolado el (fuego|incendio)\b|\bremocion\b/;
 const SIZE_UP_RE =
   /\bpre-? ?informe\b|\bse trata de\b|\binforme de situacion\b|\bestrategia (ofensiva|defensiva)\b|\bcasa habitacion\b|\bpeligro de propagacion\b|\bfuego (declarado )?en (un |el |la )?\w* ?(del )?(primer|segundo|tercer|cuarto|quinto|\d+\w*) piso\b|\blado principal\b/;
 const ORDER_RE =
@@ -842,6 +843,8 @@ export interface CommsFacts {
   hydrantSeqs: number[];
   glossary: number[];
   numericCodes: string[];
+  /** Claves del libro configurado (radio-claves.ts) usadas en la bitácora, en orden de aparición. */
+  claves: RadioClave[];
   entryCount: number;
 }
 
@@ -864,14 +867,20 @@ export function runCommsRules(comms: readonly CommEntry[]): CommsFacts {
     hydrantSeqs: [],
     glossary: [],
     numericCodes: [],
+    claves: [],
     entryCount: sorted.length,
   };
   const glossarySet = new Set<number>();
   const codeSet = new Set<string>();
+  const claveMap = new Map<string, RadioClave>();
 
   for (const entry of sorted) {
     const seq = entry.seq;
-    const nt = normalizeWithMap(entry.text);
+    // Las claves del libro se leen como su significado en claro ("6-7" → "6-7 (Situación controlada)").
+    const claveHits = findClaves(entry.text);
+    for (const h of claveHits) claveMap.set(h.clave.code, h.clave);
+    const text = expandClaves(entry.text);
+    const nt = normalizeWithMap(text);
     const t0 = nt.text;
     const speakerNorm = normalizeText(entry.speaker);
     const isCentral = CENTRAL_RE.test(speakerNorm);
@@ -887,7 +896,7 @@ export function runCommsRules(comms: readonly CommEntry[]): CommsFacts {
     const statements = sentences.filter((s) => !s.question);
     const sentenceOrig = (pos: number): string => {
       const s = sentenceAt(sentences, pos);
-      return truncate(s ? sliceOriginal(entry.text, nt, s.start, s.end) : entry.text, 180);
+      return truncate(s ? sliceOriginal(text, nt, s.start, s.end) : text, 180);
     };
     const inStatement = (pos: number) => statements.some((s) => pos >= s.start && pos < s.end);
     const push = (kind: CommsEvent["kind"], text: string, priority: CommsEvent["priority"]) => {
@@ -897,7 +906,11 @@ export function runCommsRules(comms: readonly CommEntry[]): CommsFacts {
     // Glosario y claves numéricas.
     for (const i of glossaryHits(`${speakerNorm} . ${t0}`)) glossarySet.add(i);
     if (mentions.length > 0 || speakerUnit) glossarySet.add(UNIT_IDS_GLOSSARY_INDEX);
-    for (const m of execAll(NUMERIC_CODE_RE, t0)) codeSet.add(m[0]);
+    let unknownCodesText = entry.text;
+    for (const h of [...claveHits].reverse()) {
+      unknownCodesText = unknownCodesText.slice(0, h.start) + " ".repeat(h.end - h.start) + unknownCodesText.slice(h.end);
+    }
+    for (const m of execAll(NUMERIC_CODE_RE, normalizeText(unknownCodesText))) codeSet.add(m[0]);
 
     // 1) Estados de unidades.
     const report = `C${seq}: ${truncate(entry.text, 140)}`;
@@ -1067,7 +1080,7 @@ export function runCommsRules(comms: readonly CommEntry[]): CommsFacts {
       const restStart = m.index + m[0].length;
       const restNorm = t0.slice(restStart, s.end).replace(/^[\s:,-]+/, "").trim();
       if (!restNorm || NON_RESOURCE_RE.test(restNorm)) continue;
-      const display = truncate(sliceOriginal(entry.text, nt, restStart, s.end).replace(/^[\s:,-]+/, ""), 90);
+      const display = truncate(sliceOriginal(text, nt, restStart, s.end).replace(/^[\s:,-]+/, ""), 90);
       facts.requests.push({
         seq,
         speaker: speakerLabel,
@@ -1116,7 +1129,7 @@ export function runCommsRules(comms: readonly CommEntry[]): CommsFacts {
       const nearest = [...unitsInSentence].sort((a, b) => Math.abs(a.start - cmd.index) - Math.abs(b.start - cmd.index))[0];
       let commander = nearest?.name ?? speakerUnit ?? (!isCentral && entry.speaker.trim() ? entry.speaker.trim() : "");
       if (!commander && s) {
-        commander = truncate(sliceOriginal(entry.text, nt, cmd.index + cmd[0].length, s.end).replace(/^[\s:,-]+/, ""), 40);
+        commander = truncate(sliceOriginal(text, nt, cmd.index + cmd[0].length, s.end).replace(/^[\s:,-]+/, ""), 40);
       }
       facts.command.established = true;
       if (commander) facts.command.commander = commander;
@@ -1124,7 +1137,7 @@ export function runCommsRules(comms: readonly CommEntry[]): CommsFacts {
       const post = execAll(POST_RE, t0)[0];
       if (post) {
         const ps = sentenceAt(sentences, post.index);
-        if (ps) facts.command.post = truncate(sliceOriginal(entry.text, nt, post.index + post[0].length, ps.end), 80);
+        if (ps) facts.command.post = truncate(sliceOriginal(text, nt, post.index + post[0].length, ps.end), 80);
       }
       push("status_update", commander ? `Mando: ${commander}.` : "Se menciona el mando del incidente.", "important");
     }
@@ -1132,6 +1145,7 @@ export function runCommsRules(comms: readonly CommEntry[]): CommsFacts {
 
   facts.glossary = Array.from(glossarySet).filter((i) => i >= 0).sort((a, b) => a - b);
   facts.numericCodes = Array.from(codeSet);
+  facts.claves = Array.from(claveMap.values());
   return facts;
 }
 
@@ -1224,6 +1238,7 @@ export function commsAnalysisFromFacts(f: CommsFacts): CommsAnalysis {
   for (const h of f.hazards) latestHazards.set(h.kind, h);
 
   const codes: CommsAnalysis["codes_interpreted"] = [
+    ...f.claves.map((c) => ({ code: c.code, meaning: c.meaning, certainty: "high" as const })),
     ...f.glossary.map((i) => ({ code: RADIO_GLOSSARY[i].term, meaning: RADIO_GLOSSARY[i].meaning, certainty: RADIO_GLOSSARY[i].certainty })),
     ...f.numericCodes.map((code) => ({ code, meaning: "Clave no verificada para este Cuerpo; confirmar", certainty: "low" as const })),
   ];

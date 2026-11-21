@@ -5,6 +5,7 @@
  */
 import { useId, useState } from "react";
 import {
+  ChevronDown,
   CircleHelp,
   Hourglass,
   MapPin,
@@ -14,8 +15,8 @@ import {
   TriangleAlert,
   type LucideIcon,
 } from "lucide-react";
-import { Badge, ConfidenceMeter, Spinner } from "@/components/ui";
-import { toneBorder, toneSoftBg, toneSolidBg, toneText, type Tone } from "@/components/ui/tone";
+import { Badge, ConfidenceMeter, Spinner, TimeAgo } from "@/components/ui";
+import { toneSoftBg, toneText, type Tone } from "@/components/ui/tone";
 import { SimulatedNotice } from "@/components/shell/SimulatedNotice";
 import type { SituationReport, TrappedStatus } from "@/lib/domain";
 import {
@@ -29,16 +30,25 @@ import {
 } from "@/lib/labels";
 import { cn } from "@/lib/cn";
 import type { CriticalStripProps } from "./types";
-import { EvidenceChips, PipelineStatusLine, UpdatedAgo } from "./parts";
-import { divergentType, noSituationMessage, TRAPPED_DISPLAY, trappedCountText } from "./model";
+import { EvidenceChips, PipelineStatusLine } from "./parts";
+import { divergentType, noSituationMessage, TRAPPED_DISPLAY, trappedCountText, uniqueLocations } from "./model";
 
-/** Tono de la franja; sin evidencia queda neutra (nunca verde ni "segura"). */
+/** Tono del estado; sin evidencia queda neutro (nunca verde ni "seguro"). */
 const stripTone: Record<TrappedStatus, Tone> = {
   confirmed: "critical",
   probable: "critical",
   possible: "warning",
   no_evidence: "neutral",
   cleared_by_unit: "ok",
+};
+
+/** Borde izquierdo: el único color de la franja además del estado. */
+const stripEdge: Record<TrappedStatus, string> = {
+  confirmed: "border-l-critical",
+  probable: "border-l-critical",
+  possible: "border-l-warning",
+  no_evidence: "border-l-line-strong",
+  cleared_by_unit: "border-l-ok",
 };
 
 const stripIcon: Record<TrappedStatus, LucideIcon> = {
@@ -49,8 +59,9 @@ const stripIcon: Record<TrappedStatus, LucideIcon> = {
   cleared_by_unit: ShieldCheck,
 };
 
-/** Más de esto y el fundamento se pliega a una línea. */
-const BASIS_FOLD_CHARS = 90;
+/** Lugares y chips visibles antes de plegar en "+N". */
+const MAX_PLACES = 2;
+const MAX_CHIPS = 3;
 
 export function CriticalStrip({ incident, mediaCount, onEvidence, mode, className }: CriticalStripProps) {
   const situation = incident.situation;
@@ -69,22 +80,22 @@ function EmptyStrip({ incident, mediaCount, className }: Pick<CriticalStripProps
     <section
       aria-label="Personas atrapadas"
       data-trapped="none"
-      className={cn("rounded-lg border border-line bg-surface", className)}
+      className={cn("@container rounded-lg border border-l-[3px] border-line border-l-line-strong bg-surface", className)}
     >
-      <div className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-4">
+      <div className="flex flex-col gap-2 p-3 @xl:flex-row @xl:items-center @xl:gap-4">
         <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="flex size-12 shrink-0 items-center justify-center rounded-md border border-line bg-surface-2 text-muted">
-            {working ? <Spinner size="md" label="Analizando" /> : <Hourglass aria-hidden="true" className="size-6" />}
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-surface-2 text-muted">
+            {working ? <Spinner size="sm" label="Analizando" /> : <Hourglass aria-hidden="true" className="size-5" />}
           </span>
           <div className="min-w-0">
-            <p className="label-caps text-xs text-muted">Personas atrapadas · sin informe aún</p>
-            <p aria-live="polite" className="font-display text-2xl font-semibold leading-tight text-text sm:text-3xl">
+            <p className="text-xs text-muted">Personas atrapadas · sin informe aún</p>
+            <p aria-live="polite" className="font-display text-xl leading-tight font-semibold text-text">
               {failed ? "No hay informe de situación" : noSituationMessage(mediaCount)}
             </p>
             <p className="text-sm text-muted">Mientras no haya análisis no se descartan víctimas.</p>
           </div>
         </div>
-        <PipelineStatusLine pipeline={incident.pipeline} className="sm:max-w-[45%]" />
+        <PipelineStatusLine pipeline={incident.pipeline} className="@xl:max-w-[45%]" />
       </div>
     </section>
   );
@@ -101,93 +112,117 @@ interface ReportStripProps {
 }
 
 function ReportStrip({ incident, situation, onEvidence, mode, className }: ReportStripProps) {
-  const { trapped } = situation;
+  const [whyOpen, setWhyOpen] = useState(false);
+  const whyId = useId();
+  const { trapped, injured } = situation;
   const status = trapped.status;
   const tone = stripTone[status] ?? "neutral";
   const Icon = stripIcon[status] ?? CircleHelp;
   const display = TRAPPED_DISPLAY[status] ?? TRAPPED_DISPLAY.no_evidence;
   const alarm = status === "confirmed" || status === "probable";
   const count = trappedCountText(trapped);
-  const locations = trapped.locations.map((l) => l.trim()).filter(Boolean);
+  const places = uniqueLocations(trapped.locations);
+  const shownPlaces = places.slice(0, MAX_PLACES);
+  const morePlaces = places.length - shownPlaces.length;
+  const basis = trapped.basis.trim();
   const seenType = divergentType(incident, situation);
   const SeenIcon = seenType ? incidentTypeIcon[seenType] : ScanEye;
   const simulated = incident.situation_engine === "simulated";
+  // Sin evidencia de lesionados se lee atenuado, pero el texto mantiene "(no descarta)".
+  const injuredTone = injured.status === "no_evidence" ? "neutral" : (likelihoodTone[injured.status] ?? "neutral");
 
   return (
     <section
       aria-label="Personas atrapadas y estado del incidente"
       data-trapped={status}
-      className={cn(
-        "rounded-lg border",
-        tone === "neutral" ? "border-line-strong bg-surface" : cn(toneSoftBg[tone], toneBorder[tone]),
-        className,
-      )}
+      className={cn("@container rounded-lg border border-l-[3px] border-line bg-surface", stripEdge[status], className)}
     >
-      <div className="flex flex-col gap-2 p-3 lg:flex-row lg:gap-4">
+      <div className="flex flex-col gap-3 p-3 @3xl:flex-row @3xl:items-start @3xl:gap-6">
         {/* Izquierda: atrapados */}
-        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-          <div className="flex min-w-0 items-start gap-3">
-            <span
-              className={cn(
-                "flex size-12 shrink-0 items-center justify-center rounded-md",
-                tone === "neutral" ? "border border-line bg-surface-2 text-muted" : cn(toneSolidBg[tone], "text-on-solid"),
-                alarm && "animate-pulse-critical",
-              )}
-            >
-              <Icon aria-hidden="true" className="size-7" />
-            </span>
-            <div className="min-w-0">
-              <p className="label-caps text-xs text-muted">Personas atrapadas</p>
+        <div className="flex min-w-0 flex-1 items-start gap-3">
+          <span
+            className={cn(
+              "flex size-10 shrink-0 items-center justify-center rounded-full",
+              toneSoftBg[tone],
+              tone === "neutral" ? "text-muted" : toneText[tone],
+              alarm && "animate-pulse-critical",
+            )}
+          >
+            <Icon aria-hidden="true" className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-muted">Personas atrapadas</p>
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
               <p
                 aria-live="polite"
                 className={cn(
-                  "font-display text-3xl leading-none font-bold xl:text-4xl",
+                  "font-display text-3xl leading-none font-bold",
                   tone === "neutral" ? "text-text" : toneText[tone],
                 )}
               >
                 {display.primary}
                 {display.qualifier ? " " : null}
                 {display.qualifier ? (
-                  <span className="ml-2 align-middle text-lg font-semibold tracking-normal text-text xl:text-xl">
-                    — {display.qualifier}
-                  </span>
+                  <span className="text-base font-semibold tracking-normal text-text">— {display.qualifier}</span>
                 ) : null}
               </p>
-              {count || locations.length > 0 ? (
-                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-base font-semibold text-text">
-                  {count ? <span className="tabular">{count}</span> : null}
-                  {locations.length > 0 ? (
-                    <span className="inline-flex min-w-0 items-center gap-1 font-medium">
-                      <MapPin aria-hidden="true" className="size-4 shrink-0 text-muted" />
-                      <span className="line-clamp-2 min-w-0">{locations.join(" · ")}</span>
-                    </span>
-                  ) : null}
-                </p>
+              {count ? <span className="tabular text-base font-semibold text-text">{count}</span> : null}
+              {shownPlaces.length > 0 ? (
+                <span title={trapped.locations.join(" · ")} className="inline-flex min-w-0 items-center gap-1 text-sm text-muted">
+                  <MapPin aria-hidden="true" className="size-3.5 shrink-0" />
+                  <span className="min-w-0 truncate">
+                    {shownPlaces.join(" · ")}
+                    {morePlaces > 0 ? ` +${morePlaces}` : null}
+                  </span>
+                </span>
               ) : null}
             </div>
+            {trapped.evidence.length > 0 || basis ? (
+              <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5">
+                <EvidenceChips
+                  refs={trapped.evidence}
+                  onEvidence={onEvidence}
+                  max={MAX_CHIPS}
+                  label="Evidencia sobre personas atrapadas"
+                />
+                {basis ? (
+                  <button
+                    type="button"
+                    aria-expanded={whyOpen}
+                    aria-controls={whyId}
+                    onClick={() => setWhyOpen((v) => !v)}
+                    className="inline-flex h-7 items-center gap-0.5 rounded-md px-1.5 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-text"
+                  >
+                    Por qué
+                    <ChevronDown aria-hidden="true" className={cn("size-3.5 transition-transform", whyOpen && "rotate-180")} />
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+            {basis ? (
+              <p id={whyId} hidden={!whyOpen} className="mt-1.5 text-sm text-muted">
+                {basis}
+              </p>
+            ) : null}
           </div>
-          <Basis text={trapped.basis} />
-          <EvidenceChips
-            refs={trapped.evidence}
-            onEvidence={onEvidence}
-            size="md"
-            label="Evidencia sobre personas atrapadas"
-          />
         </div>
 
         {/* Derecha: gravedad, lesionados, titular y estado del análisis */}
-        <div className="flex min-w-0 flex-col gap-2 border-line lg:w-[42%] lg:max-w-xl lg:border-l lg:pl-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge size="lg" tone={severityTone[situation.severity] ?? "neutral"} variant="solid">
+        <div className="flex min-w-0 flex-col gap-1.5 @3xl:w-[40%] @3xl:max-w-xl">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <Badge size="md" tone={severityTone[situation.severity] ?? "neutral"}>
               Gravedad {labelOr(severityLabel, situation.severity)}
             </Badge>
-            <Badge size="md" tone={likelihoodTone[situation.injured.status] ?? "neutral"}>
-              Lesionados: {labelOr(likelihoodLabel, situation.injured.status)}
-              {situation.injured.count_estimate > 0 ? ` · ~${Math.round(situation.injured.count_estimate)}` : ""}
-            </Badge>
+            <span className="text-sm text-muted">
+              Lesionados:{" "}
+              <span className={cn(injuredTone !== "neutral" && cn("font-medium", toneText[injuredTone]))}>
+                {labelOr(likelihoodLabel, injured.status)}
+                {injured.count_estimate > 0 ? ` · ~${Math.round(injured.count_estimate)}` : ""}
+              </span>
+            </span>
           </div>
           {situation.headline.trim() ? (
-            <p className="text-base leading-snug font-semibold text-text xl:text-lg">{situation.headline}</p>
+            <p className="line-clamp-2 text-base leading-snug font-medium text-text">{situation.headline}</p>
           ) : null}
           {seenType ? (
             <p className="inline-flex items-center gap-1.5 text-sm text-warning">
@@ -198,43 +233,21 @@ function ReportStrip({ incident, situation, onEvidence, mode, className }: Repor
               </span>
             </p>
           ) : null}
-          <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
             <ConfidenceMeter level={situation.overall_confidence} size="sm" />
-            <UpdatedAgo iso={incident.situation_updated_at} />
+            {incident.situation_updated_at ? (
+              <>
+                <span aria-hidden="true">·</span>
+                <TimeAgo iso={incident.situation_updated_at} />
+              </>
+            ) : null}
+            {simulated ? (
+              <SimulatedNotice compact what="Este informe" mode={mode} demo={incident.origin === "demo"} />
+            ) : null}
             <PipelineStatusLine pipeline={incident.pipeline} />
           </div>
-          {simulated ? (
-            <SimulatedNotice compact what="Este informe" mode={mode} demo={incident.origin === "demo"} />
-          ) : null}
         </div>
       </div>
     </section>
-  );
-}
-
-/** Fundamento del estado en una línea, expandible. */
-function Basis({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
-  const id = useId();
-  const basis = text.trim();
-  if (!basis) return null;
-  const foldable = basis.length > BASIS_FOLD_CHARS;
-  return (
-    <div className="flex min-w-0 items-start gap-2 text-sm">
-      <p id={id} className={cn("min-w-0 flex-1 text-muted", foldable && !open && "truncate")}>
-        <span className="font-semibold text-text">Fundamento:</span> {basis}
-      </p>
-      {foldable ? (
-        <button
-          type="button"
-          aria-expanded={open}
-          aria-controls={id}
-          onClick={() => setOpen((v) => !v)}
-          className="shrink-0 rounded px-1 font-semibold text-accent hover:underline"
-        >
-          {open ? "Ver menos" : "Ver más"}
-        </button>
-      ) : null}
-    </div>
   );
 }

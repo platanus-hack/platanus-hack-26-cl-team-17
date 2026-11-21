@@ -384,17 +384,17 @@ export function declutter(boxes: readonly LabelBox[], options: { pad?: number; s
   for (const i of order) {
     const b = boxes[i];
     if (!(b.w > 0 && b.h > 0)) continue;
-    const candidates: [number, number][] =
-      b.pinned || !shift
-        ? [[0, 0]]
-        : [
-            [0, 0],
-            [b.w / 2 + 6, 0],
-            [-(b.w / 2 + 6), 0],
-            [0, -(b.h + 4)],
-            [0, b.h + 12],
-          ];
-    const hit = candidates.find(([dx, dy]) => b.pinned || free(b.x + dx, b.y + dy, b.w, b.h));
+    const candidates: [number, number][] = !shift
+      ? [[0, 0]]
+      : [
+          [0, 0],
+          [b.w / 2 + 6, 0],
+          [-(b.w / 2 + 6), 0],
+          [0, -(b.h + 4)],
+          [0, b.h + 12],
+        ];
+    // Las fijas también buscan un hueco (dos personas en riesgo juntas no se montan), pero nunca se ocultan.
+    const hit = candidates.find(([dx, dy]) => free(b.x + dx, b.y + dy, b.w, b.h)) ?? (b.pinned ? candidates[0] : undefined);
     if (hit) {
       placed.push({ x: b.x + hit[0], y: b.y + hit[1], w: b.w, h: b.h });
       out[i] = { visible: true, dx: hit[0], dy: hit[1] };

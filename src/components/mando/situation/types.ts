@@ -22,7 +22,7 @@ export interface SituationPanelProps {
   onEvidence: (ref: EvidenceRef) => void;
   /** Forzar una nueva fusión. */
   onReanalyze: () => void;
-  /** Modo de la instancia: ajusta el texto del aviso de simulación (opcional). */
+  /** Modo de la instancia: ajusta la explicación del rótulo "Simulado" del pie (opcional). */
   mode?: RuntimeMode | null;
   className?: string;
 }

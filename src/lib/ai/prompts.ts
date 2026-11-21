@@ -33,6 +33,7 @@ import {
   toLocal,
   type LatLng,
 } from "@/lib/geo";
+import { CLAVES_TEXT } from "./radio-claves";
 import { RADIO_GLOSSARY_TEXT } from "./radio-glossary";
 import type {
   CommsAnalysisInput,
@@ -58,7 +59,7 @@ Eres el analista de apoyo de Vigía, el puesto de mando web de Bomberos de Chile
 - No emitas ni interpretes claves radiales numéricas (10-x, 6-x u otras): varían entre Cuerpos.`;
 
 const SIDES = `## Lados y pisos
-- Alfa = lado principal, normalmente la fachada hacia la calle principal (si el OBAC lo fijó por radio, manda lo que dijo). Bravo, Charlie y Delta siguen en sentido horario visto desde arriba: mirando la fachada Alfa desde la calle, Bravo queda a la izquierda, Charlie es el fondo y Delta queda a la derecha (convención SCI).
+- Sectores Alfa, Bravo, Charlie y Delta (los que usa este Cuerpo por radio). Alfa = frente, normalmente la fachada hacia la calle principal (si el OBAC lo fijó por radio, manda lo que dijo). Bravo, Charlie y Delta siguen en sentido horario visto desde arriba: mirando la fachada Alfa desde la calle, Bravo queda a la izquierda, Charlie es el fondo y Delta queda a la derecha.
 - En los campos "side": front = Alfa, left = Bravo, rear = Charlie, right = Delta, roof = techumbre, interior, whole_floor = todo el piso; unknown si no se reconoce la fachada. Si no la reconoces, ubica con referencias del encuadre ("costado izquierdo de la imagen").
 - Pisos contados desde la calle: 1 = nivel de calle. Subterráneos y entretecho se mencionan en texto.`;
 
@@ -170,9 +171,11 @@ Recibes la bitácora radial del incidente (<bitacora>), una línea por entrada c
 - mayday: active=true desde un mayday o "bombero en peligro" hasta que la radio lo dé explícitamente por resuelto (bombero ubicado, rescatado o fuera); nunca lo supongas resuelto.
 - resource_requests: solicitudes aún no confirmadas en el lugar. hazards: peligros informados por radio.
 - command: established si alguien asumió el mando (OBAC, "asumo el mando", "a cargo"); commander tal como se nombra; post_location si se informó.
-- codes_interpreted: solo términos que aparecen en la bitácora y están en el RADIO_GLOSSARY, con su certeza; claves numéricas → certainty=low y meaning "Clave no verificada para este Cuerpo; confirmar".
+- codes_interpreted: términos que aparecen en la bitácora y están en el RADIO_GLOSSARY, con su certeza, y cada clave numérica usada: si está en CLAVES RADIALES, code = la clave y meaning = su significado, certainty=high; si no está, certainty=low y meaning "Clave no verificada para este Cuerpo; confirmar".
+- Una clave vale lo mismo que su significado en claro: "6-3" = la unidad está en el lugar, "7-0" = se establece puesto de mando, "6-7" = situación controlada, "6-17" = fuego extinguido, "6-19" = bombero accidentado (trátalo como emergencia de bombero), "1-x" y "2-x" = solicitudes de recursos. Los sectores Alfa, Bravo, Charlie y Delta ubican lo informado.
 - open_questions: lo que el mando debería pedir por radio, la primera siempre que no lo haya informado una unidad en el lugar: "¿Hay personas atrapadas o sin ubicar?". Luego lados sin reconocer, peligros sin confirmar, recursos pendientes.`,
   RADIO_GLOSSARY_TEXT,
+  CLAVES_TEXT,
   SECURITY,
   STYLE,
 );
@@ -201,7 +204,9 @@ Recibes el contexto del incidente; por cada medio sus metadatos, su nota y su an
 - unknowns: siempre los lados no vistos (no hay 360°), el interior y lo que conviene confirmar al llegar.
 - recommended_actions: máx. 6 consideraciones de apoyo ("Confirmar por radio…", "Considerar…", "Verificar al llegar…"). Nunca fijes estrategia ofensiva o defensiva, ni ordenes ingresar o no ingresar.
 - briefing.spoken: hasta 90 palabras para leer en voz alta en el orden del pre-informe: qué es, dónde, vidas en riesgo, peligros, acceso. Palabras pronunciables ("segundo piso", "lado Bravo", sin siglas raras). Si no hay indicios de víctimas, di que no se observan y que no se descartan. bullets: 5 a 8 puntos telegráficos.
-- headline: una línea legible en 3 segundos. overall_confidence calibrada.`,
+- headline: una línea legible en 3 segundos. overall_confidence calibrada.
+- Radio: las claves de la bitácora valen lo que dice CLAVES RADIALES (p. ej. "6-3" unidad en el lugar, "6-7" situación controlada, "7-9" evacuar moradores). Lo que una unidad informa por sector (Alfa, Bravo, Charlie, Delta) ubícalo en ese lado de la estructura.`,
+  CLAVES_TEXT,
   SECURITY,
   STYLE,
 );

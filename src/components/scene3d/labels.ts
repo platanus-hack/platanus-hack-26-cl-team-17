@@ -307,6 +307,8 @@ export function frameLabel(frame: number): string | null {
 }
 
 export const LEGEND_TEXT = "Reconstrucción esquemática inferida por IA · dimensiones aproximadas";
+/** Honestidad del entorno OSM (simbología y supuestos). */
+export const SURROUNDINGS_TEXT = "Entorno: edificios de OpenStreetMap según el GPS del incidente; referencial";
 export const EMPTY_TEXT = "La reconstrucción aparecerá con el primer video analizado";
 
 /** Supuestos que agregó el propio visor al dibujar (valores que la IA no entregó o eran inválidos). */

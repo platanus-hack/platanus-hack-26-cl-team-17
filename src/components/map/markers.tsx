@@ -109,7 +109,7 @@ export function IncidentMarker({
       <span
         className={cn(
           "relative grid size-10 place-items-center rounded-full border-2 border-bg shadow-lg ring-4",
-          atRisk ? "bg-critical text-on-solid ring-critical/35" : "bg-accent text-on-solid ring-accent/30",
+          atRisk ? "bg-critical text-on-solid ring-critical/35" : "bg-fire text-on-solid ring-fire/30",
         )}
       >
         <Icon className="size-5" aria-hidden />

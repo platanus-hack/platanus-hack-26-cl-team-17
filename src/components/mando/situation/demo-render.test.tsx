@@ -105,6 +105,7 @@ function commsOf(spec: ShowcaseSpec): CommEntry[] {
     speaker: c.speaker,
     text: c.text,
     source: "simulated",
+    audio_path: null,
     created_at: T0,
   }));
 }
@@ -130,16 +131,19 @@ for (const [name, spec] of [
     const incident = incidentOf(spec);
     const media = mediaOf(spec);
     const comms = commsOf(spec);
-    const t = text(
-      renderToStaticMarkup(
-        <SituationPanel incident={incident} media={media} comms={comms} onEvidence={noop} onReanalyze={noop} mode={MODE} />,
-      ),
+    const html = renderToStaticMarkup(
+      <SituationPanel incident={incident} media={media} comms={comms} onEvidence={noop} onReanalyze={noop} mode={MODE} />,
     );
+    const t = text(html);
     for (const section of ["Hallazgos", "Peligros", "Acceso y agua", "Consideraciones tácticas", "Contradicciones", "Lo que no se sabe", "Briefing"]) {
       assert.match(t, new RegExp(section), `falta la sección ${section}`);
     }
     assert.match(t, /la decisión es del oficial a cargo/);
-    assert.match(t, /Este informe es SIMULADO/);
+    // Rótulo visible de simulado en el pie, con la explicación de demostración.
+    assert.match(t, /Simulado/);
+    assert.match(html, /data-engine="simulated"[^>]*title="[^"]*datos de demostración/);
+    // Cada hallazgo muestra su confianza.
+    assert.equal((t.match(/Confianza (baja|media|alta)/g) ?? []).length, spec.situation.insights.length + 1);
     // Toda evidencia citada por la demo apunta a un medio o comunicación existente.
     const refs = [
       ...spec.situation.trapped.evidence,

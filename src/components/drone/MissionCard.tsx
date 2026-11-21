@@ -27,6 +27,7 @@ import { missionActionLabel, missionStatusIcon, missionStatusLabel, missionStatu
 import { toneText } from "@/components/ui/tone";
 import { cn } from "@/lib/cn";
 import { BatchList } from "./BatchList";
+import { LiveFeed } from "./LiveFeed";
 import { TrackSparkline } from "./TrackSparkline";
 import {
   BATTERY_CRITICAL_PCT,
@@ -190,6 +191,13 @@ export function MissionCard({ mission: m, center, media, onChanged, onOpenMedia,
                 : "El dron la recibe en su próximo envío de telemetría; la misión sigue abierta hasta que confirme."}
             </span>
           </p>
+        </div>
+      )}
+
+      {/* Video en vivo (los drones simulados no tienen cámara) */}
+      {!simulated && (
+        <div className="border-t border-line p-3">
+          <LiveFeed missionId={m.id} label={m.label} active />
         </div>
       )}
 

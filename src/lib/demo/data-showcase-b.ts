@@ -21,8 +21,9 @@ export const SHOWCASE_B: ShowcaseSpec = {
   title: "Colisión múltiple — Av. Departamental con Av. Macul, Macul",
   type: "vehicle_collision",
   address: "Av. Departamental con Av. Macul, Macul, Región Metropolitana",
-  lat: -33.5037,
-  lng: -70.5985,
+  // Calzada sur de Av. Departamental, ~35 m al oriente del cruce con Av. Macul (según OSM).
+  lat: -33.51022,
+  lng: -70.58805,
   description:
     "Colisión de tres vehículos en la calzada sur de Av. Departamental, al oriente de Av. Macul. Auto volcado con un ocupante atrapado, derrame de combustible bajo los vehículos, un auto posiblemente eléctrico y tránsito detenido.",
   status: "active",

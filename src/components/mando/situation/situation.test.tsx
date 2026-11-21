@@ -9,7 +9,7 @@ import { EMPTY_PIPELINE, type CommEntry, type Incident, type SituationReport } f
 import type { MediaView, RuntimeMode } from "@/lib/contract";
 import { CriticalStrip, SituationPanel } from "./index";
 import { evidenceLabel, resolveEvidence } from "./evidence";
-import { briefingCopyText, byPriority, divergentType, fusionPipelineView, trappedCountText, trappedRange } from "./model";
+import { briefingCopyText, byPriority, divergentType, fusionPipelineView, trappedCountText, trappedRange, uniqueLocations } from "./model";
 
 /* ─────────────────────────── Fixtures ─────────────────────────── */
 
@@ -156,7 +156,7 @@ function mediaFixture(label: string, frames: number): MediaView {
 }
 
 function commFixture(seq: number, text: string): CommEntry {
-  return { id: `c${seq}`, incident_id: "inc-1", seq, at: T0, channel: "1", speaker: "B-3", text, source: "manual", created_at: T0 };
+  return { id: `c${seq}`, incident_id: "inc-1", seq, at: T0, channel: "1", speaker: "B-3", text, source: "manual", audio_path: null, created_at: T0 };
 }
 
 const MEDIA = [mediaFixture("M1", 2), mediaFixture("M2", 6)];
@@ -285,6 +285,48 @@ test("franja: tipo distinto → 'La IA ve'; count_max < count_min tolerado", () 
   assert.doesNotMatch(t, /3–1/);
 });
 
+test("franja compacta: lugar repetido una vez, 3 chips + '+N', fundamento plegado y lesionados 'no descarta'", () => {
+  const refs = ["M1", "M2", "M3", "M6", "M7"];
+  const s = situationFixture({
+    trapped: {
+      status: "possible",
+      count_min: 0,
+      count_max: 1,
+      locations: refs.map((r) => `2º piso (nota ${r})`),
+      basis: refs.map((r) => `nota del informante en ${r}: «Hay personas adentro» (sin corroborar)`).join("; "),
+      evidence: refs.map((ref) => ({ ref, frame: -1, note: "Nota del informante" })),
+    },
+    injured: { status: "no_evidence", count_estimate: 0, detail: "" },
+    headline: "Incendio estructural; posible persona atrapada (sin confirmar)",
+    overall_confidence: "low",
+  });
+  const html = strip(incidentFixture({ situation: s, situation_engine: "simulated" }));
+  const t = text(html);
+  assert.match(t, /POSIBLE/);
+  assert.match(t, /Hasta 1 persona/);
+  assert.equal(t.split("2º piso").length - 1, 1, "el lugar se lee una sola vez");
+  assert.doesNotMatch(t, /\(nota M1\)/);
+  // Tres chips visibles y el resto plegado.
+  for (const r of ["M1", "M2", "M3"]) assert.match(html, new RegExp(`aria-label="${r}:`));
+  assert.doesNotMatch(html, /aria-label="M6:/);
+  assert.match(html, /aria-label="Ver 2 evidencias más"/);
+  // El fundamento existe pero queda oculto tras "Por qué".
+  assert.match(html, /aria-expanded="false"[^>]*>Por qué/);
+  assert.match(html, /<p[^>]*hidden=""[^>]*>nota del informante en M1/);
+  // Gravedad suave (sin relleno sólido) y lesionados sin evidencia, que no descarta.
+  assert.doesNotMatch(html, /bg-critical text-on-solid|text-on-solid bg-critical/);
+  assert.match(t, /Lesionados: Sin evidencia \(no descarta\)/);
+  // Confianza y rótulo de simulado siguen visibles.
+  assert.match(t, /Confianza baja/);
+  assert.match(t, /Simulado/);
+});
+
+test("uniqueLocations agrupa el mismo lugar citado por varias fuentes", () => {
+  assert.deepEqual(uniqueLocations(["2º piso (nota M1)", "2º piso (M2)", " 2º PISO ", "Patio (nota C3)"]), ["2º piso", "Patio"]);
+  // Un paréntesis sin referencia es parte del lugar.
+  assert.deepEqual(uniqueLocations(["Ventana (costado B)", "", "(M4)"]), ["Ventana (costado B)"]);
+});
+
 /* ─────────────────────────── SituationPanel ─────────────────────────── */
 
 test("panel: situación completa con las 8 secciones, aviso táctico, briefing y pie", () => {
@@ -329,17 +371,37 @@ test("panel: sin situación y sin medios → espera; con medios → analizando",
   assert.match(none, /Sin informe/);
   assert.doesNotMatch(none, /Hallazgos/);
   const html = panel(incidentFixture({ situation: null, situation_engine: null }), MEDIA, []);
-  assert.match(text(html), /Analizando las primeras imágenes…/);
+  assert.match(text(html), /Sin informe todavía/);
+  assert.doesNotMatch(text(html), /Analizando las primeras imágenes…/, "la franja de arriba ya lo dice");
   // Sin fuentes, Reanalizar queda deshabilitado; con medios, habilitado.
   const disabledNoSources = /<button(?=[^>]*disabled="")(?=[^>]*title="Aún no hay medios)/;
   assert.match(panel(incidentFixture({ situation: null }), [], []), disabledNoSources);
   assert.doesNotMatch(html, /<button[^>]*title="Aún no hay medios/);
 });
 
-test("panel: motor simulado muestra el aviso completo y la etiqueta Simulado", () => {
-  const t = text(panel(incidentFixture({ situation_engine: "simulated" })));
-  assert.match(t, /Este informe es SIMULADO/);
-  assert.match(t, /Simulado/);
+test("panel: motor simulado queda rotulado 'Simulado' en el pie, con su explicación", () => {
+  // El aviso grande vive solo en la franja; el panel conserva un rótulo visible propio.
+  const html = panel(incidentFixture({ situation_engine: "simulated" }));
+  assert.match(html, /<span[^>]*data-engine="simulated"[^>]*title="[^"]*motor de reglas[^"]*"[^>]*>(?:(?!<\/span><\/span>).)*Simulado/);
+  const demo = panel(incidentFixture({ situation_engine: "simulated", origin: "demo" }));
+  assert.match(demo, /data-engine="simulated"[^>]*title="[^"]*datos de demostración/);
+  // Con IA real no hay rótulo de simulado.
+  assert.doesNotMatch(text(panel(incidentFixture())), /Simulado/);
+});
+
+test("panel: hallazgo con detalle largo se pliega a 2 líneas, sin rótulo de categoría y con su confianza", () => {
+  const long = "Indicio sin corroborar: nota del informante en M1, M2, M3, M6 y M7 indica personas adentro; nada en las imágenes lo confirma todavía.";
+  const s = situationFixture({
+    insights: [{ id: "I1", category: "life_safety", priority: "high", title: "Posible persona atrapada", detail: long, confidence: "low", evidence: [] }],
+  });
+  const html = panel(incidentFixture({ situation: s }));
+  const t = text(html);
+  assert.match(html, /<button[^>]*aria-expanded="false"[^>]*><span class="line-clamp-2">Indicio sin corroborar/);
+  assert.doesNotMatch(t, /Vidas en riesgo/, "la categoría repetía el título");
+  assert.match(t, /Posible persona atrapadaAlta/);
+  assert.match(t, /Confianza baja/);
+  // Sin aviso grande: la franja ya rotula el informe.
+  assert.doesNotMatch(t, /SIMULADO/);
 });
 
 test("panel: error de pipeline visible con su mensaje", () => {

@@ -12,7 +12,6 @@ import {
   ClipboardList,
   Flame,
   Hourglass,
-  Info,
   Lightbulb,
   Megaphone,
   RefreshCw,
@@ -21,10 +20,10 @@ import {
   Siren,
   TriangleAlert,
 } from "lucide-react";
-import { Badge, Button, ConfidenceMeter, EmptyState, KeyValue, Panel, Spinner, type KeyValueItem } from "@/components/ui";
-import { SimulatedNotice } from "@/components/shell/SimulatedNotice";
+import { Badge, Button, ConfidenceMeter, EmptyState, KeyValue, Panel, type KeyValueItem } from "@/components/ui";
+import { toneText } from "@/components/ui/tone";
 import type { CommEntry, EvidenceRef, Incident, SituationReport } from "@/lib/domain";
-import type { MediaView } from "@/lib/contract";
+import type { MediaView, RuntimeMode } from "@/lib/contract";
 import {
   analysisEngineLabel,
   analysisEngineTone,
@@ -34,18 +33,15 @@ import {
   hazardKindLabel,
   hazardSeverityLabel,
   hazardSeverityTone,
-  insightCategoryIcon,
-  insightCategoryLabel,
   labelOr,
   likelihoodLabel,
   likelihoodTone,
   priorityLabel,
   priorityTone,
 } from "@/lib/labels";
-import { formatClock } from "@/lib/format";
 import { cn } from "@/lib/cn";
 import type { SituationPanelProps } from "./types";
-import { CollapsibleSection, EvidenceChips, PipelineStatusLine, UpdatedAgo } from "./parts";
+import { ClampText, CollapsibleSection, EvidenceChips, PipelineStatusLine, UpdatedAgo } from "./parts";
 import { BriefingBlock } from "./Briefing";
 import { refsFromLabels } from "./evidence";
 import { byPriority, bySeverity, noSituationMessage, showsFireAndStructure, showsVehicles } from "./model";
@@ -55,10 +51,12 @@ type SectionId = "insights" | "hazards" | "physical" | "access" | "tactics" | "c
 /** Cuánto queda "Solicitado" el botón Reanalizar antes de volver a habilitarse. */
 const REANALYZE_COOLDOWN_MS = 5000;
 
+/** Chips de evidencia visibles por ítem antes de plegar en "+N". */
+const MAX_CHIPS = 3;
+
 export function SituationPanel({ incident, media, comms, onEvidence, onReanalyze, mode, className }: SituationPanelProps) {
   const [closed, setClosed] = useState<ReadonlySet<SectionId>>(() => new Set());
   const situation = incident.situation;
-  const simulated = situation !== null && incident.situation_engine === "simulated";
 
   const toggle = (id: SectionId) =>
     setClosed((prev) => {
@@ -75,13 +73,12 @@ export function SituationPanel({ incident, media, comms, onEvidence, onReanalyze
       title="Situación"
       icon={ClipboardList}
       badge={situation ? <ConfidenceMeter level={situation.overall_confidence} size="sm" className="ml-1" /> : null}
-      footer={<PanelFooter incident={incident} media={media} comms={comms} onReanalyze={onReanalyze} />}
+      footer={<PanelFooter incident={incident} media={media} comms={comms} onReanalyze={onReanalyze} mode={mode} />}
       className={cn("h-full", className)}
     >
-      {incident.pipeline.fusion_status !== "idle" || simulated ? (
-        <div className="flex flex-col gap-2 border-b border-line px-3 py-2.5">
+      {incident.pipeline.fusion_status !== "idle" ? (
+        <div className="border-b border-line px-3 py-2">
           <PipelineStatusLine pipeline={incident.pipeline} />
-          {simulated ? <SimulatedNotice what="Este informe" mode={mode} demo={incident.origin === "demo"} /> : null}
         </div>
       ) : null}
       {situation ? (
@@ -108,22 +105,14 @@ function NoSituation({ incident, mediaCount }: { incident: Incident; mediaCount:
   const working = !failed && mediaCount > 0;
   return (
     <EmptyState
-      icon={working ? undefined : Hourglass}
-      title={failed ? "No hay informe de situación" : noSituationMessage(mediaCount)}
+      icon={Hourglass}
+      title={failed ? "No hay informe de situación" : working ? "Sin informe todavía" : noSituationMessage(mediaCount)}
       description={
-        <>
-          {working ? (
-            <span className="mb-2 flex justify-center">
-              <Spinner size="md" label="Analizando" />
-            </span>
-          ) : null}
-          {failed
-            ? "El análisis falló antes de producir un informe. Puedes reintentar con «Reanalizar»."
-            : working
-              ? "El informe aparecerá aquí apenas termine el primer análisis."
-              : "Cuando llegue un video, una foto o un mensaje de radio, la IA armará aquí el informe."}{" "}
-          Mientras no haya análisis no se descartan víctimas.
-        </>
+        failed
+          ? "El análisis falló antes de producir un informe. Puedes reintentar con «Reanalizar»."
+          : working
+            ? "Aparecerá aquí cuando termine el análisis."
+            : "Llegará con el primer video, foto o mensaje de radio."
       }
     />
   );
@@ -142,8 +131,16 @@ interface ReportProps {
 }
 
 function Report({ incident, situation: s, media, comms, onEvidence, isOpen, toggle }: ReportProps) {
-  const chips = (refs: readonly EvidenceRef[], label?: string) => (
-    <EvidenceChips refs={refs} media={media} comms={comms} onEvidence={onEvidence} label={label} className="mt-2" />
+  const chips = (refs: readonly EvidenceRef[], label?: string, className = "mt-1.5") => (
+    <EvidenceChips
+      refs={refs}
+      media={media}
+      comms={comms}
+      onEvidence={onEvidence}
+      max={MAX_CHIPS}
+      label={label}
+      className={className}
+    />
   );
 
   const insights = byPriority(s.insights);
@@ -168,31 +165,26 @@ function Report({ incident, situation: s, media, comms, onEvidence, isOpen, togg
         {insights.length === 0 ? (
           <Muted>La IA no destacó hallazgos con la información disponible.</Muted>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {insights.map((item, i) => {
-              const CategoryIcon = insightCategoryIcon[item.category] ?? Info;
-              return (
-                <li key={`${item.id}-${i}`} className="rounded-md border border-line bg-surface-2 p-2.5">
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <Badge
-                      tone={priorityTone[item.priority] ?? "neutral"}
-                      variant={item.priority === "critical" ? "solid" : "soft"}
-                      icon={item.priority === "critical" ? Siren : undefined}
-                    >
-                      {labelOr(priorityLabel, item.priority)}
-                    </Badge>
-                    <span className="inline-flex items-center gap-1 text-xs text-muted">
-                      <CategoryIcon aria-hidden="true" className="size-3.5 shrink-0" />
-                      {labelOr(insightCategoryLabel, item.category)}
-                    </span>
-                    <ConfidenceMeter level={item.confidence} size="sm" className="ml-auto" />
-                  </div>
-                  <p className="mt-1.5 font-semibold leading-snug text-text">{item.title}</p>
-                  {item.detail.trim() ? <p className="mt-0.5 text-sm text-muted">{item.detail}</p> : null}
-                  {chips(item.evidence, `Evidencia de «${item.title}»`)}
-                </li>
-              );
-            })}
+          <ul className={LIST}>
+            {insights.map((item, i) => (
+              <li key={`${item.id}-${i}`} className={ITEM}>
+                <div className="flex items-start gap-2">
+                  <p className="min-w-0 flex-1 font-semibold leading-snug text-text">{item.title}</p>
+                  <Badge
+                    tone={priorityTone[item.priority] ?? "neutral"}
+                    icon={item.priority === "critical" ? Siren : undefined}
+                    className="mt-0.5"
+                  >
+                    {labelOr(priorityLabel, item.priority)}
+                  </Badge>
+                </div>
+                <ClampText text={item.detail} className="mt-0.5 text-sm text-muted" />
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <ConfidenceMeter level={item.confidence} size="sm" />
+                  {chips(item.evidence, `Evidencia de «${item.title}»`, "")}
+                </div>
+              </li>
+            ))}
           </ul>
         )}
       </CollapsibleSection>
@@ -208,20 +200,18 @@ function Report({ incident, situation: s, media, comms, onEvidence, isOpen, togg
         {hazards.length === 0 ? (
           <Muted>No se identificaron peligros en las fuentes. Eso no los descarta: verifícalo al llegar.</Muted>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className={LIST}>
             {hazards.map((h, i) => {
               const HazardIcon = hazardKindIcon[h.kind] ?? TriangleAlert;
               const tone = hazardSeverityTone[h.severity] ?? "neutral";
               return (
-                <li key={`${h.kind}-${i}`} className="rounded-md border border-line bg-surface-2 p-2.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <HazardIcon aria-hidden="true" className={cn("size-4 shrink-0", tone === "critical" ? "text-critical" : tone === "warning" ? "text-warning" : "text-info")} />
-                    <span className="font-semibold text-text">{labelOr(hazardKindLabel, h.kind)}</span>
-                    <Badge tone={tone} className="ml-auto">
-                      Gravedad {labelOr(hazardSeverityLabel, h.severity).toLowerCase()}
-                    </Badge>
+                <li key={`${h.kind}-${i}`} className={ITEM}>
+                  <div className="flex items-center gap-2">
+                    <HazardIcon aria-hidden="true" className={cn("size-4 shrink-0", toneText[tone])} />
+                    <span className="min-w-0 flex-1 font-semibold text-text">{labelOr(hazardKindLabel, h.kind)}</span>
+                    <Badge tone={tone}>Gravedad {labelOr(hazardSeverityLabel, h.severity).toLowerCase()}</Badge>
                   </div>
-                  {h.description.trim() ? <p className="mt-1 text-sm text-muted">{h.description}</p> : null}
+                  <ClampText text={h.description} className="mt-0.5 text-sm text-muted" />
                   {chips(h.evidence, `Evidencia de ${labelOr(hazardKindLabel, h.kind).toLowerCase()}`)}
                 </li>
               );
@@ -255,23 +245,22 @@ function Report({ incident, situation: s, media, comms, onEvidence, isOpen, togg
         open={isOpen("tactics")}
         onToggle={() => toggle("tactics")}
       >
-        <p role="note" className="mb-2 flex items-start gap-1.5 rounded-md border border-info/40 bg-info-soft px-2.5 py-1.5 text-sm text-info">
-          <Info aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
+        <p role="note" className="mb-1 text-xs text-muted">
           Sugerencias de apoyo — la decisión es del oficial a cargo
         </p>
         {actions.length === 0 ? (
           <Muted>Sin sugerencias por ahora.</Muted>
         ) : (
-          <ol className="flex flex-col gap-2">
+          <ol className={LIST}>
             {actions.map((a, i) => (
-              <li key={`${i}-${a.action}`} className="rounded-md border border-line bg-surface-2 p-2.5">
+              <li key={`${i}-${a.action}`} className={ITEM}>
                 <div className="flex items-start gap-2">
+                  <p className="min-w-0 flex-1 font-semibold leading-snug text-text">{a.action}</p>
                   <Badge tone={priorityTone[a.priority] ?? "neutral"} className="mt-0.5">
                     {labelOr(priorityLabel, a.priority)}
                   </Badge>
-                  <p className="min-w-0 font-semibold leading-snug text-text">{a.action}</p>
                 </div>
-                {a.rationale.trim() ? <p className="mt-1 text-sm text-muted">{a.rationale}</p> : null}
+                <ClampText text={a.rationale} className="mt-0.5 text-sm text-muted" />
               </li>
             ))}
           </ol>
@@ -289,9 +278,9 @@ function Report({ incident, situation: s, media, comms, onEvidence, isOpen, togg
         {s.contradictions.length === 0 ? (
           <Muted>No se detectaron contradicciones entre las fuentes.</Muted>
         ) : (
-          <ul className="flex flex-col gap-2">
+          <ul className={LIST}>
             {s.contradictions.map((c, i) => (
-              <li key={`${i}-${c.description}`} className="rounded-md border border-warning/40 bg-warning-soft p-2.5">
+              <li key={`${i}-${c.description}`} className={ITEM}>
                 <p className="flex items-start gap-1.5 text-sm text-text">
                   <Scale aria-hidden="true" className="mt-0.5 size-3.5 shrink-0 text-warning" />
                   {c.description}
@@ -327,6 +316,10 @@ function Report({ incident, situation: s, media, comms, onEvidence, isOpen, togg
     </div>
   );
 }
+
+/** Listas planas: separadores en vez de tarjetas. */
+const LIST = "flex flex-col divide-y divide-line";
+const ITEM = "py-2.5 first:pt-1 last:pb-0";
 
 function Muted({ children }: { children: ReactNode }) {
   return <p className="text-sm text-muted">{children}</p>;
@@ -423,9 +416,17 @@ interface PanelFooterProps {
   media: MediaView[];
   comms: CommEntry[];
   onReanalyze: () => void;
+  mode?: RuntimeMode | null;
 }
 
-function PanelFooter({ incident, media, comms, onReanalyze }: PanelFooterProps) {
+/** Explicación del rótulo "Simulado" (tooltip y lector de pantalla). */
+function simulatedReason(mode: RuntimeMode | null | undefined, demo: boolean): string {
+  if (demo) return "Informe simulado: datos de demostración, ficticios.";
+  if (mode?.ai === "simulated") return "Informe simulado por el motor de reglas: no proviene de los videos.";
+  return "Informe simulado por el motor de reglas, no por el modelo de IA. Reanaliza para reintentar con el modelo.";
+}
+
+function PanelFooter({ incident, media, comms, onReanalyze, mode }: PanelFooterProps) {
   const [requested, setRequested] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -452,20 +453,18 @@ function PanelFooter({ incident, media, comms, onReanalyze }: PanelFooterProps) 
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
       {engine ? (
-        <Badge tone={analysisEngineTone[engine] ?? "neutral"} variant="outline">
+        <Badge
+          tone={analysisEngineTone[engine] ?? "neutral"}
+          variant="outline"
+          data-engine={engine}
+          title={engine === "simulated" ? simulatedReason(mode, incident.origin === "demo") : undefined}
+        >
           {labelOr(analysisEngineLabel, engine)}
         </Badge>
       ) : (
         <span className="text-xs text-muted">Sin informe</span>
       )}
-      {updatedAt ? (
-        <span className="flex items-center gap-2 text-xs">
-          <span className="font-mono tabular text-text" title="Hora del informe" suppressHydrationWarning>
-            {formatClock(updatedAt)}
-          </span>
-          <UpdatedAgo iso={updatedAt} className="text-xs" />
-        </span>
-      ) : null}
+      {updatedAt ? <UpdatedAgo iso={updatedAt} className="text-xs" /> : null}
       <Button
         size="sm"
         icon={requested ? Check : RefreshCw}

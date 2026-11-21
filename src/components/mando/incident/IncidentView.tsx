@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -11,6 +11,9 @@ import {
   Images,
   LayoutList,
   Map as MapIcon,
+  Mic,
+  PanelLeftClose,
+  PanelLeftOpen,
   Radio,
   RotateCw,
   ScanEye,
@@ -34,7 +37,7 @@ import { MandoShell } from "@/components/shell";
 import { Scene3D, type SceneSelection } from "@/components/scene3d";
 import { TacticalMap } from "@/components/map";
 import { CommsPanel } from "@/components/comms";
-import { DronePanel, useSimulatedMissionTicker } from "@/components/drone";
+import { DronePanel, LiveFeed, useSimulatedMissionTicker } from "@/components/drone";
 import { ReconstructionPanel } from "@/components/splat";
 import { CriticalStrip, SituationPanel } from "@/components/mando/situation";
 import { TimelinePanel } from "@/components/mando/timeline";
@@ -44,6 +47,7 @@ import { useIncidentSnapshot, useMe, useRuntimeMode } from "@/lib/client/use-liv
 import type { IncidentSnapshot } from "@/lib/contract";
 import type { DroneMission, EvidenceRef, PipelineStatus, TimelineEvent } from "@/lib/domain";
 import { isTrappedAlarm } from "@/lib/labels";
+import { isMissionActive } from "@/lib/drone/plan";
 import { cn } from "@/lib/cn";
 import { IncidentHeader } from "./IncidentHeader";
 import { IncidentSkeleton } from "./IncidentSkeleton";
@@ -67,6 +71,16 @@ const NO_MISSIONS: DroneMission[] = [];
 const ZONE_PREFIX = "zona";
 const ACTIVITY_PREFIX = "actividad";
 const DESKTOP_QUERY = "(min-width: 768px)";
+/** Ancho mínimo del área del incidente para la vista con la escena a pantalla completa y paneles flotantes. */
+const IMMERSIVE_MIN_WIDTH = 900;
+/** Separación de los paneles flotantes con el borde y entre sí (px). */
+const GAP = 12;
+/** Alto de la fila de controles bajo el encabezado (selector de vista, radio, paneles). */
+const CONTROLS_H = 44;
+/** Alto aproximado de la barra de herramientas y del pie de la escena (para ubicar sus controles internos). */
+const SCENE_TOOLBAR_H = 44;
+const SCENE_FOOTER_H = 26;
+const FLOAT = "rounded-xl border border-line bg-surface shadow-[0_8px_24px_rgb(0_0_0/0.14)]";
 
 /** Vista de mando de un incidente; se reinicia por completo al cambiar de incidente. */
 export function IncidentView({ id }: IncidentViewProps) {
@@ -90,6 +104,26 @@ function useMediaQuery(query: string): boolean {
     () => window.matchMedia(query).matches,
     () => false,
   );
+}
+
+/** Tamaño de un elemento (0 × 0 hasta que se monta). Se le pasa el elemento por un ref de callback. */
+function useElementSize(el: HTMLElement | null): { width: number; height: number } {
+  const [size, setSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      const width = Math.round(el.offsetWidth);
+      const height = Math.round(el.offsetHeight);
+      setSize((cur) => (cur.width === width && cur.height === height ? cur : { width, height }));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [el]);
+  return size;
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, v));
 }
 
 interface ActivityIds {
@@ -151,6 +185,12 @@ function IncidentScreen({ id }: IncidentViewProps) {
   const [addMediaOpen, setAddMediaOpen] = useState(false);
   const [selection, setSelection] = useState<SceneSelection | null>(null);
   const [highlightSeq, setHighlightSeq] = useState<number | null>(null);
+  const [panelsOpen, setPanelsOpen] = useState(true);
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
+  const [headerEl, setHeaderEl] = useState<HTMLDivElement | null>(null);
+  const rootSize = useElementSize(rootEl);
+  const headerSize = useElementSize(headerEl);
+  const immersive = rootSize.width >= IMMERSIVE_MIN_WIDTH;
 
   // Último snapshot para los manejadores estables (los paneles no se re-renderizan por callbacks nuevos).
   const latest = useRef<IncidentSnapshot | null>(snapshot);
@@ -162,6 +202,7 @@ function IncidentScreen({ id }: IncidentViewProps) {
   const showActivity = useCallback((tab: ActivityTab) => {
     setActivityTab(tab);
     setMobileZone("actividad");
+    setPanelsOpen(true);
   }, []);
 
   const openMediaById = useCallback((mediaId: string, frame?: number | null) => {
@@ -247,7 +288,10 @@ function IncidentScreen({ id }: IncidentViewProps) {
     },
     [openMediaById, onOpenComm, showActivity],
   );
-  const onViewTrapped = useCallback(() => setMobileZone("situacion"), []);
+  const onViewTrapped = useCallback(() => {
+    setMobileZone("situacion");
+    setPanelsOpen(true);
+  }, []);
   useIncidentAlerts(snapshot, { onView: onViewAlert, onViewTrapped });
 
   /* Contadores de novedades por pestaña de actividad */
@@ -263,7 +307,7 @@ function IncidentScreen({ id }: IncidentViewProps) {
     [snapshot],
   );
   const [seen, setSeen] = useState<SeenState | null>(null);
-  const activityVisible = isDesktop || mobileZone === "actividad";
+  const activityVisible = immersive ? panelsOpen : isDesktop || mobileZone === "actividad";
   if (activityIds) {
     const next = advanceSeen(seen, activityIds, activityVisible ? activityTab : null);
     if (next !== seen) setSeen(next);
@@ -350,211 +394,340 @@ function IncidentScreen({ id }: IncidentViewProps) {
     "aria-labelledby": isDesktop ? undefined : `${ZONE_PREFIX}-tab-${zone}`,
   });
 
-  return (
-    <MandoShell
-      title={incident.title}
-      subtitle={incident.address || undefined}
-      back={{ href: "/mando", label: "Incidentes" }}
-      mode={mode}
-      staff={staff}
-    >
-      <div className="relative flex h-full min-h-0 flex-col overflow-y-auto md:overflow-hidden">
-        {stale && <StaleBanner lastUpdatedAt={lastUpdatedAt} />}
-        {scenario.incidentId === incident.id && scenarioVisible(scenario) && (
-          <ScenarioChip scenario={scenario} onDismiss={scenario.dismiss} variant="inline" className="shrink-0" />
-        )}
+  /* ───────────── Piezas compartidas por los dos diseños ───────────── */
 
-        <IncidentHeader
-          incident={incident}
-          mode={snapshot.mode}
-          onShare={() => setShareOpen(true)}
-          onAddMedia={() => setAddMediaOpen(true)}
-          onChanged={refreshNow}
-          className="shrink-0"
-        />
+  const viewSwitch = (
+    <SegmentedControl<CenterView>
+      ariaLabel="Vista central"
+      value={centerView}
+      onChange={onCenterView}
+      className="max-sm:w-full"
+      fullWidth={!isDesktop}
+      options={[
+        { value: "scene", label: "Esquema", icon: Box },
+        { value: "reconstruction", label: "3D", icon: ScanEye },
+        { value: "map", label: "Mapa", icon: MapIcon },
+        { value: "media", label: <ResponsiveLabel short={String(snapshot.media.length)} long={`Medios (${snapshot.media.length})`} />, icon: Images },
+      ]}
+    />
+  );
 
-        <CriticalStrip
-          incident={incident}
-          mediaCount={snapshot.media.length}
-          onEvidence={onEvidence}
-          mode={snapshot.mode}
-          className="shrink-0"
-        />
+  const sceneEl = (
+    <Scene3D
+      scene={incident.scene}
+      incident={incident}
+      media={snapshot.media}
+      missions={snapshot.missions}
+      engine={incident.scene_engine}
+      updatedAt={incident.scene_updated_at}
+      updating={fusionRunning}
+      selection={selection}
+      onSelect={setSelection}
+      onOpenMedia={onOpenMediaLabel}
+      className={cn("h-full w-full", immersive && "rounded-none border-0")}
+    />
+  );
 
-        <div className="sticky top-0 z-10 shrink-0 bg-bg md:hidden">
-          <Tabs
-            tabs={mobileTabs}
-            value={mobileZone}
-            onChange={setMobileZone}
-            idPrefix={ZONE_PREFIX}
-            ariaLabel="Zonas del incidente"
-            fullWidth
-            size="sm"
+  const otherLayers = (
+    <>
+      <CenterLayer active={centerView === "reconstruction"} scroll>
+        {splatMounted && (
+          <ReconstructionPanel
+            incident={incident}
+            media={snapshot.media}
+            mode={snapshot.mode}
+            onChanged={refreshNow}
+            className="m-2 border-0 shadow-none"
           />
+        )}
+      </CenterLayer>
+      <CenterLayer active={centerView === "map"}>
+        {mapMounted && (
+          <TacticalMap
+            incident={incident}
+            scene={incident.scene}
+            media={snapshot.media}
+            missions={snapshot.missions}
+            theme="dark"
+            onOpenMedia={onOpenMediaLabel}
+            className="h-full w-full"
+          />
+        )}
+      </CenterLayer>
+      <CenterLayer active={centerView === "media"} scroll>
+        <MediaGrid media={snapshot.media} onOpen={setViewer} mode={snapshot.mode} demo={demo} className="p-2" />
+      </CenterLayer>
+    </>
+  );
+
+  const situationEl = (
+    <SituationPanel
+      incident={incident}
+      media={snapshot.media}
+      comms={snapshot.comms}
+      onEvidence={onEvidence}
+      onReanalyze={onReanalyze}
+      mode={snapshot.mode}
+      className={cn("h-full", immersive && "shadow-[0_8px_24px_rgb(0_0_0/0.14)]")}
+    />
+  );
+
+  const activityEl = (
+    <>
+      <Tabs
+        tabs={activityTabs}
+        value={activityTab}
+        onChange={setActivityTab}
+        idPrefix={ACTIVITY_PREFIX}
+        ariaLabel="Actividad del incidente"
+        fullWidth
+        size="sm"
+        className="shrink-0"
+      />
+      <TabPanel id="timeline" idPrefix={ACTIVITY_PREFIX} active={activityTab === "timeline"} className="min-h-0 flex-1 overflow-y-auto">
+        <TimelinePanel
+          events={snapshot.events}
+          media={snapshot.media}
+          onOpenMedia={openMediaById}
+          onOpenComm={onOpenComm}
+          onOpenMission={onOpenMission}
+          className="h-full"
+        />
+      </TabPanel>
+      <TabPanel id="comms" idPrefix={ACTIVITY_PREFIX} active={activityTab === "comms"} className="min-h-0 flex-1 overflow-y-auto">
+        <CommsPanel
+          incidentId={incident.id}
+          comms={snapshot.comms}
+          analysis={incident.comms_analysis}
+          engine={incident.comms_engine}
+          analysisUpdatedAt={incident.comms_analysis_updated_at}
+          pipeline={incident.pipeline}
+          onChanged={refreshNow}
+          highlightSeq={highlightSeq}
+          incidentCode={incident.code}
+          demoRadio={mode?.demo_radio === true}
+          className="h-full"
+        />
+      </TabPanel>
+      <TabPanel id="drone" idPrefix={ACTIVITY_PREFIX} active={activityTab === "drone"} className="min-h-0 flex-1 overflow-y-auto">
+        <DronePanel
+          incident={incident}
+          missions={snapshot.missions}
+          media={snapshot.media}
+          mode={snapshot.mode}
+          onChanged={refreshNow}
+          onOpenMedia={onOpenMediaLabel}
+          className="h-full"
+        />
+      </TabPanel>
+    </>
+  );
+
+  const banners = (
+    <>
+      {stale && <StaleBanner lastUpdatedAt={lastUpdatedAt} />}
+      {scenario.incidentId === incident.id && scenarioVisible(scenario) && (
+        <ScenarioChip scenario={scenario} onDismiss={scenario.dismiss} variant="inline" className="shrink-0" />
+      )}
+    </>
+  );
+
+  const header = (
+    <IncidentHeader
+      incident={incident}
+      mode={snapshot.mode}
+      onShare={() => setShareOpen(true)}
+      onAddMedia={() => setAddMediaOpen(true)}
+      onChanged={refreshNow}
+      className="shrink-0"
+    />
+  );
+
+  const criticalStrip = (className: string) => (
+    <CriticalStrip incident={incident} mediaCount={snapshot.media.length} onEvidence={onEvidence} mode={snapshot.mode} className={className} />
+  );
+
+  /* ───────────── Escena a pantalla completa con paneles flotantes ───────────── */
+
+  const renderImmersive = () => {
+    const panelL = Math.round(clamp(rootSize.width * 0.25, 280, 380));
+    const panelR = Math.round(clamp(rootSize.width * 0.27, 300, 400));
+    const controlsTop = GAP + headerSize.height + 8;
+    const panelsTop = controlsTop + CONTROLS_H + 8;
+    const safeL = panelsOpen ? GAP + panelL + GAP : GAP;
+    const safeR = panelsOpen ? GAP + panelR + GAP : GAP;
+    // La escena ocupa todo el fondo; sus controles propios se ubican en el hueco que dejan los paneles.
+    const sceneVars = {
+      "--scene-chrome-pos": "absolute",
+      "--scene-chrome-radius": "10px",
+      "--scene-chrome-shadow": "0 4px 16px rgb(0 0 0 / 0.12)",
+      "--scene-safe-t": `${panelsTop}px`,
+      "--scene-safe-l": `${safeL}px`,
+      "--scene-safe-r": `${safeR}px`,
+      "--scene-safe-b": `${GAP}px`,
+      "--scene-hud-t": `${panelsTop + SCENE_TOOLBAR_H}px`,
+      "--scene-hud-l": `${safeL}px`,
+      "--scene-hud-r": `${safeR}px`,
+      "--scene-hud-b": `${GAP + SCENE_FOOTER_H}px`,
+    } as CSSProperties;
+    const liveMission = snapshot.missions.find((m) => m.mode !== "simulated" && isMissionActive(m)) ?? null;
+
+    return (
+      <div className="relative h-full min-h-0 overflow-hidden" style={sceneVars}>
+        {/* Fondo: la escena 3D a pantalla completa */}
+        <div className="absolute inset-0">
+          <CenterLayer active={centerView === "scene"}>{sceneEl}</CenterLayer>
         </div>
 
+        {/* Mapa, 3DGS y medios: en el hueco entre los paneles, para no quedar tapados */}
         <div
+          aria-hidden={centerView === "scene" ? true : undefined}
+          className={cn("absolute z-10 overflow-hidden", FLOAT, centerView === "scene" && "invisible")}
+          style={{ top: panelsTop, left: safeL, right: safeR, bottom: GAP }}
+        >
+          {otherLayers}
+        </div>
+
+        {/* Encabezado flotante */}
+        <div ref={setHeaderEl} className="absolute top-3 right-3 left-3 z-30 flex flex-col gap-2">
+          {banners}
+          <div className={cn(FLOAT, "overflow-hidden")}>{header}</div>
+        </div>
+
+        {/* Controles: vista, estado del análisis, radio y paneles */}
+        <div
+          className="absolute right-3 left-3 z-30 flex items-center justify-between gap-2"
+          style={{ top: controlsTop, height: CONTROLS_H }}
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="rounded-lg shadow-[0_8px_24px_rgb(0_0_0/0.14)]">{viewSwitch}</div>
+            {fusion.fusion_status !== "idle" && (
+              <div className="rounded-lg bg-surface/95 px-2 py-1 shadow-[0_8px_24px_rgb(0_0_0/0.14)]">
+                <PipelineHint status={fusion.fusion_status} error={fusion.fusion_error} />
+              </div>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              variant="primary"
+              icon={Mic}
+              onClick={() => showActivity("comms")}
+              className="shadow-[0_8px_24px_rgb(0_0_0/0.18)]"
+            >
+              Hablar por radio
+            </Button>
+            <Button
+              icon={panelsOpen ? PanelLeftClose : PanelLeftOpen}
+              onClick={() => setPanelsOpen((v) => !v)}
+              className="shadow-[0_8px_24px_rgb(0_0_0/0.14)]"
+            >
+              {panelsOpen ? "Ocultar paneles" : "Mostrar paneles"}
+            </Button>
+          </div>
+        </div>
+
+        {/* IZQUIERDA · lo crítico y la situación */}
+        <section
+          aria-label="Situación"
+          className={cn("absolute z-20 flex flex-col gap-2", !panelsOpen && "hidden")}
+          style={{ top: panelsTop, left: GAP, bottom: GAP, width: panelL }}
+        >
+          {criticalStrip("shrink-0 shadow-[0_8px_24px_rgb(0_0_0/0.14)]")}
+          <div className="min-h-0 flex-1 overflow-y-auto rounded-lg">{situationEl}</div>
+        </section>
+
+        {/* DERECHA · dron en vivo y actividad */}
+        <section
+          aria-label="Actividad"
+          className={cn("absolute z-20 flex flex-col gap-2", !panelsOpen && "hidden")}
+          style={{ top: panelsTop, right: GAP, bottom: GAP, width: panelR }}
+        >
+          {liveMission && (
+            <div className={cn(FLOAT, "max-h-[45%] shrink-0 overflow-y-auto p-2")}>
+              <LiveFeed missionId={liveMission.id} label={liveMission.label} active />
+            </div>
+          )}
+          <div className={cn(FLOAT, "flex min-h-0 flex-1 flex-col overflow-hidden")}>{activityEl}</div>
+        </section>
+      </div>
+    );
+  };
+
+  /* ───────────── Diseño en columnas (teléfono y pantallas angostas) ───────────── */
+
+  const renderColumns = () => (
+    <div className="relative flex h-full min-h-0 flex-col overflow-y-auto md:overflow-hidden">
+      {banners}
+      {header}
+      {criticalStrip("mx-2 shrink-0")}
+
+      <div className="sticky top-0 z-10 shrink-0 bg-bg md:hidden">
+        <Tabs
+          tabs={mobileTabs}
+          value={mobileZone}
+          onChange={setMobileZone}
+          idPrefix={ZONE_PREFIX}
+          ariaLabel="Zonas del incidente"
+          fullWidth
+          size="sm"
+        />
+      </div>
+
+      <div
+        className={cn(
+          // minmax(0,1fr): sin esto, en teléfono la columna crece al ancho mínimo de su contenido y se sale.
+          "grid grid-cols-[minmax(0,1fr)] gap-2 p-2",
+          "md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-[minmax(0,1.3fr)_minmax(0,1fr)]",
+        )}
+      >
+        {/* Situación */}
+        <section
+          {...zoneProps("situacion")}
+          aria-label="Situación"
+          className={cn("flex min-h-0 flex-col max-md:h-[75dvh]", "md:col-start-1 md:row-start-2", mobileZone !== "situacion" && "max-md:hidden")}
+        >
+          <div className="min-h-0 flex-1 overflow-y-auto">{situationEl}</div>
+        </section>
+
+        {/* Escena, mapa y medios */}
+        <section
+          {...zoneProps("escena")}
+          aria-label="Escena"
+          className={cn("flex min-h-0 flex-col gap-2 max-md:h-[75dvh]", "md:col-start-1 md:row-start-1", mobileZone !== "escena" && "max-md:hidden")}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {viewSwitch}
+            <PipelineHint status={fusion.fusion_status} error={fusion.fusion_error} />
+          </div>
+
+          <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-surface">
+            <CenterLayer active={centerView === "scene"}>{sceneEl}</CenterLayer>
+            {otherLayers}
+          </div>
+
+          <MediaStrip media={snapshot.media} selectedId={viewer?.mediaId ?? null} onOpen={setViewer} className="shrink-0" />
+        </section>
+
+        {/* Actividad */}
+        <section
+          {...zoneProps("actividad")}
+          aria-label="Actividad"
           className={cn(
-            // minmax(0,1fr): sin esto, en teléfono la columna crece al ancho mínimo de su contenido y se sale.
-            "grid grid-cols-[minmax(0,1fr)] gap-2 p-2",
-            "md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-[minmax(0,1.3fr)_minmax(0,1fr)]",
-            "xl:grid-cols-[360px_minmax(0,1fr)_380px] xl:grid-rows-1",
+            "flex min-h-0 flex-col overflow-hidden rounded-lg border border-line bg-surface max-md:h-[75dvh]",
+            "md:col-start-2 md:row-span-2 md:row-start-1",
+            mobileZone !== "actividad" && "max-md:hidden",
           )}
         >
-          {/* IZQUIERDA · situación */}
-          <section
-            {...zoneProps("situacion")}
-            aria-label="Situación"
-            className={cn(
-              "flex min-h-0 flex-col max-md:h-[75dvh]",
-              "md:col-start-1 md:row-start-2 xl:row-start-1",
-              mobileZone !== "situacion" && "max-md:hidden",
-            )}
-          >
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <SituationPanel
-                incident={incident}
-                media={snapshot.media}
-                comms={snapshot.comms}
-                onEvidence={onEvidence}
-                onReanalyze={onReanalyze}
-                mode={snapshot.mode}
-                className="h-full"
-              />
-            </div>
-          </section>
+          {activityEl}
+        </section>
+      </div>
+    </div>
+  );
 
-          {/* CENTRO · escena, mapa y medios */}
-          <section
-            {...zoneProps("escena")}
-            aria-label="Escena"
-            className={cn(
-              "flex min-h-0 flex-col gap-2 max-md:h-[75dvh]",
-              "md:col-start-1 md:row-start-1 xl:col-start-2",
-              mobileZone !== "escena" && "max-md:hidden",
-            )}
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <SegmentedControl<CenterView>
-                ariaLabel="Vista central"
-                value={centerView}
-                onChange={onCenterView}
-                className="max-sm:w-full"
-                fullWidth={!isDesktop}
-                options={[
-                  { value: "scene", label: <ResponsiveLabel short="IA" long="Esquema IA" />, icon: Box },
-                  { value: "reconstruction", label: <ResponsiveLabel short="3DGS" long="Reconstrucción 3DGS" />, icon: ScanEye },
-                  { value: "map", label: "Mapa", icon: MapIcon },
-                  { value: "media", label: <ResponsiveLabel short={String(snapshot.media.length)} long={`Medios (${snapshot.media.length})`} />, icon: Images },
-                ]}
-              />
-              <PipelineHint status={fusion.fusion_status} error={fusion.fusion_error} />
-            </div>
-
-            <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg border border-line bg-surface">
-              <CenterLayer active={centerView === "scene"}>
-                <Scene3D
-                  scene={incident.scene}
-                  incident={incident}
-                  media={snapshot.media}
-                  missions={snapshot.missions}
-                  engine={incident.scene_engine}
-                  updatedAt={incident.scene_updated_at}
-                  updating={fusionRunning}
-                  selection={selection}
-                  onSelect={setSelection}
-                  onOpenMedia={onOpenMediaLabel}
-                  className="h-full w-full"
-                />
-              </CenterLayer>
-              <CenterLayer active={centerView === "reconstruction"} scroll>
-                {splatMounted && (
-                  <ReconstructionPanel
-                    incident={incident}
-                    media={snapshot.media}
-                    mode={snapshot.mode}
-                    onChanged={refreshNow}
-                    className="m-2 border-0 shadow-none"
-                  />
-                )}
-              </CenterLayer>
-              <CenterLayer active={centerView === "map"}>
-                {mapMounted && (
-                  <TacticalMap
-                    incident={incident}
-                    scene={incident.scene}
-                    media={snapshot.media}
-                    missions={snapshot.missions}
-                    theme="dark"
-                    onOpenMedia={onOpenMediaLabel}
-                    className="h-full w-full"
-                  />
-                )}
-              </CenterLayer>
-              <CenterLayer active={centerView === "media"} scroll>
-                <MediaGrid media={snapshot.media} onOpen={setViewer} mode={snapshot.mode} demo={demo} className="p-2" />
-              </CenterLayer>
-            </div>
-
-            <MediaStrip media={snapshot.media} selectedId={viewer?.mediaId ?? null} onOpen={setViewer} className="shrink-0" />
-          </section>
-
-          {/* DERECHA · actividad */}
-          <section
-            {...zoneProps("actividad")}
-            aria-label="Actividad"
-            className={cn(
-              "flex min-h-0 flex-col overflow-hidden rounded-lg border border-line bg-surface max-md:h-[75dvh]",
-              "md:col-start-2 md:row-span-2 md:row-start-1 xl:col-start-3 xl:row-span-1",
-              mobileZone !== "actividad" && "max-md:hidden",
-            )}
-          >
-            <Tabs
-              tabs={activityTabs}
-              value={activityTab}
-              onChange={setActivityTab}
-              idPrefix={ACTIVITY_PREFIX}
-              ariaLabel="Actividad del incidente"
-              fullWidth
-              size="sm"
-              className="shrink-0"
-            />
-            <TabPanel id="timeline" idPrefix={ACTIVITY_PREFIX} active={activityTab === "timeline"} className="min-h-0 flex-1 overflow-y-auto">
-              <TimelinePanel
-                events={snapshot.events}
-                media={snapshot.media}
-                onOpenMedia={openMediaById}
-                onOpenComm={onOpenComm}
-                onOpenMission={onOpenMission}
-                className="h-full"
-              />
-            </TabPanel>
-            <TabPanel id="comms" idPrefix={ACTIVITY_PREFIX} active={activityTab === "comms"} className="min-h-0 flex-1 overflow-y-auto">
-              <CommsPanel
-                incidentId={incident.id}
-                comms={snapshot.comms}
-                analysis={incident.comms_analysis}
-                engine={incident.comms_engine}
-                analysisUpdatedAt={incident.comms_analysis_updated_at}
-                pipeline={incident.pipeline}
-                onChanged={refreshNow}
-                highlightSeq={highlightSeq}
-                className="h-full"
-              />
-            </TabPanel>
-            <TabPanel id="drone" idPrefix={ACTIVITY_PREFIX} active={activityTab === "drone"} className="min-h-0 flex-1 overflow-y-auto">
-              <DronePanel
-                incident={incident}
-                missions={snapshot.missions}
-                media={snapshot.media}
-                mode={snapshot.mode}
-                onChanged={refreshNow}
-                onOpenMedia={onOpenMediaLabel}
-                className="h-full"
-              />
-            </TabPanel>
-          </section>
-        </div>
+  return (
+    <MandoShell title="Incidente" back={{ href: "/mando", label: "Incidentes" }} mode={mode} staff={staff}>
+      <div ref={setRootEl} className="h-full min-h-0">
+        {immersive ? renderImmersive() : renderColumns()}
       </div>
 
       <MediaViewer

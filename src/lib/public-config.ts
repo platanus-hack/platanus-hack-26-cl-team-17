@@ -11,6 +11,11 @@ export const publicConfig = {
   mapStyleLight:
     (process.env.NEXT_PUBLIC_MAP_STYLE_LIGHT ?? "").trim() ||
     "https://tiles.openfreemap.org/styles/positron",
+  /**
+   * Token público de Mapbox (pk.…) para la ficha del incidente: con él se usa el estilo
+   * Standard 3D de Mapbox; sin él, MapLibre con un estilo claro equivalente.
+   */
+  mapboxToken: (process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? "").trim(),
   /** Centro inicial del mapa cuando no hay incidentes ni geolocalización (Santiago de Chile). */
   defaultCenter: { lat: -33.4489, lng: -70.6693 },
 };

@@ -213,7 +213,7 @@ export function Dialog({
       aria-labelledby={titleId}
       aria-describedby={description ? descriptionId : undefined}
       className={cn(
-        "m-auto overflow-hidden rounded-lg border border-line bg-surface p-0 text-text",
+        "m-auto overflow-hidden rounded-2xl border border-line bg-surface p-0 text-text",
         "focus-visible:outline-none",
         sizeClass[size],
         className,
