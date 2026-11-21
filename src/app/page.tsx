@@ -59,9 +59,13 @@ export default function Home() {
 
       <main className="flex-1">
         <section aria-labelledby="portada-titulo" className="relative isolate overflow-hidden border-b border-line">
-          {/* Fondo: Santiago en movimiento (ilustración animada: cordillera, Costanera Center, San Cristóbal). */}
-          <picture className="pointer-events-none absolute inset-0 -z-10">
-            <source srcSet="/portada/santiago-poster.png" media="(prefers-reduced-motion: reduce)" />
+          {/* Fondo: timelapse real de Santiago (Costanera Center y cordillera, del atardecer a la noche).
+              La imagen fija aparece al instante mientras carga el GIF. */}
+          <picture
+            className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-bottom"
+            style={{ backgroundImage: "url(/portada/santiago-poster.jpg)" }}
+          >
+            <source srcSet="/portada/santiago-poster.jpg" media="(prefers-reduced-motion: reduce)" />
             <img src="/portada/santiago.gif" alt="" className="size-full object-cover object-bottom" />
           </picture>
           {/* Velo blanco a la izquierda para que el texto se lea sobre la ciudad. */}
@@ -93,6 +97,14 @@ export default function Home() {
 
             <FlowDiagram />
           </div>
+          <a
+            href="https://www.youtube.com/watch?v=IfKadff9oAc"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="absolute right-3 bottom-2 rounded-full bg-black/35 px-2 py-0.5 text-[11px] text-white/85 backdrop-blur-sm hover:text-white"
+          >
+            Timelapse: Max Felis
+          </a>
         </section>
 
         <section aria-labelledby="como-funciona" className="border-b border-line">
