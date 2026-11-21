@@ -32,6 +32,7 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+!.env.example
 
 # vercel
 .vercel
@@ -39,3 +40,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Vigía: datos locales del modo demo y secretos
+.data/
+.env*.local
+.coord/
+key.env
+
+# Entornos de Python (p. ej. gpu/splat/.venv)
+.venv/
+__pycache__/

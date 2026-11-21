@@ -1,0 +1,16 @@
+[
+  {
+    "origin": ["https://REEMPLAZA-CON-TU-ORIGEN"],
+    "method": ["PUT", "GET", "HEAD"],
+    "responseHeader": [
+      "Content-Type",
+      "Content-Length",
+      "Content-Range",
+      "Range",
+      "Accept-Ranges",
+      "ETag",
+      "x-goog-generation"
+    ],
+    "maxAgeSeconds": 3600
+  }
+]

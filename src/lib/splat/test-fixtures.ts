@@ -1,0 +1,176 @@
+/**
+ * Datos de prueba de las pruebas de src/lib/splat (ficticios; no son una escena real).
+ */
+import type { Media, MediaFrame, Reconstruction, SceneModel } from "@/lib/domain";
+
+export const INCIDENT_ID = "0b6f2f9e-3c1a-4d7e-9a51-6f0c2b7d8e11";
+export const REC_ID = "5a1e9c3d-7b2f-4e60-8d14-2c9b7f6a0e33";
+
+export function frame(mediaId: string, idx: number, extra: Partial<MediaFrame> = {}): MediaFrame {
+  return {
+    id: `${mediaId}-f${idx}`,
+    media_id: mediaId,
+    idx,
+    t_s: idx * 0.5,
+    storage_path: `incidents/${INCIDENT_ID}/media/${mediaId}/frames/${String(idx).padStart(3, "0")}.jpg`,
+    width: 1280,
+    height: 720,
+    lat: null,
+    lng: null,
+    alt_m: null,
+    heading_deg: null,
+    ...extra,
+  };
+}
+
+export function media(id: string, extra: Partial<Media> = {}): Media {
+  return {
+    id,
+    incident_id: INCIDENT_ID,
+    label: "M1",
+    source: "citizen",
+    kind: "video",
+    mission_id: null,
+    video_path: null,
+    video_status: "none",
+    mime: "video/mp4",
+    size_bytes: 1000,
+    duration_s: null,
+    lat: -33.45,
+    lng: -70.66,
+    accuracy_m: 8,
+    heading_deg: 120,
+    captured_at: null,
+    reporter_note: "",
+    status: "analyzed",
+    error: null,
+    analysis: null,
+    analysis_engine: null,
+    analyzed_at: null,
+    frames: [],
+    created_at: "2026-11-21T10:00:00.000Z",
+    ...extra,
+  };
+}
+
+export function reconstruction(extra: Partial<Reconstruction> = {}): Reconstruction {
+  return {
+    id: REC_ID,
+    status: "queued",
+    progress: 0,
+    message: "En cola",
+    method: "gaussian_splatting",
+    backend: "cloud_run_gpu",
+    gpu: null,
+    media_ids: ["m1"],
+    frame_count: 40,
+    frames_registered: null,
+    splat_path: null,
+    splat_format: null,
+    transform: null,
+    alignment: "none",
+    scale_known: false,
+    gaussians: null,
+    iterations: 7000,
+    gpu_seconds: null,
+    error: null,
+    requested_at: "2026-11-21T10:00:00.000Z",
+    started_at: null,
+    finished_at: null,
+    ...extra,
+  };
+}
+
+export const SCENE: SceneModel = {
+  description: "Casa de 2 pisos con fuego en el segundo piso.",
+  ground: { street_axis_deg: 90, notes: "" },
+  roads: [{ id: "R1", name: "Calle", x1: -60, y1: -12, x2: 60, y2: -12, width_m: 8, blocked: false }],
+  structures: [
+    {
+      id: "S1",
+      label: "Casa",
+      kind: "house_2_story",
+      role: "involved",
+      x: 0,
+      y: 0,
+      width_m: 8,
+      depth_m: 10,
+      floors: 2,
+      floor_height_m: 2.7,
+      rotation_deg: 180,
+      roof: "gable",
+      construction: "masonry",
+      confidence: "medium",
+      notes: "",
+    },
+    {
+      id: "S2",
+      label: "Vecina",
+      kind: "house_1_story",
+      role: "exposure",
+      x: 12,
+      y: 0,
+      width_m: 8,
+      depth_m: 10,
+      floors: 1,
+      floor_height_m: 2.7,
+      rotation_deg: 180,
+      roof: "flat",
+      construction: "wood",
+      confidence: "low",
+      notes: "",
+    },
+  ],
+  fire_zones: [
+    {
+      id: "F1",
+      structure_id: "S1",
+      floor: 2,
+      side: "front",
+      x: 0,
+      y: -4,
+      z: 4,
+      radius_m: 2,
+      intensity: "heavy",
+      confidence: "high",
+      note: "",
+    },
+  ],
+  smoke_plumes: [{ id: "P1", x: 0, y: 0, z: 7, drift_deg: 45, volume: "heavy", color: "black" }],
+  people: [
+    {
+      id: "P1",
+      status: "at_window_or_balcony",
+      count: 1,
+      structure_id: "S1",
+      floor: 2,
+      x: 2,
+      y: -5,
+      z: 3.2,
+      confidence: "medium",
+      note: "",
+      evidence: [],
+    },
+  ],
+  vehicles: [
+    {
+      id: "V1",
+      kind: "car",
+      state: "upright",
+      x: -8,
+      y: -10,
+      rotation_deg: 90,
+      length_m: 0,
+      width_m: 0,
+      entrapment_suspected: false,
+      burning: false,
+      note: "",
+    },
+  ],
+  hazards: [{ id: "H1", kind: "gas_cylinder", x: 4, y: 3, z: 0.5, radius_m: 5, severity: "high", note: "" }],
+  access_points: [],
+  cameras: [],
+  annotations: [],
+  uncertainty_notes: [],
+  confidence: "medium",
+};

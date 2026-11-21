@@ -1,0 +1,64 @@
+/*
+ * Ajustes de MapLibre al sistema de diseño. Sin capas (@layer) a propósito: maplibre-gl.css
+ * tampoco las usa, así que estas reglas ganan por especificidad (.vg-map + clase propia).
+ */
+/* maplibre-gl.css fija `position: relative` (sin capa, gana a las utilidades de Tailwind):
+   el contenedor de los mapas de Vigía siempre llena su marco. */
+.vg-map.maplibregl-map {
+  position: absolute;
+  inset: 0;
+  font-family: var(--font-sans);
+  background-color: var(--v-bg);
+}
+
+.vg-map .maplibregl-ctrl-bottom-right .maplibregl-ctrl.maplibregl-ctrl-attrib,
+.vg-map .maplibregl-ctrl-bottom-left .maplibregl-ctrl.maplibregl-ctrl-attrib {
+  margin: 0;
+  padding: 1px 6px;
+  border-top-left-radius: var(--radius-control);
+  background-color: color-mix(in oklab, var(--v-surface) 84%, transparent);
+  color: var(--v-muted);
+  font-size: 10px;
+  line-height: 16px;
+}
+
+.vg-map .maplibregl-ctrl-attrib a {
+  color: var(--v-muted);
+}
+
+.vg-map .maplibregl-ctrl-attrib a:hover {
+  color: var(--v-text);
+}
+
+.vg-map .maplibregl-ctrl-attrib.maplibregl-compact {
+  min-height: 20px;
+  border-radius: 10px;
+}
+
+.vg-map .maplibregl-ctrl-attrib-button {
+  background-color: var(--v-surface);
+}
+
+[data-theme="mando"] .vg-map .maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+}
+
+/* El selector de ubicación apunta, no arrastra. */
+.vg-map-pick .maplibregl-canvas-container.maplibregl-interactive {
+  cursor: crosshair;
+}
+
+.vg-map-pick .maplibregl-canvas-container.maplibregl-interactive:active {
+  cursor: grabbing;
+}
+
+/* Los marcadores HTML heredan la tipografía del sistema, no la de MapLibre. */
+.vg-map .vg-marker {
+  font-family: var(--font-sans);
+  line-height: 1.2;
+}
+
+.vg-map .vg-marker:has(:focus-visible),
+.vg-map .vg-marker:hover {
+  z-index: 50 !important;
+}

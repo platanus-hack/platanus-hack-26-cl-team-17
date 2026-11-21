@@ -1,0 +1,35 @@
+# Contexto de build de la imagen (también lo usa `gcloud builds submit --ignore-file`).
+
+# Dependencias y salidas de build: se regeneran dentro de la imagen
+node_modules
+.next
+out
+build
+*.tsbuildinfo
+next-env.d.ts
+
+# Datos locales, coordinación y secretos (nunca dentro de la imagen)
+.data
+.coord
+.env*
+*.pem
+
+# Control de versiones y editores
+.git
+.github
+.vscode
+.idea
+.DS_Store
+
+# Pruebas y sus artefactos
+**/*.test.ts
+**/*.test.tsx
+e2e
+coverage
+playwright-report
+test-results
+blob-report
+
+# Registros
+*.log
+npm-debug.log*

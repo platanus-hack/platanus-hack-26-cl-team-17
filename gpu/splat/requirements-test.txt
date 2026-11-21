@@ -1,0 +1,2 @@
+# Solo para las pruebas locales sin GPU (gpu/splat/.venv).
+numpy==2.2.6

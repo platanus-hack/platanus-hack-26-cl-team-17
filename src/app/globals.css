@@ -1,26 +1,224 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/*
+ * Vigía — tokens de diseño.
+ * Los nombres de token son los mismos en ambos temas; cada tema solo cambia las variables.
+ *   data-theme="mando"  (oscuro, por defecto en <html>): consola táctica nocturna.
+ *   data-theme="vecino" (claro, en un contenedor): teléfono al sol, botones grandes.
+ * Contraste (WCAG) medido contra bg/surface/surface-2: text ≥ 14:1, muted ≥ 6:1, semánticos ≥ 5:1.
+ * `faint` (≈ 3.5–4.7:1) es solo para texto auxiliar no esencial o ≥ 18 px.
+ * `on-solid` es el color del texto sobre rellenos sólidos de acento/semánticos.
+ */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-bg: var(--v-bg);
+  --color-surface: var(--v-surface);
+  --color-surface-2: var(--v-surface-2);
+  --color-line: var(--v-line);
+  --color-line-strong: var(--v-line-strong);
+  --color-text: var(--v-text);
+  --color-muted: var(--v-muted);
+  --color-faint: var(--v-faint);
+  --color-on-solid: var(--v-on-solid);
+
+  --color-accent: var(--v-accent);
+  --color-critical: var(--v-critical);
+  --color-warning: var(--v-warning);
+  --color-ok: var(--v-ok);
+  --color-info: var(--v-info);
+  --color-drone: var(--v-drone);
+
+  --color-accent-soft: color-mix(in oklab, var(--v-accent) var(--v-soft), transparent);
+  --color-critical-soft: color-mix(in oklab, var(--v-critical) var(--v-soft), transparent);
+  --color-warning-soft: color-mix(in oklab, var(--v-warning) var(--v-soft), transparent);
+  --color-ok-soft: color-mix(in oklab, var(--v-ok) var(--v-soft), transparent);
+  --color-info-soft: color-mix(in oklab, var(--v-info) var(--v-soft), transparent);
+  --color-drone-soft: color-mix(in oklab, var(--v-drone) var(--v-soft), transparent);
+
+  --font-display: var(--font-barlow-condensed), "Arial Narrow", ui-sans-serif, sans-serif;
+  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", monospace;
+
+  --radius-panel: 8px;
+  --radius-control: 6px;
+
+  --animate-pulse-critical: pulse-critical 1.6s ease-in-out infinite;
+  --animate-enter: enter 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fade-in: fade-in 160ms ease-out both;
+  --animate-slide-in-right: slide-in-right 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root,
+[data-theme="mando"] {
+  color-scheme: dark;
+  --v-bg: #0a0e13;
+  --v-surface: #10161d;
+  --v-surface-2: #161e27;
+  --v-line: #223040;
+  --v-line-strong: #33465c;
+  --v-text: #e8eef4;
+  --v-muted: #8fa0b4;
+  --v-faint: #647487;
+  --v-on-solid: #0a0e13;
+  --v-accent: #ff6a47;
+  --v-critical: #ff4d4d;
+  --v-warning: #ffb224;
+  --v-ok: #35d49a;
+  --v-info: #48b8ff;
+  --v-drone: #a78bfa;
+  --v-soft: 16%;
+  --v-scrollbar: #2a3a4d;
+}
+
+[data-theme="vecino"] {
+  color-scheme: light;
+  --v-bg: #fffdf9;
+  --v-surface: #ffffff;
+  --v-surface-2: #f5f1ea;
+  --v-line: #e2dbd0;
+  --v-line-strong: #c4b9a9;
+  --v-text: #16130f;
+  --v-muted: #5a5248;
+  --v-faint: #7a7166;
+  --v-on-solid: #ffffff;
+  --v-accent: #c8102e;
+  --v-critical: #b3141f;
+  --v-warning: #8a5a00;
+  --v-ok: #0f7a4a;
+  --v-info: #0a62a8;
+  --v-drone: #6a3fc9;
+  --v-soft: 11%;
+  --v-scrollbar: #cfc6b8;
+  /* Vecinos: texto base más grande. */
+  font-size: 1.0625rem;
+}
+
+[data-theme] {
+  background-color: var(--v-bg);
+  color: var(--v-text);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  body {
+    background-color: var(--v-bg);
+    color: var(--v-text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  ::selection {
+    background-color: color-mix(in oklab, var(--v-accent) 38%, transparent);
+    color: var(--v-text);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--v-info);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  [data-theme="vecino"] :focus-visible {
+    outline-width: 3px;
+  }
+
+  /* Scrollbars discretas. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--v-scrollbar) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--v-scrollbar);
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  dialog {
+    color: var(--v-text);
+  }
+  dialog::backdrop {
+    background: rgb(3 6 10 / 0.72);
+  }
+  [data-theme="vecino"] dialog::backdrop,
+  dialog[data-theme="vecino"]::backdrop {
+    background: rgb(22 19 15 / 0.5);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+/* Datos: números de ancho fijo (horas, cronómetros, coordenadas, conteos). */
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Rótulo técnico: mayúsculas condensadas con tracking (barras de título, etiquetas). */
+@utility label-caps {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+
+@keyframes pulse-critical {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in oklab, var(--v-critical) 55%, transparent);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 4px color-mix(in oklab, var(--v-critical) 0%, transparent);
+  }
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
