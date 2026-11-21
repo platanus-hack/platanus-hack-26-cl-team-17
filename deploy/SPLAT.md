@@ -62,4 +62,16 @@ gcloud logging read 'resource.type="cloud_run_job" AND resource.labels.job_name=
 ```
 
 ## Estado (21-11-2026)
-El job corre en europe-west1 con una L4 (en us-central1 no se pudo por la cuota `MaxRegionsPerProject` de Cloud Run). Las reconstrucciones de prueba tardan de 3,5 a 10 min. Pruebas de consistencia sobre las escenas de la base antes de la limpieza: las de un solo teléfono quedaban con 0,4 % a 9 % del peso flotando y un reflejo bajo el piso; la limpieza las deja bajo 0,1 %. Una escena que unió mal el video de un teléfono con cuadros de dron (vertical torcida 24°, 40 % flotando) no se limpia a propósito y el reporte la marca: ese problema es del registro de medios (`register.py`), no de la limpieza.
+El job corre en europe-west1 con una L4 (en us-central1 no se pudo por la cuota `MaxRegionsPerProject` de Cloud Run). Una reconstrucción de 7.000 pasos tarda ~6,5 min: 65 % entrenamiento, 11 % VGGT, el resto arranque, descarga, registro y exportación (la limpieza y las pruebas, ~8 s). El build de la imagen tarda ~14 min, la mitad subiendo los ~14 GB (los pesos de VGGT van dentro).
+
+Pruebas de consistencia sobre los 5 incidentes de la base con video o fotos reales (salida en `gs://…/test/consistencia/<código>/`, imagen `vigia-splat:20261121-221309`):
+
+| Incidente | Flotantes antes de limpiar → después | Bajo el suelo después | Resultado |
+|---|---|---|---|
+| VG-6CP6 (1 video) | 1,5 % → 0,01 % | 0,36 % | OK |
+| VG-EFU4 (2 videos, uno descartado) | 35 % → 0,08 % | 0,21 % | OK |
+| VG-2ND6 (9 cuadros) | 0,6 % → 0,00 % | 0,52 % | OK |
+| VG-79KV (teléfono + dron) | 25 % → 5,5 % | 0,08 % | falla: islas grandes que la limpieza no toca (la escena principal tiene 47 %) |
+| VG-ZKW8 (3 videos, uno descartado) | 42 % → 21 % | 1,25 % | falla: escena muy fragmentada (principal 24 %) |
+
+Las que fallan son salas grabadas con pocas vistas, personas caminando (dejan «fantasmas») y ventanales: el mensaje final avisa que hay que revisar la escena. Los incidentes de demostración con cuadros SVG no se pueden reconstruir. La vista previa (`preview.jpg`) se dibuja antes de la limpieza: para ver lo que quedó usa `--png` de las pruebas.
