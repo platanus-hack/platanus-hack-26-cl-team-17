@@ -71,9 +71,9 @@ export function Landing() {
           {/* Velo gris azulado: oscurece la foto y deja leer el texto sin apagar las luces de la ciudad. */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-[#141C26]/45 via-[#1A2430]/35 to-[#1A2430]/20"
+            className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-[#141C26]/54 via-[#1A2430]/42 to-[#1A2430]/24"
           />
-          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-t from-[#141C26]/40 to-transparent" />
+          <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-t from-[#141C26]/48 to-transparent" />
 
           <div className="mx-auto grid min-h-dvh w-full max-w-7xl items-center gap-14 px-4 pt-28 pb-20 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16">
             <div className="flex min-w-0 flex-col gap-8">

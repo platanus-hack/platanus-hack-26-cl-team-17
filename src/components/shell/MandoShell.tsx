@@ -94,7 +94,7 @@ export function MandoShell({
         Saltar al contenido
       </a>
 
-      <header className="flex h-14 shrink-0 items-center gap-2 border-b border-line bg-bg/85 px-2 backdrop-blur-md sm:gap-3 sm:px-4">
+      <header className="relative z-40 flex h-14 shrink-0 items-center gap-2 border-b border-line bg-bg/85 px-2 backdrop-blur-md sm:gap-3 sm:px-4">
         {backLink ? (
           <Link
             href={backLink.href}
