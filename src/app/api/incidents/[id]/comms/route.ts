@@ -1,17 +1,19 @@
 /**
  * POST /api/incidents/[id]/comms   AddCommInput → { entry }   (201)
  *
- * Registra una entrada de la bitácora radial (escrita, dictada, importada o
- * hablada por el micrófono), deja el evento en la línea de tiempo y pide el
- * análisis de comunicaciones en after() (el pipeline agrupa ráfagas con su candado).
+ * Registra una entrada de la bitácora radial (escrita, importada o llegada por
+ * Zello), deja el evento en la línea de tiempo y pide el análisis de
+ * comunicaciones en after() (el pipeline agrupa ráfagas con su candado).
  * `audio_path` (opcional) es la grabación ya subida con POST …/comms/audio.
+ * source "zello" solo lo puede usar el puente Zello (Bearer VIGIA_BRIDGE_TOKEN).
  */
 import { after } from "next/server";
 import { requestCommsAnalysis } from "@/lib/ai/pipeline";
-import { requireStaff } from "@/lib/auth";
 import { AddCommInputSchema, type CommEntry } from "@/lib/domain";
 import { errors, ok, readJson, route } from "@/lib/http";
+import { mayActAsBridge, requireStaffOrBridge } from "@/lib/server/bridge-auth";
 import { isCommAudioPathOf, recordComm } from "@/lib/server/comms";
+import { isVigiaVoiceComm } from "@/lib/server/zello/channels";
 import { INCIDENT_NOT_FOUND } from "@/lib/server/snapshot";
 import { getFiles, getStore } from "@/lib/store";
 
@@ -21,8 +23,10 @@ export const maxDuration = 900;
 
 export const POST = route<{ id: string }>(async (req, ctx) => {
   const { id } = await ctx.params;
-  await requireStaff();
+  await requireStaffOrBridge(req);
   const input = await readJson(req, AddCommInputSchema);
+  // La insignia «Zello» en la bitácora significa que la transmisión llegó de verdad por Zello.
+  if (input.source === "zello" && !mayActAsBridge(req)) throw errors.forbidden("Solo el puente Zello registra entradas de Zello.");
   const store = getStore();
   if ((await store.getIncidentRev(id)) === null) throw errors.notFound(INCIDENT_NOT_FOUND);
   const audioPath = input.audio_path?.trim() || null;
@@ -41,6 +45,7 @@ export const POST = route<{ id: string }>(async (req, ctx) => {
     at: input.at,
     audio_path: audioPath,
   });
-  after(() => requestCommsAnalysis(id));
+  // Lo que dijo Vigía por Zello queda anotado, pero no es tráfico de las compañías: no se analiza.
+  if (!isVigiaVoiceComm(entry)) after(() => requestCommsAnalysis(id));
   return ok<{ entry: CommEntry }>({ entry }, { status: 201 });
 });

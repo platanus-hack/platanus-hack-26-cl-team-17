@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit -p .",
     "test": "node --import tsx --test \"src/**/*.test.ts\" \"src/**/*.test.tsx\"",
     "db:migrate": "tsx scripts/db-migrate.mts",
-    "e2e": "node e2e/smoke.mjs"
+    "e2e": "node e2e/smoke.mjs",
+    "zello": "node --env-file-if-exists=.env.local --import tsx tools/zello-bridge/main.mts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.12.0",

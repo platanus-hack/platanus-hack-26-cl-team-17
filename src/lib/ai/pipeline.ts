@@ -32,6 +32,7 @@ import type {
   TrappedStatus,
 } from "@/lib/domain";
 import type { FileStorage, NewEvent, Store } from "@/lib/store/types";
+import { isVigiaVoiceComm } from "@/lib/server/zello/channels";
 import type { SceneSanitizeContext } from "./scene-post";
 import { isImageMediaType } from "./types";
 import type {
@@ -974,7 +975,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     });
     const incident = await store.getIncident(incidentId);
     if (!incident) return { saved: false, ok: false };
-    const comms = await store.listComms(incidentId);
+    // Lo que Vigía dijo por Zello queda en la bitácora, pero no es tráfico de las compañías.
+    const comms = (await store.listComms(incidentId)).filter((c) => !isVigiaVoiceComm(c));
     if (comms.length === 0) return { saved: false, ok: true };
     const previous = incident.comms_analysis;
     const input: CommsAnalysisInput = {

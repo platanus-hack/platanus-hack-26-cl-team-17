@@ -43,6 +43,13 @@
  *          body = image/jpeg crudo (≤ 3 MB)  → DroneFrameResponse
  *   POST   /api/drone/[missionId]/live         body = image/jpeg chico (video en vivo, sin guardar) → LiveFrameAck
  *
+ * Puente Zello (Authorization: Bearer <VIGIA_BRIDGE_TOKEN>; en modo local abierto no hace falta)
+ *   POST   /api/incidents/[id]/comms (source "zello") y …/comms/audio, GET /api/incidents: igual que el mando
+ *   POST   /api/incidents/[id]/ask            { question } → { answer, focus, engine }   (respaldo mientras
+ *          no exista la salida del agente; la misma ruta la usa la ficha del mando)
+ *   POST   /api/zello/status                   ZelloBridgeStatus → { ok: true }   (latido cada ~10 s)
+ *   GET    /api/zello/status                   (staff) → ZelloStatusResponse
+ *
  * Job de GPU (Authorization: Bearer <token de la reconstrucción, HMAC del servidor>)
  *   POST   /api/internal/reconstruction/[incidentId]   ReconstructionUpdate → { ok: true, cancel: boolean }
  *
@@ -405,4 +412,36 @@ export interface SplatManifest {
       heading_deg: number | null;
     }[];
   }[];
+}
+
+/* ───────────── Puente Zello ───────────── */
+
+/** Estado que el puente Zello (tools/zello-bridge) informa en cada latido. */
+export interface ZelloBridgeStatus {
+  /** true = último latido al detener el puente (Ctrl+C): no es una caída. */
+  stopped?: boolean;
+  /** true = sesión iniciada en Zello y canal en línea. */
+  connected: boolean;
+  channel: string;
+  /** Usuarios conectados al canal según Zello; null si no se sabe. */
+  users_online: number | null;
+  /** true = el puente solo escucha (sin voz de ElevenLabs o con --listen-only). */
+  listen_only: boolean;
+  /** Último problema de conexión, en palabras; null si no hay. */
+  error: string | null;
+  /** Emergencias abiertas a las que llegan las transmisiones. */
+  incident_codes: string[];
+  last_transmission: { at: string; from: string; text: string } | null;
+  last_spoken: { at: string; text: string } | null;
+  /** Hora del puente al mandar el latido (ISO). */
+  sent_at: string;
+}
+
+export interface ZelloStatusResponse {
+  /** null = nunca se ha conectado un puente. */
+  status: ZelloBridgeStatus | null;
+  /** Hora del servidor al recibir el último latido; null si no hay. */
+  received_at: string | null;
+  /** true = el último latido tiene más de 30 s: el puente se cayó o perdió la red. */
+  stale: boolean;
 }

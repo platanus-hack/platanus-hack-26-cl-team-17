@@ -648,6 +648,7 @@ export const commSourceLabel: Record<CommSource, string> = {
   dictation: "Dictado",
   simulated: "Simulada",
   import: "Importada",
+  zello: "Zello",
 };
 
 /** Texto de una transmisión hablada que llegó con grabación pero sin transcripción. */

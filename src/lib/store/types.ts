@@ -243,6 +243,8 @@ export const storagePaths = {
     `incidents/${incidentId}/reconstructions/${reconstructionId}/`,
   /** Grabación de una transmisión de radio. */
   commAudio: (incidentId: string, audioId: string, ext: string) => `incidents/${incidentId}/comms/${audioId}.${ext}`,
+  /** Último latido del puente Zello (fuera de incidents/: /api/files no lo sirve). */
+  zelloStatus: "system/zello-status.json",
   /** Extrae el id de incidente de una ruta del bucket, o null si no sigue la convención. */
   incidentIdOf: (path: string): string | null => {
     const m = /^incidents\/([0-9a-fA-F-]{8,64})\//.exec(path);

@@ -151,7 +151,7 @@ const MEDIA_STATUSES = allOf<MediaStatus>()([
   "failed",
 ]);
 const VIDEO_STATUSES = allOf<Media["video_status"]>()(["none", "uploading", "uploaded", "failed"]);
-const COMM_SOURCES = allOf<CommSource>()(["manual", "dictation", "simulated", "import"]);
+const COMM_SOURCES = allOf<CommSource>()(["manual", "dictation", "simulated", "import", "zello"]);
 const MISSION_STATUSES = allOf<MissionStatus>()([
   "planned",
   "launching",

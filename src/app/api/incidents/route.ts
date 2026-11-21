@@ -8,6 +8,7 @@ import { runtimeMode } from "@/lib/config";
 import { ensureLocalSeed } from "@/lib/demo";
 import { CreateIncidentInputSchema, type Incident } from "@/lib/domain";
 import { ok, readJson, route } from "@/lib/http";
+import { requireStaffOrBridge } from "@/lib/server/bridge-auth";
 import { createCommandIncident, listIncidentSummaries } from "@/lib/server/snapshot";
 import { getStore } from "@/lib/store";
 
@@ -15,8 +16,9 @@ export const runtime = "nodejs";
 // La siembra local de la demo deja análisis en after().
 export const maxDuration = 900;
 
-export const GET = route(async () => {
-  await requireStaff();
+// El puente Zello también la lee (con su token) para saber qué emergencias están abiertas.
+export const GET = route(async (req) => {
+  await requireStaffOrBridge(req);
   const store = getStore();
   if (store.kind === "local") await ensureLocalSeed();
   const incidents = await listIncidentSummaries(store);

@@ -38,6 +38,7 @@ import type {
   ScenarioStepRequest,
   ScenarioStepResponse,
   StaffFramesRequest,
+  ZelloStatusResponse,
   StaffFramesResponse,
   StaffPublic,
   TelemetryResponse,
@@ -232,6 +233,11 @@ export interface DroneFrameParams {
 
 export const api = {
   status: (o?: RequestOptions) => get<{ mode: RuntimeMode }>("/api/status", undefined, o),
+
+  /** Estado del puente Zello (latido cada ~10 s). */
+  zello: {
+    status: (o?: RequestOptions) => get<ZelloStatusResponse>("/api/zello/status", undefined, o),
+  },
 
   auth: {
     login: (body: LoginRequest, o?: RequestOptions) =>

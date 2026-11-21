@@ -70,6 +70,63 @@ export const config = {
     if (v === "0") return false;
     return !env("DATABASE_URL");
   },
+  /**
+   * Zello: lo usa el puente aparte (tools/zello-bridge), no el servidor web.
+   * Cuenta del bot de Vigía (el *username* de Zello, no el correo).
+   */
+  get zelloUsername() {
+    return env("ZELLO_USERNAME");
+  },
+  get zelloPassword() {
+    return env("ZELLO_PASSWORD");
+  },
+  /**
+   * Token de la Channel API para zello.io: el de desarrollo (dura 30 días), o se firma
+   * uno con ZELLO_ISSUER + ZELLO_PRIVATE_KEY (PEM RSA de developers.zello.com).
+   */
+  get zelloAuthToken() {
+    return env("ZELLO_AUTH_TOKEN");
+  },
+  get zelloIssuer() {
+    return env("ZELLO_ISSUER");
+  },
+  get zelloPrivateKey() {
+    // En variables de entorno los saltos de línea del PEM suelen venir como "\n".
+    return env("ZELLO_PRIVATE_KEY").replace(/\\n/g, "\n");
+  },
+  /** wss://zello.io/ws (Zello gratis) o wss://zellowork.io/ws/<red> (Zello Work). */
+  get zelloWsUrl() {
+    return env("ZELLO_WS_URL") || "wss://zello.io/ws";
+  },
+  /** Canal de Zello que escucha el puente y en el que habla Vigía. */
+  get zelloChannel() {
+    return env("ZELLO_CHANNEL") || "demo-platanus";
+  },
+  /** Usuario de Zello del OBAC: lo que dice es una pregunta para Vigía. Vacío = solo el vocativo «Vigía, …». */
+  get zelloObacUsername() {
+    return env("ZELLO_OBAC_USERNAME");
+  },
+  /**
+   * Token interno del puente Zello (Authorization: Bearer). Con él, el puente registra
+   * comunicaciones y su estado sin sesión del personal. Vacío = solo en modo local abierto.
+   */
+  get bridgeToken() {
+    return env("VIGIA_BRIDGE_TOKEN");
+  },
+  /** Llave de ElevenLabs: transcribe lo que llega por Zello y pone la voz de Vigía. */
+  get elevenLabsApiKey() {
+    return env("ELEVENLABS_API_KEY");
+  },
+  get sttModel() {
+    return env("VIGIA_STT_MODEL") || "scribe_v1";
+  },
+  /** Voz de Vigía en ElevenLabs. Vacío = una voz de prueba (ver src/lib/server/zello/voice.ts). */
+  get elevenLabsVoiceId() {
+    return env("ELEVENLABS_VOICE_ID");
+  },
+  get ttsModel() {
+    return env("VIGIA_TTS_MODEL") || "eleven_flash_v2_5";
+  },
   get hasAnthropic() {
     return Boolean(env("ANTHROPIC_API_KEY") || env("ANTHROPIC_AUTH_TOKEN"));
   },

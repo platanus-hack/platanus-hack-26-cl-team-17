@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ClipboardPaste, Mic, PenLine, Radio, RadioTower } from "lucide-react";
+import { ClipboardPaste, PenLine, RadioTower } from "lucide-react";
 import { Badge, EmptyState, Panel, useToast } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { api, errorMessage } from "@/lib/client/api";
@@ -10,6 +10,7 @@ import { AnalysisSummary, MaydayBanner } from "./AnalysisSummary";
 import { CommsLog, type LogFocus } from "./CommsLog";
 import { Composer } from "./Composer";
 import { ImportDialog } from "./ImportDialog";
+import { ZelloStatus } from "./ZelloStatus";
 import {
   channelSuggestions,
   mergeEntries,
@@ -37,17 +38,10 @@ function CommsEmpty() {
             </span>
           </li>
           <li className="flex items-start gap-2">
-            <Mic aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
+            <RadioTower aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
             <span>
-              <strong className="text-text">Dicta</strong> con «Escuchar radio»: cada frase queda como entrada
-              rotulada «dictado».
-            </span>
-          </li>
-          <li className="flex items-start gap-2">
-            <Radio aria-hidden className="mt-0.5 size-4 shrink-0 text-muted" />
-            <span>
-              <strong className="text-text">Habla</strong> con «Hablar»: mantén apretado y habla por el micrófono;
-              al soltar se sube la grabación con su transcripción.
+              <strong className="text-text">Zello</strong>: lo que se habla en el canal entra solo, con su grabación y
+              transcripción (puente <code className="font-mono text-xs">npm run zello</code>).
             </span>
           </li>
           <li className="flex items-start gap-2">
@@ -63,7 +57,7 @@ function CommsEmpty() {
   );
 }
 
-/** Panel de comunicaciones del puesto de mando: análisis de radio, bitácora, redacción, dictado e importación. */
+/** Panel de comunicaciones del puesto de mando: análisis de radio, bitácora, estado de Zello, redacción e importación. */
 export function CommsPanel({
   incidentId,
   comms,
@@ -73,8 +67,6 @@ export function CommsPanel({
   pipeline,
   onChanged,
   highlightSeq = null,
-  incidentCode,
-  demoRadio = false,
   className,
 }: CommsPanelProps) {
   // Entradas ya guardadas que el snapshot aún no trae, y entradas en vuelo o fallidas.
@@ -106,7 +98,7 @@ export function CommsPanel({
     onChangedRef.current = onChanged;
   }, [onChanged]);
 
-  // Una cola: las entradas (sobre todo las dictadas) llegan al servidor en el orden en que se dijeron.
+  // Una cola: las entradas llegan al servidor en el orden en que se escribieron.
   const queue = useRef<Promise<void>>(Promise.resolve());
   const localCounter = useRef(0);
 
@@ -201,6 +193,8 @@ export function CommsPanel({
       className={cn("flex h-full min-h-0 flex-col", className)}
       bodyClassName="flex min-h-0 flex-1 flex-col"
     >
+      <ZelloStatus className="shrink-0" />
+
       {analysis && <MaydayBanner analysis={analysis} knownSeqs={knownSeqs} onSelectSeq={selectSeq} />}
 
       <div className="max-h-[35%] shrink-0 overflow-y-auto">
@@ -235,7 +229,6 @@ export function CommsPanel({
         channelOptions={channels}
         onSend={send}
         onOpenImport={() => setImportOpen(true)}
-        demoRadioHref={demoRadio && incidentCode ? `/radio/${encodeURIComponent(incidentCode)}` : null}
       />
 
       {importOpen && (

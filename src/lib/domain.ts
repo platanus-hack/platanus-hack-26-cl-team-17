@@ -884,7 +884,8 @@ export interface Media {
   created_at: string;
 }
 
-export type CommSource = "manual" | "dictation" | "simulated" | "import";
+/** zello = transmisión del canal de Zello, recibida y transcrita en el servidor. */
+export type CommSource = "manual" | "dictation" | "simulated" | "import" | "zello";
 
 export interface CommEntry {
   id: string;
@@ -1063,7 +1064,8 @@ export const AddCommInputSchema = z.object({
   text: z.string().trim().min(1).max(2000),
   speaker: z.string().trim().max(60).default(""),
   channel: z.string().trim().max(40).default(""),
-  source: z.enum(["manual", "dictation", "simulated", "import"]).default("manual"),
+  /** "zello" solo lo acepta la ruta si viene del puente (token interno o modo local abierto). */
+  source: z.enum(["manual", "dictation", "simulated", "import", "zello"]).default("manual"),
   at: z.string().datetime().optional(),
   /** Ruta devuelta por POST /api/incidents/[id]/comms/audio. */
   audio_path: z.string().max(512).optional(),

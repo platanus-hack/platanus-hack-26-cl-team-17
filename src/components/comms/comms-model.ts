@@ -11,6 +11,7 @@ export const commSourceShort: Record<CommSource, string> = {
   dictation: "dictado",
   simulated: "simulado",
   import: "importado",
+  zello: "Zello",
 };
 
 /** Etiqueta que el análisis pone sobre una entrada de la bitácora. */
@@ -123,7 +124,8 @@ export interface DraftComm {
   text: string;
   speaker: string;
   channel: string;
-  source: CommSource;
+  /** Desde la página solo se escribe o importa; "zello" lo crea el servidor y "dictation" queda en entradas antiguas. */
+  source: "manual" | "import";
   /** ISO; si falta, el servidor usa la hora de ingreso. */
   at?: string;
   /** Grabación de la transmisión: se sube primero y la entrada queda con su audio_path. */

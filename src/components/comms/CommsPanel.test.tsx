@@ -59,7 +59,8 @@ test("bitácora: C<seq>, emisor, canal, origen y etiquetas de eventos", () => {
   assert.match(t, /Víctima reportada/);
   assert.match(t, /Solicitud de recursos/);
   assert.match(t, /Bombero de B-3 atrapado/);
-  assert.match(t, /Escuchar radio/);
+  assert.doesNotMatch(t, /Escuchar radio/, "sin dictado en la página");
+  assert.doesNotMatch(t, /Mantén apretado|Hablar\b/, "sin push-to-talk en la página");
   assert.match(t, /Importar/);
   assert.match(t, /Enter envía · Shift\+Enter salto de línea/);
 });
@@ -74,7 +75,8 @@ test("sin análisis ni entradas: vacío con las tres vías y sin estados inventa
   const t = text(render({ comms: [], analysis: null, engine: null, analysisUpdatedAt: null }));
   assert.match(t, /Sin comunicaciones registradas/);
   assert.match(t, /Escribe/);
-  assert.match(t, /Dicta/);
+  assert.match(t, /Zello/);
+  assert.doesNotMatch(t, /Dicta/);
   assert.match(t, /Importa/);
   assert.match(t, /El análisis aparece cuando haya entradas de radio/);
   assert.doesNotMatch(t, /MAYDAY/);

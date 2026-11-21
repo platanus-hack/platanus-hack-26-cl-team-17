@@ -285,6 +285,7 @@ const COMM_SOURCE_ES: Record<CommSource, string> = {
   dictation: "dictado",
   simulated: "simulado",
   import: "importado",
+  zello: "radio Zello, transcripción automática",
 };
 
 /** Quita caracteres de control (salvo tab y salto de línea). */

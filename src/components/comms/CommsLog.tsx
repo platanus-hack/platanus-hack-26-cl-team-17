@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { ArrowDown, CircleAlert, FlaskConical, Mic, RotateCcw, Trash2 } from "lucide-react";
+import { ArrowDown, CircleAlert, FlaskConical, Mic, RadioTower, RotateCcw, Trash2 } from "lucide-react";
 import { Badge, Button, Spinner } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import type { CommEntry } from "@/lib/domain";
@@ -59,6 +59,10 @@ function EntryHeader({
         {source === "simulated" ? (
           <Badge tone="warning" icon={FlaskConical} title="Entrada de simulacro: no es tráfico radial real">
             {commSourceShort.simulated}
+          </Badge>
+        ) : source === "zello" ? (
+          <Badge tone="info" icon={RadioTower} title="Llegó por Zello: transcripción automática, puede tener errores. Tiene su grabación.">
+            {commSourceShort.zello}
           </Badge>
         ) : source === "dictation" ? (
           <Badge tone="info" icon={Mic} title="Transcrita por dictado: puede tener errores">

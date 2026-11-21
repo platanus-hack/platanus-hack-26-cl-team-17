@@ -51,3 +51,39 @@ Otras opciones: `--radius` (60 m), `--alt` (45 m), `--speed` (8 m/s), `--ffmpeg`
 - **401 — token rechazado**: revisa `--mission` y `--token` (el token se entrega una sola vez al crear la misión).
 - **409 — la misión ya no acepta datos**: la misión fue abortada en el puesto de mando. Crea otra.
 - **Sin conexión**: el puente reintenta solo, con espera creciente; sigue volando mientras tanto.
+
+## `zello-bridge/` — puente Zello (la única vía de voz)
+
+Proceso aparte (notebook o Jetson) que mantiene abierta la conexión con la Zello Channel API.
+No corre dentro de Next.js: Cloud Run atiende pedidos cortos y tiene varias instancias.
+
+```bash
+npm run zello                                    # contra http://localhost:3000, todas las emergencias abiertas
+npm run zello -- --url https://vigia.example     # contra el despliegue (con VIGIA_BRIDGE_TOKEN)
+npm run zello -- --incident VG-XXXX              # solo una emergencia
+npm run zello -- --listen-only                   # Vigía no habla
+```
+
+### Antes de empezar
+- En `.env.local`: `ZELLO_USERNAME` (el *username* de Zello, no el correo), `ZELLO_PASSWORD`, y
+  `ZELLO_AUTH_TOKEN` (token de desarrollo de developers.zello.com) o `ZELLO_ISSUER` + `ZELLO_PRIVATE_KEY`.
+  `ZELLO_CHANNEL` (por defecto `demo-platanus`) y `ZELLO_OBAC_USERNAME`.
+- `ELEVENLABS_API_KEY` para transcribir y para la voz (`ELEVENLABS_VOICE_ID`; vacío = voz de prueba).
+- `ffmpeg` con libopus (para codificar la voz de Vigía).
+- Contra un servidor con Postgres, el mismo `VIGIA_BRIDGE_TOKEN` en el servidor y en el puente.
+- La cuenta del bot no puede estar abierta en la app de Zello: Zello permite una sesión por cuenta
+  y expulsa al puente («otra sesión con la misma cuenta de Zello tomó la conexión»).
+
+### Qué hace
+- **Escucha** el canal: cada transmisión (Opus → Ogg, sin decodificar) se transcribe con
+  `on_transcription` si Zello la manda, o con ElevenLabs, y entra a la bitácora de **todas las
+  emergencias abiertas** con su grabación (speaker = usuario de Zello, source `zello`).
+- **Pregunta del OBAC**: lo que dice `ZELLO_OBAC_USERNAME`, o lo que empieza con «Vigía, …». La
+  responde el agente; mientras la salida del agente no exista, el puente usa `POST …/ask`.
+- **Habla** en el canal lo que el agente marca para decir: ElevenLabs (PCM 16 kHz) → Opus en cuadros
+  de 60 ms. Reglas duras de `src/lib/vigia/rules.ts` antes del audio: máximo un mensaje cada ~20 s
+  salvo posible persona en riesgo, filtro de «no hay nadie», nunca órdenes a las unidades. No habla
+  encima de alguien que tiene el PTT apretado.
+- **Estado**: latido cada 10 s; la mesa de mando lo muestra en el panel de radio.
+
+Detenerlo: `Ctrl+C` (la mesa ve «desconectado» de inmediato). Reconecta solo si se corta la red.
