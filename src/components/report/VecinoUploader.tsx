@@ -36,6 +36,7 @@ import {
   headingApplies,
   isPoorAccuracy,
   pickGallerySelection,
+  RECORD_REQUEST_EVENT,
   toggleChip,
   vecinoStageView,
   videoOutcomeText,
@@ -99,6 +100,9 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
   const errorHeadingRef = useRef<HTMLHeadingElement>(null);
   const locationRef = useRef<HTMLElement>(null);
+  const mediaRef = useRef<HTMLElement>(null);
+  // Tras volver de la cámara o la galería se muestra "Video listo" (y el envío fijo abajo).
+  const revealMediaRef = useRef(false);
 
   const controllerRef = useRef<AbortController | null>(null);
   const selectionRef = useRef<Selection | null>(null);
@@ -139,6 +143,43 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [sending]);
 
+  // "Grabar ahora" del pedido de video de Bomberos: abre esta misma cámara (salvo mientras sube).
+  useEffect(() => {
+    const onRecordRequest = () => {
+      if (!controllerRef.current) captureRef.current?.click();
+    };
+    window.addEventListener(RECORD_REQUEST_EVENT, onRecordRequest);
+    return () => window.removeEventListener(RECORD_REQUEST_EVENT, onRecordRequest);
+  }, []);
+
+  // Pantalla encendida mientras sube: si el teléfono se bloquea, iOS y Android congelan la subida.
+  useEffect(() => {
+    if (!sending) return;
+    let sentinel: WakeLockSentinel | null = null;
+    let cancelled = false;
+    const acquire = async () => {
+      try {
+        if (document.visibilityState !== "visible" || !("wakeLock" in navigator)) return;
+        const s = await navigator.wakeLock.request("screen");
+        if (cancelled) void s.release().catch(() => {});
+        else sentinel = s;
+      } catch {
+        // Sin soporte o sin permiso: queda el aviso en pantalla de no bloquearla.
+      }
+    };
+    // El navegador suelta el bloqueo al ocultar la pestaña; al volver se pide de nuevo.
+    const onVisibility = () => {
+      if (document.visibilityState === "visible" && (!sentinel || sentinel.released)) void acquire();
+    };
+    void acquire();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      cancelled = true;
+      document.removeEventListener("visibilitychange", onVisibility);
+      void sentinel?.release().catch(() => {});
+    };
+  }, [sending]);
+
   // Lleva el foco al resultado o al error para que el lector de pantalla lo anuncie.
   useEffect(() => {
     if (phase.name === "sent") resultHeadingRef.current?.focus();
@@ -148,8 +189,15 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
   const replaceSelection = useCallback((next: Selection | null) => {
     revokeAll(selectionRef.current);
     selectionRef.current = next;
+    revealMediaRef.current = next !== null;
     setSelection(next);
   }, []);
+
+  useEffect(() => {
+    if (!selection || !revealMediaRef.current) return;
+    revealMediaRef.current = false;
+    mediaRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  }, [selection]);
 
   const onCaptureChange = (e: ChangeEvent<HTMLInputElement>) => {
     const list = Array.from(e.target.files ?? []);
@@ -161,6 +209,12 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
       return;
     }
     setPickError(null);
+    // Grabó otro desde el pedido de video tras un envío: empieza un reporte nuevo.
+    if (phase.name === "sent") {
+      setChips(new Set());
+      setFreeText("");
+      setPhase({ name: "compose" });
+    }
     replaceSelection({
       kind: "video",
       files: [file],
@@ -328,6 +382,20 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
 
   const dismissError = () => setPhase({ name: "compose" });
 
+  // Montado también tras un envío, para que el pedido de video pueda abrir la cámara de un toque.
+  const captureInput = (
+    <input
+      ref={captureRef}
+      type="file"
+      accept="video/*"
+      capture="environment"
+      className="sr-only"
+      tabIndex={-1}
+      aria-hidden="true"
+      onChange={onCaptureChange}
+    />
+  );
+
   /* ───────────── Enviando ───────────── */
   if (phase.name === "sending") {
     const kind = selection?.kind ?? "video";
@@ -381,6 +449,7 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
     const { info } = phase;
     return (
       <section className={cn("flex flex-col gap-4", className)}>
+        {captureInput}
         <div className="flex flex-col gap-3 rounded-lg border border-ok/40 bg-ok-soft p-5">
           <div className="flex items-start gap-3">
             <CircleCheck aria-hidden="true" className="mt-0.5 size-9 shrink-0 text-ok" />
@@ -469,20 +538,11 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
       )}
 
       {/* 1. Video o fotos */}
-      <section aria-labelledby={ids.media} className="flex flex-col gap-3">
+      <section ref={mediaRef} aria-labelledby={ids.media} className="flex scroll-mt-4 flex-col gap-3">
         <h2 id={ids.media} className="font-display text-xl font-bold text-text">
           1. Tu video o fotos
         </h2>
-        <input
-          ref={captureRef}
-          type="file"
-          accept="video/*"
-          capture="environment"
-          className="sr-only"
-          tabIndex={-1}
-          aria-hidden="true"
-          onChange={onCaptureChange}
-        />
+        {captureInput}
         <input
           ref={galleryRef}
           type="file"
@@ -690,8 +750,14 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
         )}
       </section>
 
-      {/* Enviar */}
-      <div className="flex flex-col gap-2">
+      {/* Enviar. Con algo elegido queda fijo abajo: tras grabar no hay que buscarlo bajo la nota y la ubicación. */}
+      <div
+        className={cn(
+          "flex flex-col gap-2",
+          selection &&
+            "sticky bottom-0 z-10 -mx-4 border-t border-line bg-bg/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-sm",
+        )}
+      >
         <Button
           variant="primary"
           size="xl"

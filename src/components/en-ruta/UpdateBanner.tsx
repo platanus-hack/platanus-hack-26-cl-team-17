@@ -4,7 +4,16 @@ import { BellRing, X } from "lucide-react";
 import type { BriefingChange } from "./briefing-diff";
 
 /** Aviso "ACTUALIZACIÓN" con el resumen de cambios importantes; queda hasta que se toca. */
-export function UpdateBanner({ changes, seq, onDismiss }: { changes: BriefingChange[]; seq: number; onDismiss: () => void }) {
+export function UpdateBanner({
+  changes,
+  seq,
+  onDismiss,
+}: {
+  /** Cambios del briefing y mensajes nuevos de Vigía; solo se usa el texto. */
+  changes: Pick<BriefingChange, "text">[];
+  seq: number;
+  onDismiss: () => void;
+}) {
   if (changes.length === 0) return null;
   return (
     <div className="border-t border-warning bg-warning text-on-solid">

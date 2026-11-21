@@ -9,7 +9,7 @@
  *    se ve su estado en una línea, lo que está haciendo y se le puede escribir.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { CornerDownLeft, FileText, RadioTower, Send, Volume2, VolumeX, X } from "lucide-react";
+import { Bot, BotOff, CornerDownLeft, FileText, RadioTower, Send, Volume2, VolumeX, X } from "lucide-react";
 import { Badge, CopyButton, IconButton, Spinner, useNow } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/client/api";
@@ -17,9 +17,11 @@ import { formatClock } from "@/lib/format";
 import { PRIORITY_RANK } from "@/lib/vigia/rules";
 import type { VigiaKind, VigiaUtterance, VigiaView } from "@/lib/vigia/types";
 import { runRadioDemo } from "./radio-demo";
+import { sinIA } from "./sin-ia";
 import { useVigia } from "./use-vigia";
 
-const KIND_LABEL: Record<VigiaKind, string> = {
+/** Nombre de cada tipo de mensaje de Vigía (también lo usa la vista técnica). */
+export const KIND_LABEL: Record<VigiaKind, string> = {
   presentacion: "Presentación",
   alerta: "Alerta",
   resumen: "Resumen de radio",
@@ -73,7 +75,7 @@ export interface VigiaDockProps {
 }
 
 export function VigiaDock({ incidentId, className, style }: VigiaDockProps) {
-  const { view, send, sending } = useVigia(incidentId);
+  const { view, send, sending, setSinIA } = useVigia(incidentId);
   const { queue, dismiss } = useQueue(view);
   const [composer, setComposer] = useState<{ replyTo: VigiaUtterance | null } | null>(null);
   const now = useNow(1000);
@@ -113,6 +115,7 @@ export function VigiaDock({ incidentId, className, style }: VigiaDockProps) {
             view={view}
             replyTo={composer.replyTo}
             sending={sending}
+            onSinIA={setSinIA}
             onClose={() => setComposer(null)}
             onSend={async (texto) => {
               await send(texto, composer.replyTo?.id ?? null);
@@ -137,6 +140,11 @@ export function VigiaDock({ incidentId, className, style }: VigiaDockProps) {
           {view?.silenced ? (
             <span aria-hidden className="absolute -top-1 -right-1 flex size-5 items-center justify-center rounded-full bg-surface text-muted ring-1 ring-line">
               <VolumeX className="size-3" />
+            </span>
+          ) : null}
+          {sinIA(view) ? (
+            <span aria-hidden className="absolute -bottom-1 -left-1 flex size-5 items-center justify-center rounded-full bg-warning text-white ring-2 ring-surface">
+              <BotOff className="size-3" />
             </span>
           ) : null}
         </button>
@@ -233,6 +241,7 @@ function Composer({
   view,
   replyTo,
   sending,
+  onSinIA,
   onClose,
   onSend,
 }: {
@@ -240,6 +249,7 @@ function Composer({
   view: VigiaView | null;
   replyTo: VigiaUtterance | null;
   sending: boolean;
+  onSinIA: (on: boolean) => Promise<void>;
   onClose: () => void;
   onSend: (texto: string) => Promise<void>;
 }) {
@@ -276,6 +286,21 @@ function Composer({
     }
   };
 
+  const [modeBusy, setModeBusy] = useState(false);
+  const toggleSinIA = async () => {
+    if (modeBusy) return;
+    setModeBusy(true);
+    setError(null);
+    try {
+      await onSinIA(!view?.ai_off);
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setModeBusy(false);
+    }
+  };
+  const noAI = sinIA(view);
+
   const actions = view?.actions.slice(0, 3) ?? [];
   const pending = view?.pending ?? [];
 
@@ -301,6 +326,12 @@ function Composer({
       {view?.silenced ? (
         <p className="mt-2 rounded-lg bg-surface-2 px-2 py-1 text-xs text-muted">
           En silencio: solo escribe en pantalla, salvo una posible persona. Escribe «puedes hablar» para que vuelva a la radio.
+        </p>
+      ) : null}
+
+      {noAI ? (
+        <p role="status" className="mt-2 rounded-lg border border-warning/40 bg-warning-soft px-2 py-1 text-xs text-text" title={noAI.detail}>
+          <span className="font-semibold">{noAI.title}.</span> <span className="line-clamp-2 text-muted">{noAI.detail}</span>
         </p>
       ) : null}
 
@@ -364,16 +395,37 @@ function Composer({
           </button>
         ))}
       </div>
-      <button
-        type="button"
-        onClick={() => void startDemo()}
-        disabled={demo === "running"}
-        className="mt-2 inline-flex items-center gap-1 text-xs text-faint underline-offset-2 hover:text-muted hover:underline disabled:cursor-wait"
-        title="Reproduce dos radios grabadas a la vez y las registra como simuladas"
-      >
-        <RadioTower aria-hidden className="size-3" />
-        {demo === "running" ? "Demo en curso: dos radios…" : "Demo: dos radios a la vez"}
-      </button>
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <button
+          type="button"
+          onClick={() => void startDemo()}
+          disabled={demo === "running"}
+          className="inline-flex items-center gap-1 text-xs text-faint underline-offset-2 hover:text-muted hover:underline disabled:cursor-wait"
+          title="Reproduce dos radios grabadas a la vez y las registra como simuladas"
+        >
+          <RadioTower aria-hidden className="size-3" />
+          {demo === "running" ? "Demo en curso: dos radios…" : "Demo: dos radios a la vez"}
+        </button>
+        {/* Plan B si Claude anda lento o caído: un clic, sin redeploy. */}
+        <button
+          type="button"
+          onClick={() => void toggleSinIA()}
+          disabled={modeBusy || !view}
+          aria-pressed={view?.ai_off ?? false}
+          className={cn(
+            "inline-flex items-center gap-1 text-xs underline-offset-2 hover:underline disabled:cursor-wait",
+            view?.ai_off || noAI ? "font-semibold text-warning" : "text-faint hover:text-muted",
+          )}
+          title={
+            view?.ai_off
+              ? "Vigía vuelve a pensar con Claude; la fusión y la radio, también"
+              : "Vigía responde con plantillas y la fusión y la radio de esta emergencia van por reglas, sin esperar a Claude"
+          }
+        >
+          {view?.ai_off ? <Bot aria-hidden className="size-3" /> : <BotOff aria-hidden className="size-3" />}
+          {modeBusy ? "Cambiando…" : view?.ai_off ? "Volver a usar IA" : "Vigía sin IA (plantillas)"}
+        </button>
+      </div>
       {view?.parte ? (
         <div className="mt-2 flex items-center gap-2 text-[13px]">
           <span className="min-w-0 flex-1 text-muted">Parte listo ({formatClock(view.parte.at)})</span>

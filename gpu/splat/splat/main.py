@@ -27,6 +27,7 @@ from . import gcs  # noqa: E402
 from .align import CameraInfo, align_scene, apply_to_cameras, apply_to_points  # noqa: E402
 from .callback import Cancelled, Reporter  # noqa: E402
 from .cleanup import export_mask, remove_outliers  # noqa: E402
+from .consistency import analyze, cleanup_mask  # noqa: E402
 from .depthmap import FrameDepth, to_world  # noqa: E402
 from .frames import (  # noqa: E402
     FRAME_LONG_EDGE_PX,
@@ -373,6 +374,24 @@ def run(m: Manifest, rep: Reporter, root: str) -> dict[str, Any]:
         mask = np.ones(len(mask), dtype=bool)
     else:
         log(f"Limpieza: fuera {int((~mask).sum())} gaussianas lejanas o desmesuradas")
+    # Flotantes, sueltas y lo que quedó bajo el suelo (splat/consistency.py).
+    clean: dict[str, Any] = {"aplicada": False}
+    try:
+        sub = np.nonzero(mask)[0]
+        keep_sub, clean = cleanup_mask(trained.means[sub], trained.log_scales[sub], trained.opacity_logits[sub])
+        if clean["aplicada"]:
+            mask[sub[~keep_sub]] = False
+            log(
+                f"Limpieza de flotantes en {clean['pasadas']} pasadas: fuera {clean['islas_flotantes']} islas flotantes "
+                f"({clean['flotantes']} gaussianas), {clean['sueltas']} sueltas y {clean['bajo_suelo']} bajo el suelo "
+                f"({clean['peso_quitado']:.1%} del peso visual)"
+                + (f"; {clean['motivo']}" if clean.get("motivo") else "")
+            )
+        else:
+            log(f"Limpieza de flotantes omitida: {clean.get('motivo', 'no había nada que quitar')}")
+    except Exception as e:  # noqa: BLE001 — la limpieza nunca debe tumbar la reconstrucción
+        log_err(f"Limpieza de flotantes falló, se exporta sin ella: {type(e).__name__}: {e}")
+        clean = {"aplicada": False, "motivo": f"error: {type(e).__name__}"}
     data, written = encode_splat(
         trained.means[mask],
         trained.log_scales[mask],
@@ -408,10 +427,8 @@ def run(m: Manifest, rep: Reporter, root: str) -> dict[str, Any]:
     extra = ""
     if dropped_labels:
         extra += f" Sin {media_list(dropped_labels)} (no coincide con el resto)." if len(dropped_labels) == 1 else f" Sin {media_list(dropped_labels)} (no coinciden con el resto)."
-    message = (
-        f"Escena 3D lista: {fmt_count(written)} gaussianas desde {r} de {n} cuadros, {align_txt}. "
-        f"Calidad del ajuste {quality_label(trained.psnr)} (PSNR {fmt_dec(trained.psnr)} dB).{extra} {STATIC_WARNING}"
-    )
+    if clean.get("aplicada") and clean.get("islas_flotantes"):
+        extra += f" Se quitaron {plural(int(clean['islas_flotantes']), 'objeto flotante', 'objetos flotantes')}."
     result = dict(
         frame_count=n,
         frames_registered=r,
@@ -424,6 +441,22 @@ def run(m: Manifest, rep: Reporter, root: str) -> dict[str, Any]:
         iterations=trained.steps,
         error=None,
     )
+    # Pruebas de consistencia sobre lo que se exportó (consistency.json, solo diagnóstico).
+    checks: dict[str, str] = {}
+    try:
+        report = analyze(data, {**result, "status": "ready"})
+        checks = report.summary()
+        gcs.upload_json(m.bucket, m.output_path("consistency.json"), {**report.to_dict(), "limpieza": clean})
+        failing = [c.name for c in report.checks if c.status == "falla"]
+        log(f"Consistencia: {'falla en ' + ', '.join(failing) if failing else 'sin fallas'} · {checks}")
+        if "flotantes" in failing or "vertical" in failing:
+            extra += " Revisa la escena: quedan partes flotando o la vertical está torcida."
+    except Exception as e:  # noqa: BLE001 — es solo diagnóstico
+        log_err(f"No pude correr las pruebas de consistencia: {type(e).__name__}: {e}")
+    message = (
+        f"Escena 3D lista: {fmt_count(written)} gaussianas desde {r} de {n} cuadros, {align_txt}. "
+        f"Calidad del ajuste {quality_label(trained.psnr)} (PSNR {fmt_dec(trained.psnr)} dB).{extra} {STATIC_WARNING}"
+    )
     rep.send("ready", 1.0, message, final=True, **result)
     return {
         **(rep.last or {}),
@@ -431,6 +464,8 @@ def run(m: Manifest, rep: Reporter, root: str) -> dict[str, Any]:
         "psnr_db": round(trained.psnr, 2),
         "dropped_media": dropped_labels,
         "bundle_adjusted": bundle_ok,
+        "cleanup": clean,
+        "consistency": checks,
     }
 
 

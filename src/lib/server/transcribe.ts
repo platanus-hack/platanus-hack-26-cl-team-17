@@ -5,6 +5,7 @@
  * y el texto UNTRANSCRIBED_COMM_TEXT: la app sigue funcionando sin credenciales.
  */
 import { config } from "@/lib/config";
+import { recordServerError } from "@/lib/server/diagnostics";
 
 const STT_URL = "https://api.elevenlabs.io/v1/speech-to-text";
 const TIMEOUT_MS = 30_000;
@@ -32,6 +33,7 @@ export async function transcribeAudio(bytes: Uint8Array, contentType: string, fi
     if (!res.ok) {
       const detail = (await res.text().catch(() => "")).slice(0, 300);
       console.error(`[vigia:stt] ElevenLabs respondió ${res.status}: ${detail}`);
+      recordServerError("transcripcion", `ElevenLabs respondió ${res.status}: ${detail}`);
       return null;
     }
     const body = (await res.json()) as { text?: unknown };
@@ -39,6 +41,7 @@ export async function transcribeAudio(bytes: Uint8Array, contentType: string, fi
     return text || null;
   } catch (err) {
     console.error(`[vigia:stt] no se pudo transcribir: ${err instanceof Error ? err.message : String(err)}`);
+    recordServerError("transcripcion", err, { context: "No se pudo transcribir" });
     return null;
   }
 }

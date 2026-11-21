@@ -20,6 +20,7 @@ import type { LiveFrameAck, LiveInsightView } from "@/lib/contract";
 import { LIMITS, type DroneMission } from "@/lib/domain";
 import { errors } from "@/lib/http";
 import { incidentTypeLabel } from "@/lib/labels";
+import { recordServerError } from "@/lib/server/diagnostics";
 import {
   analyzeLiveFrames,
   LIVE_SEVERITY_RANK,
@@ -31,7 +32,7 @@ import { storagePaths } from "@/lib/store/types";
 import { detectFrame, isDetectorConfigured } from "@/lib/vision/detector";
 import type { LiveDetection } from "@/lib/vision/live-detections";
 import { withoutAnnotation } from "@/lib/vision/media-detections";
-import { frameInterest, type DetectResult } from "@/lib/vision/types";
+import { detectionText, frameInterest, type DetectResult } from "@/lib/vision/types";
 import { isMissionActive } from "./plan";
 import type { DroneDeps } from "./service";
 
@@ -275,6 +276,11 @@ async function runInsight(deps: DroneDeps, mission: DroneMission, s: LiveState):
       }
     } catch (err) {
       console.warn("[dron-vivo] no se pudo analizar la ventana", mission.id, err instanceof Error ? err.message : err);
+      recordServerError("dron", err, {
+        incidentId: mission.incident_id,
+        incidentCode: incident.code,
+        context: `Observador en vivo de ${fresh.label}`,
+      });
       addInsight(s, {
         id: `${mission.id}-${newest.seq}`,
         at: iso(deps.now()),
@@ -375,6 +381,38 @@ export function getLiveDetections(missionId: string): LiveDetection | null {
 /** Historial corto de detecciones en vivo (las ~30 últimas), en orden de seq. */
 export function listLiveDetectionHistory(missionId: string): LiveDetection[] {
   return (states().get(missionId)?.detections ?? []).map(toLiveDetection);
+}
+
+/** Estado del video en vivo de una misión en esta instancia (vista técnica); null si aquí no llegan cuadros. */
+export function liveDiagnostics(missionId: string): {
+  lastFrameAt: string | null;
+  lastDetection: { at: string; text: string; ms: number } | null;
+  detecting: boolean;
+  analyzing: boolean;
+  lastInsight: { at: string; engine: string; summary: string } | null;
+} | null {
+  const s = states().get(missionId);
+  if (!s) return null;
+  const last = s.frames.at(-1);
+  const det = s.detections.at(-1);
+  const insight = s.insights[0];
+  return {
+    lastFrameAt: last ? iso(last.at) : null,
+    lastDetection: det
+      ? {
+          at: iso(det.atMs),
+          text: Object.entries(det.result.counts)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 5)
+            .map(([label, n]) => `${detectionText(label)}${n > 1 ? ` ×${n}` : ""}`)
+            .join(", "),
+          ms: det.result.ms,
+        }
+      : null,
+    detecting: s.detecting,
+    analyzing: s.analyzing,
+    lastInsight: insight ? { at: insight.at, engine: insight.engine, summary: insight.summary } : null,
+  };
 }
 
 export function listLiveInsights(missionId: string): { insights: LiveInsightView[]; analyzing: boolean } {

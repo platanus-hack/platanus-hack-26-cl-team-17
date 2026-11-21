@@ -94,7 +94,6 @@ export function ReportStart({ invalidCode }: ReportStartProps) {
             )}
           </div>
         </header>
-        <RecordingTips />
         <MediaUploader
           variant="vecino"
           typeHint={chosenType}
@@ -102,6 +101,7 @@ export function ReportStart({ invalidCode }: ReportStartProps) {
           onSubmitted={(r) => setSubmittedCode(r.incidentCode)}
           onDone={() => setDone(true)}
         />
+        <RecordingTips />
         <PrivacyNote />
         {done && (
           <Button variant="ghost" size="xl" icon={ArrowLeft} fullWidth onClick={restart}>

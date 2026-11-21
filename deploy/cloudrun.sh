@@ -67,8 +67,6 @@ SPLAT_ITERATIONS="${SPLAT_ITERATIONS:-4000}"
 VIGIA_AI_MODEL="${VIGIA_AI_MODEL:-}"
 VIGIA_AI_EFFORT="${VIGIA_AI_EFFORT:-}"
 VIGIA_AI_FAST="${VIGIA_AI_FAST:-1}"
-# Radio de demostración sin sesión en /radio/<código> (micrófono → bitácora). 0 = apagada.
-VIGIA_DEMO_RADIO="${VIGIA_DEMO_RADIO:-1}"
 # Usuario de Zello del OBAC: lo que dice por Zello es una pregunta para Vigía. Lo lee el
 # agente en el servidor; usa el mismo valor que el .env.local del puente. Vacío = solo
 # cuenta lo que empieza con «Vigía, …».
@@ -438,7 +436,6 @@ info "Desplegando $SERVICE en Cloud Run"
   [[ -n "$VIGIA_AI_MODEL" ]] && printf 'VIGIA_AI_MODEL: %s\n' "$(yaml_quote "$VIGIA_AI_MODEL")"
   [[ -n "$VIGIA_AI_EFFORT" ]] && printf 'VIGIA_AI_EFFORT: %s\n' "$(yaml_quote "$VIGIA_AI_EFFORT")"
   [[ -n "$VIGIA_AI_FAST" ]] && printf 'VIGIA_AI_FAST: %s\n' "$(yaml_quote "$VIGIA_AI_FAST")"
-  [[ -n "$VIGIA_DEMO_RADIO" ]] && printf 'VIGIA_DEMO_RADIO: %s\n' "$(yaml_quote "$VIGIA_DEMO_RADIO")"
   [[ -n "$ZELLO_OBAC_USERNAME" ]] && printf 'ZELLO_OBAC_USERNAME: %s\n' "$(yaml_quote "$ZELLO_OBAC_USERNAME")"
   true
 } >"$WORK_DIR/env.yaml"

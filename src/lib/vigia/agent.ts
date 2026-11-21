@@ -20,6 +20,7 @@ import { aiEngineKind, config } from "@/lib/config";
 import { formatClock } from "@/lib/format";
 import { newId } from "@/lib/ids";
 import { FALLBACK_BETA } from "@/lib/ai/client";
+import { noteAgentTurn, recordClaudeCall, recordServerError } from "@/lib/server/diagnostics";
 import { detectionText } from "@/lib/vision/types";
 import { answerQuestion, fallbackTurn } from "./fallback";
 import { applyOps, type VigiaOp } from "./memory";
@@ -43,18 +44,48 @@ import type { VigiaState, VigiaStatus, VigiaUtterance } from "./types";
 import { loadWorld, type World } from "./world";
 
 const MAX_STEPS = 6;
-const REQUEST_TIMEOUT_MS = 30_000;
+/**
+ * Tope por solicitud y un solo reintento: el agente responde en ~5 a 8 s; si Claude se cuelga,
+ * cae a plantillas en ~30 s en vez de ~2 min de radio en silencio.
+ */
+export const REQUEST_TIMEOUT_MS = 15_000;
+export const REQUEST_MAX_RETRIES = 1;
+/** Tras una vuelta fallida con Claude, plantillas directo por este tiempo (sin volver a esperar). */
+export const CLAUDE_COOLDOWN_MS = 120_000;
 
-type GlobalWithAgentClient = typeof globalThis & { __vigiaAgentAnthropic?: Anthropic };
+type GlobalWithAgentClient = typeof globalThis & { __vigiaAgentAnthropic?: Anthropic; __vigiaClaudeDownUntil?: number };
 
 function client(): Anthropic {
   const g = globalThis as GlobalWithAgentClient;
-  g.__vigiaAgentAnthropic ??= new Anthropic({ timeout: REQUEST_TIMEOUT_MS, maxRetries: 3 });
+  g.__vigiaAgentAnthropic ??= new Anthropic({ timeout: REQUEST_TIMEOUT_MS, maxRetries: REQUEST_MAX_RETRIES });
   return g.__vigiaAgentAnthropic;
 }
 
-export function agentEngine(): "claude" | "plantilla" {
-  return aiEngineKind() === "claude" ? "claude" : "plantilla";
+/** Hasta cuándo el agente no prueba Claude en este proceso (0 = lo prueba). */
+export function claudeDownUntil(): number {
+  return (globalThis as GlobalWithAgentClient).__vigiaClaudeDownUntil ?? 0;
+}
+
+/** Claude falló: plantillas directo durante CLAUDE_COOLDOWN_MS. `null` lo rehabilita. */
+export function markClaudeDown(nowMs: number | null): void {
+  (globalThis as GlobalWithAgentClient).__vigiaClaudeDownUntil = nowMs === null ? 0 : nowMs + CLAUDE_COOLDOWN_MS;
+}
+
+/** Motor del agente para la mesa: plantillas sin llave o si la mesa pidió "Vigía sin IA". */
+export function agentEngine(state?: Pick<VigiaState, "ai_off">): "claude" | "plantilla" {
+  if (aiEngineKind() !== "claude" || state?.ai_off) return "plantilla";
+  return "claude";
+}
+
+/** Motor de esta vuelta: además, plantillas mientras dure la pausa tras un fallo de Claude. */
+export function turnEngine(state: Pick<VigiaState, "ai_off">, nowMs: number): "claude" | "plantilla" {
+  return agentEngine(state) === "claude" && claudeDownUntil() <= nowMs ? "claude" : "plantilla";
+}
+
+/** Modelo, esfuerzo y modo rápido efectivos del agente (el modo rápido solo existe en Opus 5.5). */
+export function agentModelSettings(): { model: string; effort: typeof config.vigiaAgentEffort; fast: boolean } {
+  const model = config.vigiaAgentModel;
+  return { model, effort: config.vigiaAgentEffort, fast: config.vigiaAgentFast && model.startsWith("claude-opus-5-5") };
 }
 
 function observeOptions() {
@@ -101,6 +132,8 @@ function describeEvent(e: VigiaEvent): string {
       for (const c of e.contradictions) parts.push(`contradicción: ${c.description} [${c.sources.join(", ")}]`);
       return `- INFORME DE SITUACIÓN ACTUALIZADO: ${parts.join(" · ")}`;
     }
+    case "contradiccion":
+      return `- NO CALZA RADIO ↔ IMAGEN (detectado por reglas): ${e.contradictions.map((c) => `${c.description} [${c.sources.join(", ")}]`).join(" · ")} → avísalo al OBAC con hablarle_al_obac tipo "contradiccion", nombrando las dos fuentes (la imagen y la transmisión)${e.contradictions.some((c) => c.people) ? "; si hay una posible persona, prioridad persona" : ""}. No decidas cuál tiene razón: la confirmación la pide el OBAC.`;
     case "dron":
       return `- DRON ${e.label}: ${e.insights.map((i) => `${formatClock(i.at)} (${i.severity}) ${i.summary}${i.observations.length > 0 ? ` — ${i.observations.slice(0, 3).join("; ")}` : ""}`).join(" | ")}`;
     case "dron_yolo":
@@ -159,37 +192,60 @@ function turnMessage(world: World, state: VigiaState, events: VigiaEvent[], nowM
 
 /* ───────────────────────────── Claude con herramientas ───────────────────────────── */
 
-async function send(params: MessageCreateParamsNonStreaming): Promise<BetaMessage> {
+type AgentIncident = { id: string; code: string };
+
+/** Una solicitud HTTP a la API; duración, modelo y tokens quedan en el registro de la vista técnica. */
+async function timedCreate(params: MessageCreateParamsNonStreaming, incident: AgentIncident): Promise<BetaMessage> {
+  const call = {
+    task: "agente",
+    model: params.model,
+    fast: params.speed === "fast",
+    startedAt: Date.now(),
+    incidentId: incident.id,
+    incidentCode: incident.code,
+  };
   try {
-    return await client().beta.messages.create(params);
+    // Opciones por solicitud: valen aunque el cliente compartido se haya creado con otras.
+    const message = await client().beta.messages.create(params, { timeout: REQUEST_TIMEOUT_MS, maxRetries: REQUEST_MAX_RETRIES });
+    recordClaudeCall(call, { message });
+    return message;
+  } catch (error) {
+    recordClaudeCall(call, { error });
+    throw error;
+  }
+}
+
+async function send(params: MessageCreateParamsNonStreaming, incident: AgentIncident): Promise<BetaMessage> {
+  try {
+    return await timedCreate(params, incident);
   } catch (error) {
     if (params.speed === "fast" && error instanceof RateLimitError) {
       const standard = { ...params };
       delete standard.speed;
-      return client().beta.messages.create(standard);
+      return timedCreate(standard, incident);
     }
     throw error;
   }
 }
 
 async function claudeTurn(ctx: TurnContext, events: VigiaEvent[]): Promise<void> {
-  const fast = config.vigiaAgentFast && config.vigiaAgentModel.startsWith("claude-opus-5-5");
+  const settings = agentModelSettings();
   const messages: BetaMessageParam[] = [{ role: "user", content: turnMessage(ctx.world, ctx.state, events, ctx.nowMs) }];
   const started = Date.now();
   let calls = 0;
   for (let step = 0; step < MAX_STEPS; step++) {
     const params: MessageCreateParamsNonStreaming = {
-      model: config.vigiaAgentModel,
+      model: settings.model,
       max_tokens: 4000,
       system: [{ type: "text", text: VIGIA_SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
       tools: VIGIA_TOOLS,
       messages,
-      output_config: { effort: config.vigiaAgentEffort },
+      output_config: { effort: settings.effort },
       betas: [FALLBACK_BETA],
       fallbacks: "default",
-      ...(fast ? { speed: "fast" as const } : {}),
+      ...(settings.fast ? { speed: "fast" as const } : {}),
     };
-    const res = await send(params);
+    const res = await send(params, ctx.world.incident);
     calls += 1;
     if (res.stop_reason === "refusal") throw new Error("El modelo declinó la vuelta.");
     const toolUses = res.content.filter((b): b is Extract<BetaContentBlock, { type: "tool_use" }> => b.type === "tool_use");
@@ -242,7 +298,7 @@ export async function runVigiaTurn(incidentId: string): Promise<TurnResult> {
     const state = await getVigiaState(incidentId);
     const nowMs = Date.now();
     const obs = observe(world, state, nowMs, observeOptions());
-    const engine = agentEngine();
+    const engine = turnEngine(state, nowMs);
 
     const ctx: TurnContext = { world, state: structuredClone(state), ops: [], nowMs, engine, answering: null };
 
@@ -283,14 +339,25 @@ export async function runVigiaTurn(incidentId: string): Promise<TurnResult> {
         const fallbackFrom = ctx.ops.length;
         try {
           await claudeTurn(ctx, events);
+          markClaudeDown(null);
         } catch (error) {
+          // Las vueltas siguientes no vuelven a esperar a Claude por un rato.
+          markClaudeDown(Date.now());
           const message = error instanceof Error ? error.message : String(error);
           console.warn("[vigia] la vuelta con Claude falló; respondo con plantillas", { incident: world.incident.code, error: message });
+          recordServerError("agente", error, {
+            incidentId: world.incident.id,
+            incidentCode: world.incident.code,
+            context: "Claude falló en la vuelta; respondí con plantillas",
+          });
           // Se descarta lo que dejó a medias el modelo y se responde con plantillas.
           ctx.ops.length = fallbackFrom;
           ctx.engine = "plantilla";
           fallbackTurn(ctx, events);
-          ctx.ops.push({ op: "error", message: `Claude falló (${message}); respondí con plantillas.` });
+          ctx.ops.push({
+            op: "error",
+            message: `Claude falló (${message}); respondo con plantillas por ${Math.round(CLAUDE_COOLDOWN_MS / 60_000)} min y después vuelvo a probar.`,
+          });
         }
       } else {
         fallbackTurn(ctx, events);
@@ -336,10 +403,18 @@ export async function runVigiaTurn(incidentId: string): Promise<TurnResult> {
       });
       emitUtterances(added);
     }
+    noteAgentTurn(incidentId, {
+      at: new Date(nowMs).toISOString(),
+      ms: Date.now() - nowMs,
+      thought: think,
+      engine: think ? ctx.engine : null,
+      events: events.map((e) => e.type),
+    });
     return { ran: think, events: events.map((e) => e.type), added };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error("[vigia] vuelta fallida", { incidentId, error: message });
+    recordServerError("agente", error, { incidentId, context: "Vuelta del agente fallida" });
     await updateVigiaState(incidentId, (s) => {
       s.last_error = message;
       s.status = { ...s.status, thinking: false };

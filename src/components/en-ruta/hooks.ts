@@ -3,14 +3,7 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { BriefingSnapshot } from "@/lib/contract";
 import { isSpeechSynthesisSupported, speak, stopSpeaking } from "@/lib/client/speech";
-import {
-  autoReadText,
-  diffBriefing,
-  mergeChanges,
-  speechSignature,
-  spokenText,
-  type BriefingChange,
-} from "./briefing-diff";
+import { autoReadText, diffBriefing, mergeChanges, spokenText, type BriefingChange } from "./briefing-diff";
 
 const noopSubscribe = () => () => {};
 
@@ -91,19 +84,24 @@ function vibrateShort(): void {
 interface UpdatesState {
   snapshot: BriefingSnapshot | null;
   pending: BriefingChange[];
+  /** Cambios del último aviso (los que se leen en voz alta). */
+  latest: BriefingChange[];
   seq: number;
+}
+
+export interface BriefingUpdates {
+  pending: BriefingChange[];
+  latest: BriefingChange[];
+  seq: number;
+  dismiss: () => void;
 }
 
 /**
  * Compara cada snapshot nuevo con el anterior: los cambios importantes se acumulan en el aviso
  * "ACTUALIZACIÓN" hasta que se toca, y cada aviso nuevo vibra brevemente.
  */
-export function useBriefingUpdates(briefing: BriefingSnapshot | null): {
-  pending: BriefingChange[];
-  seq: number;
-  dismiss: () => void;
-} {
-  const [state, setState] = useState<UpdatesState>({ snapshot: null, pending: [], seq: 0 });
+export function useBriefingUpdates(briefing: BriefingSnapshot | null): BriefingUpdates {
+  const [state, setState] = useState<UpdatesState>({ snapshot: null, pending: [], latest: [], seq: 0 });
 
   // Patrón "derivar del render anterior": el diff se calcula al renderizar un snapshot nuevo.
   if (briefing && briefing !== state.snapshot) {
@@ -111,6 +109,7 @@ export function useBriefingUpdates(briefing: BriefingSnapshot | null): {
     setState({
       snapshot: briefing,
       pending: diff.important ? mergeChanges(state.pending, diff.changes) : state.pending,
+      latest: diff.important ? diff.changes : state.latest,
       seq: diff.important ? state.seq + 1 : state.seq,
     });
   }
@@ -120,35 +119,35 @@ export function useBriefingUpdates(briefing: BriefingSnapshot | null): {
   }, [state.seq]);
 
   const dismiss = useCallback(() => setState((s) => ({ ...s, pending: [] })), []);
-  return { pending: state.pending, seq: state.seq, dismiss };
+  return { pending: state.pending, latest: state.latest, seq: state.seq, dismiss };
 }
 
 /**
- * Lectura automática: con `enabled`, cuando cambia el texto hablado o el estado de atrapados,
- * corta lo que se esté leyendo y lee "Actualización. …". La primera respuesta solo se registra.
+ * Lectura automática: con `enabled`, cada aviso "ACTUALIZACIÓN" nuevo corta lo que se esté
+ * leyendo y lee esos mismos cambios ("Actualización. Personas atrapadas: ahora…"). Así la voz
+ * y el aviso dicen lo mismo, y una reescritura del texto de la IA sin novedad no se relee.
  */
 export function useAutoRead(
+  updates: Pick<BriefingUpdates, "seq" | "latest">,
   briefing: BriefingSnapshot | null,
   enabled: boolean,
   onSpeaking: (speaking: boolean) => void,
 ): void {
-  const lastSig = useRef<string | null | undefined>(undefined);
-  const sig = briefing ? speechSignature(briefing) : undefined;
+  const lastSeq = useRef(updates.seq);
 
   useEffect(() => {
-    if (sig === undefined) return;
-    const prev = lastSig.current;
-    lastSig.current = sig;
-    if (!enabled || prev === undefined) return;
-    const text = autoReadText(prev, briefing);
+    if (updates.seq === lastSeq.current) return;
+    lastSeq.current = updates.seq;
+    if (!enabled) return;
+    const text = autoReadText(updates.latest, briefing);
     if (!text) return;
     stopSpeaking();
     const started = speak(text, { onEnd: () => onSpeaking(false) });
     onSpeaking(started);
-    // Solo la firma dispara la relectura; el snapshot completo cambia con cada rev.
-    // La firma se registra aunque esté apagada: al activar solo se releen los cambios posteriores.
+    // Solo un aviso nuevo dispara la lectura. El número se registra aunque esté apagada:
+    // al activarla solo se leen los avisos posteriores.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sig]);
+  }, [updates.seq]);
 }
 
 export interface BriefingVoice {
@@ -164,13 +163,16 @@ export interface BriefingVoice {
   stop: () => void;
 }
 
-/** Estado de la voz del briefing: lectura a pedido y relectura automática cuando cambia. */
-export function useBriefingVoice(briefing: BriefingSnapshot | null): BriefingVoice {
+/** Estado de la voz del briefing: lectura a pedido y lectura automática de cada aviso. */
+export function useBriefingVoice(
+  briefing: BriefingSnapshot | null,
+  updates: Pick<BriefingUpdates, "seq" | "latest">,
+): BriefingVoice {
   const supported = useSpeechSupported();
   const [speaking, setSpeaking] = useState(false);
   const [autoRead, setAutoReadState] = useState(false);
 
-  useAutoRead(briefing, supported && autoRead, setSpeaking);
+  useAutoRead(updates, briefing, supported && autoRead, setSpeaking);
 
   useEffect(() => () => stopSpeaking(), []);
 
@@ -189,7 +191,7 @@ export function useBriefingVoice(briefing: BriefingSnapshot | null): BriefingVoi
   const setAutoRead = useCallback((on: boolean) => {
     setAutoReadState(on);
     if (on) {
-      setSpeaking(speak("Lectura automática activada.", { onEnd: () => setSpeaking(false) }));
+      setSpeaking(speak("Lectura automática activada. Leeré cada actualización apenas llegue.", { onEnd: () => setSpeaking(false) }));
     } else {
       stopSpeaking();
       setSpeaking(false);

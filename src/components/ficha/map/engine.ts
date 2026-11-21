@@ -103,6 +103,8 @@ export async function createMap(container: HTMLElement, cam: CameraInit): Promis
     locale: MAP_LOCALE_ES,
     attributionControl: { compact: true },
     fadeDuration: 150,
+    // Bordes suaves en las maquetas 3D (casas y vehículos), como en Mapbox.
+    canvasContextAttributes: { antialias: true },
   });
   return { map, engine: "maplibre", createMarker: (o) => new MlMarker(o) };
 }

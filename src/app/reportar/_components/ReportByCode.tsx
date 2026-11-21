@@ -82,11 +82,9 @@ function Ready({ incident }: { incident: PublicIncident }) {
         </p>
       </header>
       <VideoRequestBanner code={incident.code} />
-      <p className="text-lg leading-snug text-text">
-        Envía tu video o tus fotos de esta emergencia. Le llegan directo al personal de Bomberos que la atiende.
-      </p>
-      <RecordingTips />
+      {/* El botón de grabar va arriba: en un iPhone tiene que verse sin desplazarse ("dos toques y está grabando"). */}
       <MediaUploader variant="vecino" incidentCode={incident.code} />
+      <RecordingTips />
       <PrivacyNote />
       <Button href="/reportar" variant="ghost" size="xl" icon={ArrowLeft} fullWidth>
         No es esta emergencia

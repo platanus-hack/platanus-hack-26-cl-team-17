@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Job de GPU de Vigía para la reconstrucción 3D Gaussian Splatting (Cloud Run jobs, us-central1).
+# Job de GPU de Vigía para la reconstrucción 3D Gaussian Splatting (Cloud Run jobs, europe-west1 por defecto).
 #
 # CREA RECURSOS QUE COBRAN DINERO (la GPU cobra solo mientras corre una ejecución).
 # Lee deploy/SPLAT.md. Pide confirmación salvo que pases CONFIRM=1.

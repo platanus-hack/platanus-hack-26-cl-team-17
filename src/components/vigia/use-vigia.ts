@@ -17,6 +17,8 @@ export interface UseVigia {
   error: unknown;
   send: (texto: string, respondeA?: string | null) => Promise<void>;
   sending: boolean;
+  /** Plan B: "Vigía sin IA" (plantillas, y fusión y radio por reglas) en esta emergencia. */
+  setSinIA: (on: boolean) => Promise<void>;
 }
 
 export function useVigia(incidentId: string): UseVigia {
@@ -57,5 +59,20 @@ export function useVigia(incidentId: string): UseVigia {
     [incidentId, mutate],
   );
 
-  return { view: data ?? null, error, send, sending };
+  const setSinIA = useCallback(
+    async (on: boolean) => {
+      const res = await fetch(`/api/incidents/${encodeURIComponent(incidentId)}/vigia`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sin_ia: on }),
+      });
+      if (!res.ok) throw await errorFromResponse(res);
+      const view = (await res.json()) as VigiaView;
+      last.current = view;
+      void mutate(view, { revalidate: false });
+    },
+    [incidentId, mutate],
+  );
+
+  return { view: data ?? null, error, send, sending, setSinIA };
 }

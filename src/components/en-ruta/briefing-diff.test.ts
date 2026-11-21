@@ -10,7 +10,6 @@ import {
   mergeChanges,
   normalizeText,
   sortHazards,
-  speechSignature,
   trappedCountText,
   updatedAgoText,
   wazeUrl,
@@ -224,23 +223,26 @@ test("trappedCountText nunca muestra 0 y tolera rangos raros", () => {
   assert.equal(trappedCountText({ ...t, count_min: Number.NaN, count_max: -1, status: "probable" }), "Cantidad sin determinar");
 });
 
-test("autoReadText: relee con 'Actualización.' solo si cambió texto o atrapados", () => {
+test("autoReadText: lee los cambios importantes del aviso, no el briefing entero", () => {
   const base = snap();
-  const sig = speechSignature(base);
-  assert.equal(autoReadText(undefined, base), null);
-  assert.equal(autoReadText(sig, base), null);
-  assert.equal(autoReadText(sig, snap({ incident: { rev: 9 } })), null);
-
-  const spokenChanged = snap({ situation: situation({ briefing: { spoken: "Nuevo texto.", bullets: [] } }) });
-  assert.equal(autoReadText(sig, spokenChanged), "Actualización. Nuevo texto.");
+  // Solo cambió la redacción del texto hablado (la IA lo reescribe en cada fusión): nada que leer.
+  const reworded = snap({ situation: situation({ briefing: { spoken: "Otra redacción.", bullets: [] } }) });
+  assert.equal(autoReadText(diffBriefing(base, reworded).changes, reworded), null);
+  assert.equal(autoReadText([], base), null);
 
   const trappedChanged = snap({ situation: situation({ trapped: { ...situation().trapped, status: "confirmed" } }) });
-  assert.equal(autoReadText(sig, trappedChanged), "Actualización. Incendio en casa de dos pisos.");
+  const text = autoReadText(diffBriefing(base, trappedChanged).changes, trappedChanged);
+  assert.match(text ?? "", /^Actualización\. Personas atrapadas: ahora /);
+  assert.doesNotMatch(text ?? "", /Incendio en casa de dos pisos/);
 
-  // Primer análisis tras no tener ninguno: se lee.
-  assert.equal(autoReadText(null, base), "Actualización. Incendio en casa de dos pisos.");
-  // Sin análisis: nada que leer.
-  assert.equal(autoReadText(sig, snap({ situation: null })), null);
+  // Primer análisis tras no tener ninguno: el aviso y el briefing completo.
+  const first = autoReadText(diffBriefing(snap({ situation: null }), base).changes, base) ?? "";
+  assert.match(first, /^Actualización\. Llegó el primer análisis\./);
+  assert.match(first, /Incendio en casa de dos pisos\.$/);
+
+  // El análisis desaparece: se avisa, sin briefing que leer.
+  const gone = snap({ situation: null });
+  assert.equal(autoReadText(diffBriefing(base, gone).changes, gone), "Actualización. El análisis dejó de estar disponible. Pide la información por radio.");
 });
 
 test("isSimulated por motor o por modo sin análisis", () => {

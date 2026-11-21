@@ -770,6 +770,8 @@ export interface SubmitReportDeps {
   completeTimeoutMs?: number;
   /** Tope total de un aviso de mejor esfuerzo (por defecto 15 s). */
   bestEffortTimeoutMs?: number;
+  /** Tope del registro del reporte (por defecto 30 s). */
+  registerTimeoutMs?: number;
 }
 
 const FRAME_CONCURRENCY = 3;
@@ -780,6 +782,7 @@ const VIDEO_IDLE_TIMEOUT_MS = 90_000;
 const COMPLETE_RETRIES = 3;
 const COMPLETE_TIMEOUT_MS = 20_000;
 const BEST_EFFORT_TIMEOUT_MS = 15_000;
+const REGISTER_TIMEOUT_MS = 30_000;
 
 function stageFailMessage(stage: UploadStage, kind: "video" | "photo"): string {
   switch (stage) {
@@ -866,6 +869,33 @@ async function completeWithRetry(
     const retryable = err instanceof ApiClientError ? isRetryableStatus(err.status) : true;
     if (!retryable || attempt >= COMPLETE_RETRIES) throw err;
     await sleep(backoffDelay(attempt, deps.retryBaseMs ?? 500), signal);
+  }
+}
+
+/**
+ * Registro con tope: con la señal móvil caída el POST puede quedar colgado para siempre y la
+ * persona vería el spinner sin fin. No se reintenta solo (no es idempotente: duplicaría el
+ * medio); se corta con error de red y la persona ve "Reintentar".
+ */
+async function createWithTimeout(
+  deps: SubmitReportDeps,
+  body: CreateReportBody,
+  signal: AbortSignal | undefined,
+): Promise<CreateReportResponse> {
+  const { controller, unlink } = linkedController(signal);
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, deps.registerTimeoutMs ?? REGISTER_TIMEOUT_MS);
+  try {
+    return await untilAborted(deps.createReport(body, controller.signal), controller.signal);
+  } catch (err) {
+    if (timedOut && !signal?.aborted) throw uploadErrorFor(0);
+    throw err;
+  } finally {
+    clearTimeout(timer);
+    unlink();
   }
 }
 
@@ -1015,7 +1045,7 @@ export async function runSubmitReport(
         typeHint: opts.typeHint,
         asResponder: opts.asResponder,
       });
-      const res = await deps.createReport(body, signal);
+      const res = await createWithTimeout(deps, body, signal);
       mediaId = res.media_id;
       if (!Array.isArray(res.frame_uploads) || res.frame_uploads.length !== frames.length) {
         throw new SubmitReportError("Respuesta inesperada del servidor. Intenta de nuevo.", {

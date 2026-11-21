@@ -86,6 +86,14 @@ export function isVigiaSpeaker(speaker: string): boolean {
   return /^\s*vig[ií]a\b/i.test(speaker);
 }
 
+/**
+ * Lo que Vigía escucha de la radio: ni lo que dijo ella misma ni las transmisiones sin texto
+ * (toques del PTT, ruido), que no aportan y hacían que hablara de ellas en vez de responder.
+ */
+export function isHeardComm(c: Pick<CommEntry, "source" | "speaker" | "text">): boolean {
+  return !isVigiaVoiceComm(c) && !isVigiaSpeaker(c.speaker) && hasContent(c.text);
+}
+
 type GlobalWithDetCache = typeof globalThis & { __vigiaMediaDetections?: Map<string, WorldMedia["detections"]> };
 
 /** Las detecciones de un video no cambian después del análisis: se leen una vez por proceso. */
@@ -142,9 +150,7 @@ export async function loadWorld(incidentId: string): Promise<World | null> {
         detections: detById.get(m.id) ?? null,
       })),
     radio: comms
-      // Ni lo que dijo Vigía ni las transmisiones sin texto (toques del PTT, ruido): no aportan y hacían
-      // que Vigía hablara de ellas en vez de responder.
-      .filter((c) => !isVigiaVoiceComm(c) && !isVigiaSpeaker(c.speaker) && hasContent(c.text))
+      .filter(isHeardComm)
       .sort((a, b) => a.seq - b.seq)
       .map((c) => ({
         seq: c.seq,

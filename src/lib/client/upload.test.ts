@@ -753,6 +753,27 @@ test("submitReport: un /complete colgado se corta por tiempo y se reintenta", as
   assert.ok(Date.now() - t0 < 2000);
 });
 
+test("submitReport: un registro colgado (mala señal) se corta por tiempo con error reintentable", async () => {
+  let creates = 0;
+  const { deps, calls } = makeDeps({
+    registerTimeoutMs: 20,
+    createReport: async () => {
+      creates++;
+      // ignora la señal a propósito: el tope debe funcionar igual
+      return new Promise<CreateReportResponse>(() => {});
+    },
+  });
+  const t0 = Date.now();
+  await assert.rejects(
+    runSubmitReport({ kind: "video", file: makeFile("a.mp4", "video/mp4"), note: "" }, deps),
+    (err: unknown) =>
+      err instanceof SubmitReportError && err.stage === "registering" && err.code === "network" && err.retryable,
+  );
+  assert.ok(Date.now() - t0 < 1000, `tardó ${Date.now() - t0} ms`);
+  assert.equal(creates, 1); // no se reintenta solo: duplicaría el medio
+  assert.equal(calls.puts.length, 0);
+});
+
 test("submitReport: el aviso de mejor esfuerzo tiene tope total y no traba el resultado", async () => {
   const { deps } = makeDeps({
     completeTimeoutMs: 1000,

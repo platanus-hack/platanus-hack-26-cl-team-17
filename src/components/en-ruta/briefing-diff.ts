@@ -269,30 +269,26 @@ export function mergeChanges(pending: BriefingChange[], incoming: BriefingChange
 
 /* ─────────────────────────── Voz ─────────────────────────── */
 
-/** Firma de lo que se lee en voz alta: cambia con el texto hablado o el estado de atrapados. */
-export function speechSignature(snapshot: BriefingSnapshot | null): string | null {
-  const s = snapshot?.situation;
-  if (!s) return null;
-  return `${s.trapped.status}\u0000${s.briefing.spoken.trim()}`;
-}
-
 /** Texto del briefing para leer en voz alta; vacío si aún no hay análisis. */
 export function spokenText(snapshot: BriefingSnapshot | null): string {
   return snapshot?.situation?.briefing.spoken.trim() ?? "";
 }
 
 /**
- * Lo que debe releerse automáticamente al llegar `next`, o null si no corresponde:
- * solo cuando ya había una firma previa y cambió el texto hablado o el estado de atrapados.
- * La primera vez que llega un análisis (firma previa null) también se lee: es la noticia más
- * importante para quien va en camino.
+ * Lo que se lee en voz alta cuando aparece un aviso "ACTUALIZACIÓN": los mismos cambios
+ * importantes del aviso, no el briefing entero. La IA reescribe el texto hablado en cada
+ * fusión (cada video o radio nueva): releerlo completo tapaba qué cambió y repetía ~45 s de
+ * audio sin novedad. El primer análisis sí se lee completo: es la noticia más importante.
  */
-export function autoReadText(prevSignature: string | null | undefined, next: BriefingSnapshot | null): string | null {
-  if (prevSignature === undefined) return null;
-  const sig = speechSignature(next);
-  if (sig === null || sig === prevSignature) return null;
-  const text = spokenText(next);
-  return text ? `Actualización. ${text}` : null;
+export function autoReadText(changes: readonly BriefingChange[], next: BriefingSnapshot | null): string | null {
+  const important = changes.filter((c) => c.important);
+  if (important.length === 0) return null;
+  const parts = important.map((c) => c.text.trim()).filter(Boolean);
+  if (important.some((c) => c.kind === "situation")) {
+    const full = spokenText(next);
+    if (full) parts.push(full);
+  }
+  return parts.length > 0 ? `Actualización. ${parts.join(" ")}` : null;
 }
 
 /* ─────────────────────────── Varios ─────────────────────────── */

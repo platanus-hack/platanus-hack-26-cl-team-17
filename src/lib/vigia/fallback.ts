@@ -5,6 +5,7 @@
  */
 import { formatClock } from "@/lib/format";
 import { trappedStatusLabel } from "@/lib/labels";
+import { contradictionText } from "./contradictions";
 import { sideInText, sideName, sidesText } from "./coverage";
 import type { VigiaEvent } from "./observe";
 import { addAction, addLog, addUtterance, buildParte, pendientesText, runTool, statusLine, type TurnContext } from "./tools";
@@ -161,10 +162,19 @@ export function fallbackTurn(ctx: TurnContext, events: VigiaEvent[]): void {
           });
         }
         for (const c of e.contradictions.slice(0, 1)) {
-          addUtterance(ctx, { text: `OBAC, Vigía: no calza: ${clip(c.description, 140)}`, kind: "contradiccion", priority: "riesgo", evidence: c.sources });
+          addUtterance(ctx, { text: contradictionText(c), kind: "contradiccion", priority: "riesgo", evidence: c.sources });
         }
         break;
       }
+      case "contradiccion":
+        // Hasta dos por vuelta (las de personas primero); el resto queda en la bitácora.
+        e.contradictions.forEach((c, i) => {
+          if (i < 2) {
+            addUtterance(ctx, { text: contradictionText(c), kind: "contradiccion", priority: c.people ? "persona" : "riesgo", evidence: c.sources });
+          }
+          addLog(ctx, `No calza: ${clip(c.description, 160)}`, "La radio dice una cosa y la imagen otra", c.sources);
+        });
+        break;
       case "dron":
         for (const i of e.insights.slice(0, 1)) {
           addUtterance(ctx, {

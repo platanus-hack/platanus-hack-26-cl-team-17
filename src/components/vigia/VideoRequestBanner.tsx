@@ -8,6 +8,8 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { Video } from "lucide-react";
+import { RECORD_REQUEST_EVENT } from "@/components/report/report-core";
+import { Button } from "@/components/ui";
 import type { PublicVideoRequest } from "@/lib/vigia/types";
 
 const POLL_MS = 4000;
@@ -43,16 +45,28 @@ export function VideoRequestBanner({ code }: { code: string }) {
     <section
       role="alert"
       aria-label="Pedido de Bomberos"
-      className="flex animate-enter items-start gap-3 rounded-lg border-2 border-f-orange bg-surface p-4 shadow-[0_8px_24px_rgb(247_107_21/0.18)]"
+      className="flex animate-enter flex-col gap-3 rounded-lg border-2 border-f-orange bg-surface p-4 shadow-[0_8px_24px_rgb(247_107_21/0.18)]"
     >
-      <span aria-hidden className="flex size-11 shrink-0 items-center justify-center rounded-full bg-f-orange text-white">
-        <Video className="size-6" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-sm font-bold text-f-orange-ink">Pedido de Bomberos</p>
-        <p className="mt-0.5 text-xl leading-snug font-bold text-text">{request.text}</p>
-        <p className="mt-1 text-sm text-muted">Graba desde donde estás seguro. No te acerques ni entres a ningún lugar.</p>
+      <div className="flex items-start gap-3">
+        <span aria-hidden className="flex size-11 shrink-0 items-center justify-center rounded-full bg-f-orange text-white">
+          <Video className="size-6" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-f-orange-ink">Pedido de Bomberos</p>
+          <p className="mt-0.5 text-xl leading-snug font-bold text-text">{request.text}</p>
+          <p className="mt-1 text-sm text-muted">Graba desde donde estás seguro. No te acerques ni entres a ningún lugar.</p>
+        </div>
       </div>
+      {/* Un toque y está grabando: abre la cámara del cargador de abajo (debe despacharse dentro del toque). */}
+      <Button
+        variant="primary"
+        size="xl"
+        icon={Video}
+        fullWidth
+        onClick={() => window.dispatchEvent(new Event(RECORD_REQUEST_EVENT))}
+      >
+        Grabar ahora
+      </Button>
     </section>
   );
 }

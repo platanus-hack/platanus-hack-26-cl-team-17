@@ -56,8 +56,8 @@ export type UserContentBlock =
 /** Contenido del mensaje de usuario, en orden. */
 export type UserContent = UserContentBlock[];
 
-/** Tareas de IA; sirven para registrar uso y para elegir prompt. */
-export type AITask = "media" | "comms" | "situation" | "scene" | "live";
+/** Tareas de IA; sirven para registrar uso (también en la vista técnica) y para elegir prompt. "ask" = pregunta del OBAC. */
+export type AITask = "media" | "comms" | "situation" | "scene" | "live" | "ask";
 
 /** Datos del incidente que necesitan los motores. */
 export type IncidentContext = Pick<

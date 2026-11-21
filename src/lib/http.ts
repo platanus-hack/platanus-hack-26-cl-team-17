@@ -14,6 +14,7 @@
 import { NextResponse } from "next/server";
 import type { z } from "zod";
 import type { ApiError } from "./contract";
+import { noteRouteFailure } from "./server/diagnostics";
 import { StoreNotFoundError } from "./store/types";
 
 export class HttpError extends Error {
@@ -67,7 +68,11 @@ export interface RouteCtx<P extends Record<string, string | string[]> = Record<s
   params: Promise<P>;
 }
 
-/** Envuelve un handler para convertir excepciones en respuestas `ApiError`. */
+/**
+ * Envuelve un handler para convertir excepciones en respuestas `ApiError`. Los errores que
+ * importan en la vista técnica (5xx, subidas rechazadas, puente o dron con token inválido)
+ * quedan en el registro de diagnóstico.
+ */
 export function route<P extends Record<string, string | string[]> = Record<string, string>>(
   handler: (req: Request, ctx: RouteCtx<P>) => Promise<Response>,
 ) {
@@ -75,7 +80,9 @@ export function route<P extends Record<string, string | string[]> = Record<strin
     try {
       return await handler(req, ctx);
     } catch (err) {
-      return fail(err);
+      const res = fail(err);
+      noteRouteFailure(req, res.status, err);
+      return res;
     }
   };
 }

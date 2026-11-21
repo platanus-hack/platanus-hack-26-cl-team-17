@@ -24,6 +24,7 @@ import { useToast } from "@/components/ui/Toast";
 import { VigiaDock, useVigia } from "@/components/vigia";
 import { agentMessages, buildFicha, type ChatMessage, type LngLat } from "./model";
 import { placeUnitsOnRoute, useStreetRoute } from "./street-route";
+import { FichaHealth } from "./health";
 import { CriticalPanel, GLASS, MediaGridPanel, TopBar, VigiaPanel, useNow } from "./parts";
 import type { MapView } from "./map/FichaMap";
 
@@ -72,7 +73,7 @@ const GAP = 16;
 const TOP = 16 + 56 + 12;
 
 export function FichaView({ id, demoState = null }: { id: string; demoState?: FichaDemoState }) {
-  const { snapshot, error, refresh } = useIncidentSnapshot(id);
+  const { snapshot, error, refresh, stale, lastUpdatedAt } = useIncidentSnapshot(id);
   const agent = useVigia(id);
   const now = useNow(2000);
   const toast = useToast();
@@ -241,6 +242,7 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
         technicalHref={`/mando/${encodeURIComponent(id)}/tecnica`}
         busy={busy}
         compact={compact}
+        alerts={<FichaHealth stale={stale} lastUpdatedAt={lastUpdatedAt} vigia={agent.view} />}
       />
 
       {/* Pestañas del mapa, discretas, arriba a la izquierda del hueco */}

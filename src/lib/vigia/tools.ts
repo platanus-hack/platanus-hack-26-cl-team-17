@@ -438,7 +438,7 @@ export function runTool(ctx: TurnContext, name: string, input: unknown): ToolOut
       const from = p.data.desde?.trim() || "desde la vereda";
       const req = sanitizeVideoRequest(`Bomberos necesita un video ${zone}, ${from}.`);
       if (req.blocked) {
-        return { isError: true, content: "Rechazado: al público solo se le pide un ángulo, sin acercarse ni entrar. Reformula la zona." };
+        return { isError: true, content: "Rechazado: al público solo se le pide un ángulo, sin acercarse, entrar ni subir, y sin órdenes ni «está vacío». Reformula la zona y desde dónde grabar." };
       }
       const active = ctx.state.video_requests.find(
         (r) => Date.parse(r.expires_at) > ctx.nowMs && r.zone.toLowerCase() === zone.toLowerCase(),

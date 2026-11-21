@@ -5,14 +5,23 @@
  * Nunca expone `share_key` (salvo dentro de las URLs de archivos, que ya la
  * llevan por diseño), notas de vecinos ni datos del personal.
  */
-import type { BriefingSnapshot, RuntimeMode, UnchangedResponse } from "@/lib/contract";
+import type {
+  BriefingSnapshot,
+  BriefingVigiaMessage,
+  BriefingVigiaResponse,
+  RuntimeMode,
+  UnchangedResponse,
+} from "@/lib/contract";
 import type { EvidenceRef, Incident, Media, MediaFrame, SituationReport } from "@/lib/domain";
 import { errors } from "@/lib/http";
 import { safeEqual } from "@/lib/ids";
 import type { Store } from "@/lib/store/types";
+import type { VigiaUtterance } from "@/lib/vigia/types";
 import { fileUrl } from "./snapshot";
 
 export const MAX_BRIEFING_KEY_FRAMES = 6;
+export const MAX_BRIEFING_VIGIA = 3;
+const MAX_VIGIA_CHARS = 400;
 const MAX_CAPTION_CHARS = 180;
 
 /** Mismo mensaje para "no existe" y "clave incorrecta": no revela qué incidentes existen. */
@@ -142,13 +151,12 @@ export interface BriefingRequest {
   now?: Date;
 }
 
-/** 404 si el incidente no existe, la clave no calza o falta la clave sin sesión de personal. */
-export async function loadBriefing(
+/** El incidente si la clave calza (o, sin clave, si hay sesión de personal); si no, 404. */
+async function authorizedIncident(
   store: Store,
   id: string,
-  req: BriefingRequest,
-): Promise<BriefingSnapshot | UnchangedResponse> {
-  const now = req.now ?? new Date();
+  req: Pick<BriefingRequest, "key" | "hasStaffSession">,
+): Promise<Incident> {
   const incident = await store.getIncident(id);
   if (!incident) throw errors.notFound(BRIEFING_NOT_FOUND);
   if (req.key !== null) {
@@ -156,9 +164,60 @@ export async function loadBriefing(
   } else if (!(await req.hasStaffSession())) {
     throw errors.notFound(BRIEFING_NOT_FOUND);
   }
+  return incident;
+}
+
+/** 404 si el incidente no existe, la clave no calza o falta la clave sin sesión de personal. */
+export async function loadBriefing(
+  store: Store,
+  id: string,
+  req: BriefingRequest,
+): Promise<BriefingSnapshot | UnchangedResponse> {
+  const now = req.now ?? new Date();
+  const incident = await authorizedIncident(store, id, req);
   if (req.rev !== null && req.rev === incident.rev) {
     return { unchanged: true, rev: incident.rev, server_time: now.toISOString() };
   }
   const media = await store.listMedia(id);
   return buildBriefing(incident, media, req.mode, now);
+}
+
+/* ───────────── Lo último de Vigía ───────────── */
+
+/** "OBAC, Vigía: sigue pendiente…" → "Sigue pendiente…": en la tablet lo lee la unidad, no el OBAC. */
+function withoutVocative(text: string): string {
+  const t = text.replace(/^\s*OBAC\s*,\s*Vig[ií]a\s*[:,]\s*/i, "").trim();
+  return t ? t[0].toUpperCase() + t.slice(1) : t;
+}
+
+/**
+ * Mensajes de Vigía para la tablet: solo personas o riesgo (no recursos ni propuestas de
+ * mensaje para el OBAC), el más nuevo de cada tipo (los recordatorios de pendientes se repiten
+ * cada pocos minutos) y como máximo `max`, del más nuevo al más antiguo.
+ */
+export function selectBriefingVigia(utterances: readonly VigiaUtterance[], max = MAX_BRIEFING_VIGIA): BriefingVigiaMessage[] {
+  const seenKinds = new Set<string>();
+  const out: BriefingVigiaMessage[] = [];
+  for (const u of [...utterances].sort((a, b) => b.seq - a.seq)) {
+    if (out.length >= max) break;
+    if (u.priority !== "persona" && u.priority !== "riesgo") continue;
+    if (u.kind === "propuesta" || seenKinds.has(u.kind)) continue;
+    const text = clip(withoutVocative(u.text), MAX_VIGIA_CHARS);
+    if (!text) continue;
+    seenKinds.add(u.kind);
+    out.push({ id: u.id, at: u.at, text, priority: u.priority });
+  }
+  return out;
+}
+
+/** Lo último de Vigía con la misma autorización que el briefing (la clave del enlace). */
+export async function loadBriefingVigia(
+  store: Store,
+  id: string,
+  req: Pick<BriefingRequest, "key" | "hasStaffSession" | "now">,
+  readUtterances: (incidentId: string) => Promise<readonly VigiaUtterance[]>,
+): Promise<BriefingVigiaResponse> {
+  const now = req.now ?? new Date();
+  const incident = await authorizedIncident(store, id, req);
+  return { messages: selectBriefingVigia(await readUtterances(incident.id)), server_time: now.toISOString() };
 }

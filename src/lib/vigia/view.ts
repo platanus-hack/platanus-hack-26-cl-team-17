@@ -1,6 +1,7 @@
 /**
  * Lo que la mesa de mando, el puente y la página pública ven de la memoria de Vigía. Puro.
  */
+import { scrubText } from "@/lib/server/diagnostics";
 import type { PublicVideoRequest, VigiaSalida, VigiaState, VigiaView } from "./types";
 
 export function toVigiaView(state: VigiaState, engine: VigiaView["engine"], nowMs: number): VigiaView {
@@ -15,6 +16,9 @@ export function toVigiaView(state: VigiaState, engine: VigiaView["engine"], nowM
     video_requests: state.video_requests.filter((r) => Date.parse(r.expires_at) > nowMs),
     log: state.log.slice(-40).reverse(),
     parte: state.parte,
+    ai_off: state.ai_off,
+    // Se muestra en el navegador: sin URLs con parámetros ni credenciales.
+    last_error: state.last_error ? scrubText(state.last_error, 200) : null,
     server_time: new Date(nowMs).toISOString(),
   };
 }

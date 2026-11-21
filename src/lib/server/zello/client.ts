@@ -85,6 +85,12 @@ export interface ZelloClientOptions {
   commandTimeoutMs?: number;
   /** Una transmisión sin paquetes nuevos por este tiempo se da por terminada. */
   streamIdleMs?: number;
+  /**
+   * Zello admite una conexión por cuenta: tras tantas expulsiones dentro de `kickWindowMs`
+   * el cliente deja de reconectar (dos puentes con la misma cuenta se pelearían para siempre).
+   */
+  maxKicks?: number;
+  kickWindowMs?: number;
 }
 
 /** ~2 minutos de audio a 60 ms por paquete: tope de memoria por transmisión. */
@@ -139,6 +145,8 @@ export class ZelloClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private current: ZelloChannelState = { online: false, usersOnline: null, error: null };
+  /** Horas de las últimas expulsiones por otra sesión de la cuenta. */
+  private kicks: number[] = [];
 
   constructor(opts: ZelloClientOptions) {
     this.o = {
@@ -148,6 +156,8 @@ export class ZelloClient {
       maxBackoffMs: 30_000,
       commandTimeoutMs: 10_000,
       streamIdleMs: 10_000,
+      maxKicks: 3,
+      kickWindowMs: 5 * 60_000,
       ...opts,
     };
     this.useFeatures = this.o.transcriptions;
@@ -356,7 +366,10 @@ export class ZelloClient {
       case "on_error": {
         const code = String(msg.error ?? "");
         this.log(`error de Zello: ${describeZelloError(code)}`);
-        if (code === "kicked") this.lastErrorCode = code;
+        if (code === "kicked") {
+          this.lastErrorCode = code;
+          this.kicks.push(Date.now());
+        }
         if (code === "server closed connection" || code === "kicked") this.ws?.close(1000, "servidor");
         break;
       }
@@ -390,6 +403,19 @@ export class ZelloClient {
 
   private scheduleReconnect(): void {
     if (this.stopped || this.reconnectTimer) return;
+    if (this.lastErrorCode === "kicked") {
+      const now = Date.now();
+      this.kicks = this.kicks.filter((t) => now - t <= this.o.kickWindowMs);
+      if (this.kicks.length >= this.o.maxKicks) {
+        // Dos puentes (o el puente y la app) se expulsarían cada 30 s para siempre: este se retira y el otro queda.
+        const minutes = Math.max(1, Math.round(this.o.kickWindowMs / 60_000));
+        const error = `otra sesión con la misma cuenta de Zello tomó la conexión ${this.kicks.length} veces en ${minutes} min (¿otro puente, el de Cloud Run, o la cuenta abierta en un teléfono?). Este puente dejó de reconectar para no pelearla: deja una sola sesión y reinícialo.`;
+        this.log(error);
+        this.stopped = true;
+        this.setState({ online: false, usersOnline: null, error });
+        return;
+      }
+    }
     const exp = this.o.baseBackoffMs * 2 ** Math.min(this.attempt, 10);
     // Con credenciales malas, o si otra sesión de la cuenta nos expulsó, no sirve insistir rápido.
     const delay = this.lastErrorCode && SLOW_RETRY.has(this.lastErrorCode) ? this.o.maxBackoffMs : Math.min(this.o.maxBackoffMs, exp);

@@ -7,6 +7,7 @@ import type { LiveInsightView } from "@/lib/contract";
 import type { SituationReport } from "@/lib/domain";
 import { newId } from "@/lib/ids";
 import { CRITICAL_LABELS } from "@/lib/vision/types";
+import { crossCheck, sourcesKey, type CrossContradiction } from "./contradictions";
 import { confirmsRequest, radioRequests } from "./radio";
 import { detectSilenceCommand, fold } from "./rules";
 import type { VigiaCursors, VigiaPending, VigiaQuestion, VigiaState } from "./types";
@@ -27,6 +28,8 @@ export type VigiaEvent =
       insights: Insight[];
       contradictions: Contradiction[];
     }
+  /** Radio ↔ imagen, detectada por reglas (no espera la fusión ni depende de Claude). */
+  | { type: "contradiccion"; contradictions: CrossContradiction[] }
   | { type: "dron"; label: string; insights: LiveInsightView[] }
   | { type: "dron_yolo"; label: string; seq: number; at: string; found: { label: string; conf: number; count: number; pose: string | null }[] }
   | { type: "pendiente_vencido"; pending: VigiaPending[] }
@@ -150,9 +153,13 @@ export function observe(world: World, state: VigiaState, nowMs: number, opts: Ob
     for (const i of sit.insights) seen.add(key(i.title));
     cursors.seen_insights = [...seen].slice(-200);
 
+    // Por texto y por fuentes: la misma contradicción ya avisada por el cruce de reglas no se repite.
     const seenC = new Set(cursors.seen_contradictions);
-    const contradictions = sit.contradictions.filter((c) => !seenC.has(key(c.description)));
-    for (const c of sit.contradictions) seenC.add(key(c.description));
+    const contradictions = sit.contradictions.filter((c) => !seenC.has(key(c.description)) && !seenC.has(sourcesKey(c.sources)));
+    for (const c of sit.contradictions) {
+      seenC.add(key(c.description));
+      if (c.sources.length > 0) seenC.add(sourcesKey(c.sources));
+    }
     cursors.seen_contradictions = [...seenC].slice(-100);
 
     const status = sit.trapped.status;
@@ -164,6 +171,15 @@ export function observe(world: World, state: VigiaState, nowMs: number, opts: Ob
     if (trapped || insights.length > 0 || contradictions.length > 0) {
       events.push({ type: "situacion", trapped, insights, contradictions });
     }
+  }
+
+  /* Radio ↔ imagen: "tercer piso despejado" y un video con una persona en esa ventana, "sin gas" y un cilindro… */
+  const seenX = new Set(cursors.seen_contradictions);
+  const crossed = crossCheck(world).filter((c) => !seenX.has(sourcesKey(c.sources)));
+  if (crossed.length > 0) {
+    for (const c of crossed) seenX.add(sourcesKey(c.sources));
+    cursors.seen_contradictions = [...seenX].slice(-100);
+    events.push({ type: "contradiccion", contradictions: crossed });
   }
 
   /* Drones en vivo: observaciones nuevas que importan */

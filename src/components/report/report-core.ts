@@ -6,6 +6,13 @@ import { LIMITS } from "@/lib/domain";
 import { formatBytes, formatDistance } from "@/lib/format";
 import type { UploadStage, VideoOutcome } from "@/lib/client/upload";
 
+/**
+ * Evento de `window` con que otro componente de la página (el pedido de video de Bomberos)
+ * abre la cámara del cargador de vecinos. Se despacha sincrónico dentro del toque: así iOS
+ * acepta abrir la cámara.
+ */
+export const RECORD_REQUEST_EVENT = "vigia:grabar-video";
+
 /* ───────────── Nota: chips de un toque + texto libre ───────────── */
 
 export interface NoteChip {

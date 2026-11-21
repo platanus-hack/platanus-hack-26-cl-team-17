@@ -22,7 +22,7 @@ import type {
 import type { IncidentSnapshot, MediaView } from "@/lib/contract";
 import type { VigiaUtterance } from "@/lib/vigia/types";
 import { destination, toLatLng, type LatLng, type LocalXY } from "@/lib/geo";
-import { houseClearance, houseOutline, houseParts, vehicleParts, type Part } from "./house";
+import { houseClearance, houseOutline, houseParts, houseSpec, roofHeightOf, vehicleParts, type HouseSpec, type Part } from "./house";
 
 /* ───────────────────────────── Tipos ───────────────────────────── */
 
@@ -101,8 +101,12 @@ export interface FichaMap {
   center: LngLat;
   /** Columnas de humo animadas sobre las casas con fuego. */
   smokes: Smoke[];
-  /** Maquetas 3D (casas y vehículos) en piezas. */
+  /** Vehículos en piezas (prismas). */
   parts: Part[];
+  /** Casas para la maqueta 3D (three.js): muros, ventanas y techo. */
+  houses: HouseSpec[];
+  /** Las mismas casas en prismas, por si three.js no carga en este equipo. */
+  houseBlocks: Part[];
   /** Contornos en el suelo (casa afectada continua, vecinas punteadas) y fachadas principales. */
   outlines: { ring: LngLat[]; front: LngLat[]; affected: boolean }[];
   /** Círculos donde se oculta el edificio del mapa base (queda la maqueta). */
@@ -465,6 +469,8 @@ export function buildMap(
   const origin: LatLng = { lat: incident.lat, lng: incident.lng };
   const center: LngLat = [incident.lng, incident.lat];
   const parts: Part[] = [];
+  const houses: HouseSpec[] = [];
+  const houseBlocks: Part[] = [];
   const smokes: Smoke[] = [];
   const hideBase: FichaMap["hideBase"] = [];
   const outlines: FichaMap["outlines"] = [];
@@ -477,7 +483,8 @@ export function buildMap(
   if (s) {
     for (const st of s.structures ?? []) {
       if (st.role === "reference") continue;
-      parts.push(...houseParts(origin, st, s.fire_zones ?? []));
+      houses.push(houseSpec(st, s.fire_zones ?? []));
+      houseBlocks.push(...houseParts(origin, st, s.fire_zones ?? []));
       hideBase.push(houseClearance(origin, st));
       outlines.push(houseOutline(origin, st));
     }
@@ -487,7 +494,8 @@ export function buildMap(
     const roofOf = (structureId: string, x: number, y: number) => {
       const st = (s.structures ?? []).find((t) => t.id === structureId) ??
         (s.structures ?? []).find((t) => Math.abs(t.x - x) <= finite(t.width_m, 8) / 2 + 1 && Math.abs(t.y - y) <= finite(t.depth_m, 10) / 2 + 1);
-      return st ? Math.max(1, Math.round(finite(st.floors, 1))) * finite(st.floor_height_m, 2.7) + 1 : 4;
+      // Desde la cumbrera si el techo es a dos aguas.
+      return st ? Math.max(1, Math.round(finite(st.floors, 1))) * finite(st.floor_height_m, 2.7) + roofHeightOf(st) + 1 : 4;
     };
     for (const k of s.smoke_plumes ?? []) {
       if (k.volume === "none") continue;
@@ -628,7 +636,7 @@ export function buildMap(
     const v = s.vehicles?.find((x) => x.entrapment_suspected || x.burning);
     if (v) halo = { at: lngLat(origin, { x: finite(v.x), y: finite(v.y) }), tone: "orange" };
   }
-  return { center, smokes, parts, outlines, hideBase, zones, cones, route, halo, pins };
+  return { center, smokes, parts, houses, houseBlocks, outlines, hideBase, zones, cones, route, halo, pins };
 }
 
 /* ───────────────────────────── Vigía y línea de tiempo ───────────────────────────── */

@@ -26,6 +26,7 @@ import useSWR, { useSWRConfig, type Cache, type Revalidator, type RevalidatorOpt
 import { api, ApiClientError } from "@/lib/client/api";
 import type {
   BriefingSnapshot,
+  IncidentDiagnostics,
   IncidentListResponse,
   IncidentSnapshot,
   IncidentSummary,
@@ -286,6 +287,46 @@ export function useIncidentSnapshot(
   );
   return {
     snapshot: live.data,
+    error: live.error,
+    isLoading: live.isLoading,
+    refresh: live.refresh,
+    lastUpdatedAt: live.lastUpdatedAt,
+    stale: live.stale,
+  };
+}
+
+/* ───────────── Diagnóstico de la vista técnica ───────────── */
+
+/** Cada cuánto se sondea el diagnóstico de la vista técnica. */
+export const DIAGNOSTICS_INTERVAL_MS = 3_000;
+
+export interface IncidentDiagnosticsState {
+  /** null sin id o hasta la primera respuesta. */
+  diagnostics: IncidentDiagnostics | null;
+  error: ApiClientError | null;
+  isLoading: boolean;
+  refresh: Refresh;
+  /** Date.now() de la última respuesta exitosa. */
+  lastUpdatedAt: number | null;
+  stale: boolean;
+}
+
+/** Sondea `GET /api/incidents/[id]/diagnostico` cada ~3 s; id null no sondea. */
+export function useIncidentDiagnostics(id: string | null, options: LiveOptions = {}): IncidentDiagnosticsState {
+  const incidentId = (id ?? "").trim();
+  const key = incidentId ? `/api/incidents/${encodeURIComponent(incidentId)}/diagnostico` : null;
+  const live = useLive<IncidentDiagnostics>(
+    key,
+    async (_cached, markOk, signal) => {
+      const res = await api.incidents.diagnostics(incidentId, { signal });
+      markOk();
+      return res;
+    },
+    options.intervalMs ?? DIAGNOSTICS_INTERVAL_MS,
+    options.staleAfterMs ?? 10_000,
+  );
+  return {
+    diagnostics: live.data,
     error: live.error,
     isLoading: live.isLoading,
     refresh: live.refresh,

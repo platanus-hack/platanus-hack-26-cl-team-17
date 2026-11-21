@@ -35,7 +35,10 @@ const SEVERITY_PILL: Record<string, PillTone> = { critical: "critical", warning:
 
 /* ───────────── Voz ───────────── */
 
-/** "Leer briefing" y el interruptor de lectura automática; oculto si el navegador no tiene voz. */
+/**
+ * "Leer briefing" y el interruptor de lectura automática; oculto si el navegador no tiene voz.
+ * Va fijo abajo de la pantalla: en el carro no hay que buscarlo bajando.
+ */
 export function VoiceControls({ voice, className }: { voice: BriefingVoice; className?: string }) {
   if (!voice.supported) return null;
   return (
@@ -84,7 +87,7 @@ export function VoiceControls({ voice, className }: { voice: BriefingVoice; clas
           />
         </span>
         <span className="min-w-0">
-          Leer automáticamente cuando cambie
+          Leer cada actualización
           <span className="block text-sm font-normal text-muted">
             {voice.autoRead ? "Activada" : "Desactivada"}
           </span>
@@ -106,13 +109,11 @@ export function SummarySection({
   engine,
   updatedAt,
   now,
-  voice,
 }: {
   situation: SituationReport;
   engine: AnalysisEngine | null;
   updatedAt: string | null;
   now: number | null;
-  voice: BriefingVoice;
 }) {
   const sevTone = SEVERITY_PILL[severityTone[situation.severity]] ?? "neutral";
   return (
@@ -130,7 +131,6 @@ export function SummarySection({
           {updatedAt && now !== null && <> · análisis {timeAgo(updatedAt, now)}</>}
         </span>
       </p>
-      <VoiceControls voice={voice} className="mt-4" />
       {situation.briefing.bullets.length > 0 && (
         <ul className="mt-4 flex flex-col gap-2.5">
           {situation.briefing.bullets.map((b) => (
@@ -155,10 +155,10 @@ const HAZARD_ROW = {
 } as const;
 const HAZARD_ICON = { high: "text-critical", medium: "text-warning", low: "text-info" } as const;
 
-export function HazardsSection({ hazards }: { hazards: SituationReport["hazards"] }) {
+export function HazardsSection({ hazards, id = "peligros" }: { hazards: SituationReport["hazards"]; id?: string }) {
   const sorted = sortHazards(hazards);
   return (
-    <BriefSection id="peligros" title="Peligros" icon={OctagonAlert} aside={sorted.length > 0 && <Pill>{sorted.length}</Pill>}>
+    <BriefSection id={id} title="Peligros" icon={OctagonAlert} aside={sorted.length > 0 && <Pill>{sorted.length}</Pill>}>
       {sorted.length === 0 ? (
         <p className="text-xl leading-snug text-text">
           La IA no identificó peligros en las imágenes. <span className="text-muted">No descarta otros: evalúa al llegar.</span>

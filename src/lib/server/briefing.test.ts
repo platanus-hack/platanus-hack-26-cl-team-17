@@ -6,6 +6,7 @@ import path from "node:path";
 import type { BriefingSnapshot, RuntimeMode, UnchangedResponse } from "@/lib/contract";
 import type { Incident } from "@/lib/domain";
 import type { Store } from "@/lib/store/types";
+import type { VigiaUtterance } from "@/lib/vigia/types";
 import { analysis, ev, media, situation } from "./fixtures.test-helpers";
 
 const dir = mkdtempSync(path.join(os.tmpdir(), "vigia-briefing-"));
@@ -139,5 +140,46 @@ describe("loadBriefing", () => {
     assert.deepEqual(r, { unchanged: true, rev, server_time: now.toISOString() });
     const stale = await B.loadBriefing(store, inc.id, { key: inc.share_key, rev: rev - 1, hasStaffSession: no, mode: MODE, now });
     assert.ok(!isUnchanged(stale));
+  });
+});
+
+describe("selectBriefingVigia", () => {
+  const u = (seq: number, over: Partial<VigiaUtterance> = {}): VigiaUtterance => ({
+    id: `u${seq}`,
+    seq,
+    incident_id: "inc",
+    at: new Date(Date.UTC(2026, 10, 21, 12, seq)).toISOString(),
+    text: `OBAC, Vigía: mensaje ${seq}.`,
+    priority: "persona",
+    kind: "alerta",
+    speak: true,
+    evidence: [],
+    confidence: null,
+    engine: "claude",
+    rules: [],
+    claves: null,
+    reply_to: null,
+    ...over,
+  });
+
+  test("solo personas o riesgo, sin propuestas, el más nuevo de cada tipo y máximo 3", () => {
+    const out = B.selectBriefingVigia([
+      u(1, { kind: "pendiente" }),
+      u(2, { kind: "pendiente", priority: "riesgo" }),
+      u(3, { kind: "propuesta" }),
+      u(4, { kind: "resumen", priority: "recursos" }),
+      u(5, { kind: "alerta" }),
+      u(6, { kind: "contradiccion", priority: "riesgo" }),
+      u(7, { kind: "pedido_video" }),
+    ]);
+    assert.deepEqual(out.map((m) => m.id), ["u7", "u6", "u5"]);
+    const all = B.selectBriefingVigia([u(1, { kind: "pendiente" }), u(2, { kind: "pendiente", priority: "riesgo" })], 5);
+    assert.deepEqual(all.map((m) => m.id), ["u2"]);
+  });
+
+  test("quita el «OBAC, Vigía:» y parte con mayúscula", () => {
+    const [m] = B.selectBriefingVigia([u(1, { text: "OBAC, Vigía: sigue pendiente 1-2." })]);
+    assert.equal(m.text, "Sigue pendiente 1-2.");
+    assert.equal(m.priority, "persona");
   });
 });

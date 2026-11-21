@@ -27,6 +27,7 @@
  *   POST   /api/missions/[id]/tick             (solo misiones simuladas) → { mission }
  *   POST   /api/demo/seed                      → { incident_id }
  *   POST   /api/demo/scenario                  ScenarioStepRequest → ScenarioStepResponse
+ *   GET    /api/incidents/[id]/diagnostico     → IncidentDiagnostics   (vista técnica: qué está fallando)
  *
  * Público (vecinos, sin sesión)
  *   GET    /api/public/incidents?lat=&lng=     → PublicIncidentListResponse
@@ -36,6 +37,7 @@
  *
  * Briefing en ruta (enlace con clave de solo lectura)
  *   GET    /api/briefing/[id]?k=<share_key>&rev=N   → BriefingSnapshot | UnchangedResponse
+ *   GET    /api/briefing/[id]/vigia?k=<share_key>   → BriefingVigiaResponse (lo último de Vigía)
  *
  * Dron (Authorization: Bearer <ingest_token>)
  *   POST   /api/drone/[missionId]/telemetry    TelemetryInput → TelemetryResponse
@@ -291,6 +293,20 @@ export interface CompleteReportRequest {
 
 /* ───────────── Briefing en ruta ───────────── */
 
+/** Un mensaje de Vigía que importa a la unidad en camino (personas o riesgo), sin el "OBAC, Vigía:". */
+export interface BriefingVigiaMessage {
+  id: string;
+  at: string;
+  text: string;
+  priority: "persona" | "riesgo";
+}
+
+/** Lo último que dijo Vigía, del más nuevo al más antiguo (máx. 3, uno por tipo de mensaje). */
+export interface BriefingVigiaResponse {
+  messages: BriefingVigiaMessage[];
+  server_time: string;
+}
+
 export interface BriefingSnapshot {
   unchanged?: false;
   incident: Pick<
@@ -433,6 +449,16 @@ export interface ZelloBridgeStatus {
   last_spoken: { at: string; text: string } | null;
   /** Hora del puente al mandar el latido (ISO). */
   sent_at: string;
+  /**
+   * Errores recientes del proceso del puente (p. ej. la transcripción, que corre allá), ya
+   * limpios de secretos. La vista técnica los muestra junto con los del servidor.
+   */
+  errors?: Pick<DiagnosticsServerError, "at" | "first_at" | "count" | "source" | "message">[];
+  /**
+   * Cola de voz del puente al mandar el latido: lo que todavía no dice, en orden de llegada.
+   * Ausente en puentes anteriores (la vista técnica entonces la estima).
+   */
+  queue?: { text: string; priority: string; kind: string | null; incident_id: string | null; expires_at: string }[];
 }
 
 export interface ZelloStatusResponse {
@@ -442,4 +468,209 @@ export interface ZelloStatusResponse {
   received_at: string | null;
   /** true = el último latido tiene más de 30 s: el puente se cayó o perdió la red. */
   stale: boolean;
+}
+
+/* ═══════════════════════ Diagnóstico (vista técnica) ═══════════════════════ */
+
+/**
+ * De dónde viene un error del servidor. Se registra solo en los puntos que ya atrapaban
+ * el error (src/lib/server/diagnostics.ts).
+ */
+export type DiagnosticsErrorSource =
+  | "agente"
+  | "transcripcion"
+  | "subida"
+  | "puente"
+  | "analisis"
+  | "detector"
+  | "dron"
+  | "api";
+
+/** Una llamada a Claude (sin contenido: solo tiempos, modelo y tokens). */
+export interface DiagnosticsClaudeCall {
+  /** Inicio de la llamada (ISO). */
+  at: string;
+  /** "agente" (Vigía), "media", "situation", "scene", "comms", "live" (dron), "ask" (pregunta). */
+  task: string;
+  /** Modelo que respondió (o el pedido, si falló). */
+  model: string;
+  ms: number;
+  ok: boolean;
+  /** Error breve y sin secretos; null si salió bien. */
+  error: string | null;
+  /** Status HTTP del error de la API, si lo hubo. */
+  status: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_read_tokens: number | null;
+  /** Se pidió el modo rápido. */
+  fast: boolean;
+  /** Respondió el modelo de respaldo (el principal declinó). */
+  fallback: boolean;
+  stop_reason: string | null;
+  incident_id: string | null;
+  incident_code: string | null;
+}
+
+/** Un error reciente del servidor; los repetidos se agrupan (count). */
+export interface DiagnosticsServerError {
+  /** Última vez que ocurrió (ISO). */
+  at: string;
+  first_at: string;
+  count: number;
+  source: DiagnosticsErrorSource;
+  /** Mensaje breve y sin secretos (sin URLs con parámetros, tokens ni llaves). */
+  message: string;
+  incident_id: string | null;
+  incident_code: string | null;
+}
+
+export interface DiagnosticsModelSettings {
+  model: string;
+  effort: string;
+  /** Modo rápido efectivo (solo existe en Opus). */
+  fast: boolean;
+}
+
+/** Motor en uso. Nunca incluye credenciales: solo si existen. */
+export interface DiagnosticsEngine {
+  /** claude = Claude real; simulated = motor simulado y plantillas, rotulado como tal en la interfaz. */
+  ai: AnalysisEngine;
+  /** Hay credencial de Anthropic en el servidor. */
+  has_credential: boolean;
+  /** VIGIA_AI=simulated: simulado a propósito aunque haya credencial. */
+  forced_simulated: boolean;
+  /** Análisis de videos, informe y escena (VIGIA_AI_MODEL, VIGIA_AI_EFFORT, VIGIA_AI_FAST). */
+  analysis: DiagnosticsModelSettings;
+  /** Observador del dron en vivo y preguntas (VIGIA_AI_LIVE_*). */
+  live: DiagnosticsModelSettings;
+  /** Agente Vigía (VIGIA_AGENT, VIGIA_AGENT_MODEL…); engine "plantilla" sin Claude. */
+  agent: DiagnosticsModelSettings & { enabled: boolean; engine: "claude" | "plantilla" };
+  /** Transcripción de la radio (ElevenLabs) configurada. */
+  transcription: boolean;
+  store: RuntimeMode["store"];
+  files: RuntimeMode["files"];
+}
+
+/** Video en vivo de un dron en esta instancia del servidor. */
+export interface DiagnosticsLiveFeed {
+  mission_id: string;
+  label: string;
+  active: boolean;
+  /** Llegan cuadros a esta instancia (si el sensor habla con otra, no se ven aquí). */
+  receiving: boolean;
+  last_frame_at: string | null;
+  /** Hora de llegada del cuadro de la última detección YOLO. */
+  last_detection_at: string | null;
+  /** Lo último que vio YOLO, en palabras ("persona ×2, humo"); "" = nada. */
+  last_detection: string | null;
+  /** Tiempo de inferencia de esa detección. */
+  last_detection_ms: number | null;
+  detecting: boolean;
+  observer: { analyzing: boolean; last_at: string | null; engine: string | null; summary: string | null };
+}
+
+/** Cola de análisis de los videos de la emergencia. */
+export interface DiagnosticsMediaQueue {
+  total: number;
+  uploading: number;
+  /** Subidos, esperando análisis. */
+  queued: number;
+  analyzing: number;
+  analyzed: number;
+  failed: number;
+  /** El más antiguo que aún no termina (subiendo, en cola o analizándose). */
+  oldest_pending: { label: string; since: string; status: Media["status"] } | null;
+  last_analyzed: { label: string; at: string; engine: AnalysisEngine | null } | null;
+  last_failed: { label: string; error: string | null } | null;
+}
+
+export interface DiagnosticsDetector {
+  /** VIGIA_DETECTOR_URL definido (la URL no se envía). */
+  configured: boolean;
+  /** Respondió /health en la última consulta; null sin detector configurado. */
+  healthy: boolean | null;
+  checked_at: string | null;
+  /** Etiquetas del vocabulario que informó el detector. */
+  labels: number;
+  live: DiagnosticsLiveFeed[];
+  media: DiagnosticsMediaQueue;
+}
+
+/**
+ * Estado de un mensaje de Vigía en la salida:
+ *  - en_cola: va por voz y el puente aún no lo dice (está en su cola o llegó después del último latido);
+ *  - dicho: el puente informó haberlo dicho;
+ *  - salio: salió de la cola del puente (dicho o caducado; el puente no informa cuál);
+ *  - sin_puente: va por voz pero no hay puente hablando (caído, detenido o solo escucha);
+ *  - pantalla: solo en la mesa de mando (ver screen_reason).
+ */
+export type DiagnosticsUtteranceState = "en_cola" | "dicho" | "salio" | "sin_puente" | "pantalla";
+
+export interface DiagnosticsUtterance {
+  seq: number;
+  at: string;
+  text: string;
+  kind: string;
+  priority: string;
+  engine: "claude" | "plantilla";
+  speak: boolean;
+  /** Reglas duras que se aplicaron al texto (p. ej. "ausencia"). */
+  rules: string[];
+  state: DiagnosticsUtteranceState;
+  /** Por qué quedó solo en pantalla (estimado con las horas de los mensajes). */
+  screen_reason: "limite_20s" | "silencio" | "propuesta" | "pantalla" | null;
+}
+
+export interface DiagnosticsOutbox {
+  agent_enabled: boolean;
+  silenced: boolean;
+  last_seq: number;
+  /** Separación mínima entre mensajes hablados (regla de los 20 s). */
+  voice_interval_ms: number;
+  /** Último mensaje que el agente dejó ir por voz. */
+  last_spoken_at: string | null;
+  /** Lo último que el puente dijo en la radio (de su latido). */
+  bridge_spoken: { at: string; text: string } | null;
+  /** Mensajes de voz que el puente todavía no dice, más antiguos primero. */
+  waiting: DiagnosticsUtterance[];
+  /** true = la cola viene del latido del puente; false = estimada (puente anterior o sin puente). */
+  queue_exact: boolean;
+  /** Últimos mensajes, más recientes primero. */
+  recent: DiagnosticsUtterance[];
+  /** Mensajes que las reglas bloquearon (no se dijeron ni se mostraron), más recientes primero. */
+  blocked: { at: string; text: string; reasons: string[] }[];
+  unanswered_questions: number;
+  open_pending: number;
+  /** Radio y videos que Vigía todavía no mira (sin su propia voz ni transmisiones vacías). */
+  unread_comms: number;
+  unseen_media: number;
+  /** Última vuelta del agente en esta instancia (memoria del proceso). */
+  last_turn: { at: string; ms: number; thought: boolean; engine: "claude" | "plantilla" | null; events: string[] } | null;
+  /** Última vuelta en que pensó (con eventos). */
+  last_thought: { at: string; ms: number; engine: "claude" | "plantilla" | null; events: string[] } | null;
+  thinking: boolean;
+  last_error: string | null;
+  status_line: string;
+}
+
+/** GET /api/incidents/[id]/diagnostico (staff). Todo es de esta instancia del servidor. */
+export interface IncidentDiagnostics {
+  server_time: string;
+  incident: { id: string; code: string; status: IncidentStatus };
+  engine: DiagnosticsEngine;
+  zello: ZelloStatusResponse;
+  claude: {
+    /** Más recientes primero (hasta 10). */
+    calls: DiagnosticsClaudeCall[];
+    /** Sobre las llamadas que guarda el registro (hasta 30). */
+    total: number;
+    errors: number;
+    p50_ms: number | null;
+    max_ms: number | null;
+  };
+  detector: DiagnosticsDetector;
+  outbox: DiagnosticsOutbox;
+  /** Más recientes primero (hasta 20). */
+  errors: DiagnosticsServerError[];
 }

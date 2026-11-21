@@ -6,6 +6,7 @@
  * igual sin el servicio.
  */
 import { config } from "@/lib/config";
+import { recordServerError } from "@/lib/server/diagnostics";
 import { parseDetectResult, type DetectResult } from "./types";
 
 const HEALTH_TTL_MS = 15_000;
@@ -21,6 +22,12 @@ function healthCache() {
 
 export function isDetectorConfigured(): boolean {
   return Boolean(config.detectorUrl);
+}
+
+/** Última consulta a /health (sin consultar de nuevo); null si nunca se consultó. Para la vista técnica. */
+export function detectorHealthSnapshot(): { at: number; ok: boolean; labels: number } | null {
+  const h = healthCache().__vigiaDetectorHealth;
+  return h ? { at: h.at, ok: h.ok, labels: h.labels.length } : null;
 }
 
 /** true si el detector responde /health (cacheado unos segundos). */
@@ -73,11 +80,13 @@ export async function detectFrame(bytes: Uint8Array, opts: DetectOptions = {}): 
     });
     if (!res.ok) {
       console.warn("[vigia-yolo] el detector respondió con error", { status: res.status });
+      recordServerError("detector", `El detector respondió ${res.status}`);
       return null;
     }
     return parseDetectResult(await res.json());
   } catch (error) {
     console.warn("[vigia-yolo] falló la detección", { error: error instanceof Error ? error.message : String(error) });
+    recordServerError("detector", error, { context: "Falló la detección" });
     // Si se cayó, que el próximo /health lo confirme en vez de esperar el TTL.
     const g = healthCache();
     if (g.__vigiaDetectorHealth) g.__vigiaDetectorHealth.at = 0;

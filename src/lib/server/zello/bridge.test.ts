@@ -316,3 +316,28 @@ test("reconoce como pregunta del OBAC lo que la transcripción deformó en la pr
   assert.equal(isObacCommWith(z("Si hay alguien que me está hablando, por favor, que se ubique. Ese vigila"), ""), true);
   assert.equal(isObacCommWith(z("Lucas por favor pide el cambio"), ""), false);
 });
+
+test("respuesta bloqueada: lo permitido sale entero aunque traiga «¿», «;» o saltos de línea", async () => {
+  const { bridge, spoken, advance } = setup();
+  const say = async (text: string) => {
+    bridge.enqueue({ text, priority: "resto", origin: "t", answer: true });
+    assert.equal(await bridge.speakNext(), true);
+    advance(20_000);
+    return spoken.at(-1);
+  };
+  assert.equal(await say("Lado B sin cobertura, ¿lo confirman? Entren por el lado C."), "Lado B sin cobertura, ¿lo confirman?");
+  assert.equal(await say("Atención: no ingresen; el edificio está vacío."), "El edificio: no veo personas.");
+  assert.equal(await say("No hay nadie en el lado B\nB-3, avance al segundo piso"), "No veo a nadie en el lado B");
+  assert.equal(await say("Confirmo que no hay nadie. Entren."), "Confirmo que no veo a nadie.");
+});
+
+test("el latido informa la cola de voz del puente", async () => {
+  const { bridge } = setup();
+  bridge.enqueue({ text: "Resumen: B-5 llegando.", priority: "resto", origin: "t", incidentId: "inc-1" });
+  const q = bridge.status(false).queue ?? [];
+  assert.equal(q.length, 1);
+  assert.equal(q[0].text, "Resumen: B-5 llegando.");
+  assert.equal(q[0].incident_id, "inc-1");
+  assert.equal(await bridge.speakNext(), true);
+  assert.deepEqual(bridge.status(false).queue, []);
+});

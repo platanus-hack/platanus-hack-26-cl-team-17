@@ -85,8 +85,9 @@ interface QueuedSpeech {
 /** Si el filtro bloquea toda la respuesta a una pregunta, Vigía dice esto en vez de callar. */
 export const BLOCKED_ANSWER_TEXT = "OBAC, Vigía: eso es una decisión del mando. No doy indicaciones por radio.";
 
+/** Igual que las reglas: corta en . ! ? ; y salto de línea, sin perder lo que va antes de «¿». */
 function splitSentences(text: string): string[] {
-  return text.match(/[^.!?¿¡]*[.!?]+|[^.!?]+$/g)?.map((x) => x.trim()).filter(Boolean) ?? [text];
+  return text.match(/[^.!?;\n]+[.!?;\n]*/g)?.map((x) => x.trim()).filter(Boolean) ?? [text];
 }
 
 const clip = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1)}…`);
@@ -429,6 +430,14 @@ export class ZelloBridge {
       last_transmission: this.lastTransmission,
       last_spoken: this.lastSpoken,
       sent_at: new Date(this.now()).toISOString(),
+      // Lo que espera para la radio, para la vista técnica (el que se está diciendo ya salió de la cola).
+      queue: this.queue.slice(0, 50).map((q) => ({
+        text: clip(q.text, 300),
+        priority: q.priority,
+        kind: q.kind,
+        incident_id: q.incidentId,
+        expires_at: new Date(q.expiresAt).toISOString(),
+      })),
     };
   }
 }

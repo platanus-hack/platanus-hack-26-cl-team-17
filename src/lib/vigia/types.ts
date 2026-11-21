@@ -174,6 +174,8 @@ export interface VigiaState {
   status: VigiaStatus;
   parte: VigiaParte | null;
   last_error: string | null;
+  /** La mesa pidió "Vigía sin IA": plantillas, y la fusión y la radio por reglas, hasta que lo apague. */
+  ai_off: boolean;
 }
 
 /** Lo que recibe la mesa de mando (GET /api/incidents/[id]/vigia). */
@@ -190,6 +192,10 @@ export interface VigiaView {
   video_requests: VigiaVideoRequest[];
   log: VigiaLogEntry[];
   parte: VigiaParte | null;
+  /** "Vigía sin IA" activado desde la mesa. */
+  ai_off: boolean;
+  /** Por qué falló la última vuelta con Claude (null si la última salió bien). */
+  last_error: string | null;
   server_time: string;
 }
 
@@ -251,5 +257,6 @@ export function emptyVigiaState(incidentId: string, now: string): VigiaState {
     status: { line: "Vigía, en el puesto de mando", radios: 0, videos: 0, drones: 0, blind: [], coverage: [], thinking: false },
     parte: null,
     last_error: null,
+    ai_off: false,
   };
 }

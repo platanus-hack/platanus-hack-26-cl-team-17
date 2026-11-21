@@ -1,8 +1,9 @@
 /**
- * Maquetas 3D para el mapa de la ficha, con el lenguaje del esquema técnico: la casa o
- * edificio como volumen translúcido por piso con losas opacas (el piso del foco encendido),
- * contorno en el suelo y fachada principal marcada; vehículos a escala real con carrocería
- * y cabina. Todo con prismas verticales (fill-extrusion), igual en MapLibre y en Mapbox.
+ * Maquetas 3D para el mapa de la ficha. Las casas se describen con houseSpec y las dibuja
+ * map/houses3d.ts (muros, ventanas, techo); houseParts es su respaldo en prismas (volumen
+ * translúcido por piso con losas opacas) si three.js no carga. Además: contorno en el suelo,
+ * fachada principal marcada y vehículos a escala real con carrocería y cabina, en prismas
+ * verticales (fill-extrusion), igual en MapLibre y en Mapbox.
  *
  * Coordenadas: escena local (m, x Este, y Norte) → lng/lat con toLatLng. Ejes de la planta
  * como en el esquema: u hacia la derecha mirando la fachada, v hacia el frente.
@@ -71,13 +72,58 @@ function fireMap(st: Structure, fp: Footprint, fires: readonly FireZone[]): { fl
   return out;
 }
 
-export function houseParts(origin: LatLng, st: Structure, fires: readonly FireZone[]): Part[] {
-  const affected = st.role === "involved";
+/** Medidas acotadas de una estructura (lo que estima la IA, dentro de rangos razonables). */
+function dims(st: Structure) {
   const floors = Math.min(30, Math.max(1, Math.round(finite(st.floors, 1))));
   const fh = Math.min(4.5, Math.max(2.4, finite(st.floor_height_m, 2.7)));
   const width = Math.max(3, finite(st.width_m, 8));
   const depth = Math.max(3, finite(st.depth_m, 10));
   const fp: Footprint = { x: finite(st.x, 0), y: finite(st.y, 0), width, depth, rotationDeg: finite(st.rotation_deg, 0) };
+  return { floors, fh, width, depth, fp };
+}
+
+/** Alto del techo a dos aguas con la regla del esquema técnico; 0 si es plano o no se sabe. */
+export function roofHeightOf(st: Structure): number {
+  if (st.roof !== "gable") return 0;
+  const { width, depth } = dims(st);
+  return Math.min(5, Math.max(1, Math.min(width, depth) * 0.3));
+}
+
+/** Casa para la maqueta 3D del mapa (three.js): planta, pisos, techo y pisos con fuego. */
+export interface HouseSpec {
+  id: string;
+  /** Planta en metros de la escena (x Este, y Norte, giro como en el esquema). */
+  fp: Footprint;
+  floors: number;
+  floorHeight: number;
+  /** Dos aguas solo si la IA lo vio así; si no se sabe, plano (como en el esquema). */
+  roof: "gable" | "flat";
+  roofHeight: number;
+  /** Pisos con fuego (1 = primer piso). */
+  fireFloors: number[];
+  affected: boolean;
+}
+
+export function houseSpec(st: Structure, fires: readonly FireZone[]): HouseSpec {
+  const { floors, fh, fp } = dims(st);
+  const roofHeight = roofHeightOf(st);
+  const fireFloors = [...new Set(fireMap(st, fp, fires).map((b) => Math.min(floors, b.floor)))];
+  return {
+    id: st.id,
+    fp,
+    floors,
+    floorHeight: fh,
+    roof: roofHeight > 0 ? "gable" : "flat",
+    roofHeight,
+    fireFloors,
+    affected: st.role === "involved",
+  };
+}
+
+/** La casa en prismas (fill-extrusion): respaldo si la maqueta 3D (three.js) no carga. */
+export function houseParts(origin: LatLng, st: Structure, fires: readonly FireZone[]): Part[] {
+  const affected = st.role === "involved";
+  const { floors, fh, width, depth, fp } = dims(st);
   const hw = width / 2;
   const hd = depth / 2;
   const parts: Part[] = [];

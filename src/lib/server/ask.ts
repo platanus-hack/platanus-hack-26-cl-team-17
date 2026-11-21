@@ -156,7 +156,7 @@ export async function answerQuestion(incident: Incident, comms: readonly CommEnt
     try {
       const { callStructured } = await import("@/lib/ai/client");
       const out = await callStructured({
-        task: "live",
+        task: "ask",
         system: SYSTEM,
         schema: AnswerSchema,
         maxTokens: 600,

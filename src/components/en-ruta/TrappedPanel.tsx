@@ -1,6 +1,6 @@
 "use client";
 
-import { HelpCircle, ImageIcon, MapPin, ShieldCheck, Siren, TriangleAlert, type LucideIcon } from "lucide-react";
+import { ChevronDown, HelpCircle, ImageIcon, MapPin, ShieldCheck, Siren, TriangleAlert, type LucideIcon } from "lucide-react";
 import type { EvidenceRef, SituationReport, TrappedStatus } from "@/lib/domain";
 import { ConfidenceMeter } from "@/components/ui";
 import { cn } from "@/lib/cn";
@@ -93,38 +93,48 @@ export function TrappedPanel({
         </ul>
       )}
 
-      {trapped.basis.trim() && <p className="mt-3 text-lg leading-snug text-muted">{trapped.basis}</p>}
+      {/* El fundamento y la evidencia van plegados: en movimiento se lee estado, cantidad y dónde. */}
+      {(trapped.basis.trim() || trapped.evidence.length > 0) && (
+        <details className="group mt-3">
+          <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 rounded-md text-lg font-semibold text-text [&::-webkit-details-marker]:hidden">
+            <ChevronDown aria-hidden className="size-6 shrink-0 transition-transform group-open:rotate-180" />
+            Por qué y evidencia
+            {trapped.evidence.length > 0 && <span className="font-normal text-muted">({trapped.evidence.length})</span>}
+          </summary>
+          {trapped.basis.trim() && <p className="mt-2 text-lg leading-snug text-muted">{trapped.basis}</p>}
 
-      {trapped.evidence.length > 0 && (
-        <ul aria-label="Evidencia" className="mt-3 flex flex-wrap gap-2">
-          {trapped.evidence.map((e, i) => {
-            const label = evidenceLabel(e);
-            const content = (
-              <>
-                <span className="font-mono font-semibold">{label}</span>
-                {e.note.trim() && <span className="text-muted"> — {e.note}</span>}
-              </>
-            );
-            return (
-              <li key={`${e.ref}-${e.frame}-${i}`} className="max-w-full">
-                {canOpenEvidence(e) ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenEvidence(e)}
-                    className="inline-flex max-w-full items-start gap-1.5 rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-left text-base leading-snug text-text hover:border-text"
-                  >
-                    <ImageIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
-                    <span className="min-w-0">{content}</span>
-                  </button>
-                ) : (
-                  <span className="inline-block max-w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-base leading-snug text-text">
-                    {content}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+          {trapped.evidence.length > 0 && (
+            <ul aria-label="Evidencia" className="mt-3 flex flex-wrap gap-2">
+              {trapped.evidence.map((e, i) => {
+                const label = evidenceLabel(e);
+                const content = (
+                  <>
+                    <span className="font-mono font-semibold">{label}</span>
+                    {e.note.trim() && <span className="text-muted"> — {e.note}</span>}
+                  </>
+                );
+                return (
+                  <li key={`${e.ref}-${e.frame}-${i}`} className="max-w-full">
+                    {canOpenEvidence(e) ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenEvidence(e)}
+                        className="inline-flex max-w-full items-start gap-1.5 rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-left text-base leading-snug text-text hover:border-text"
+                      >
+                        <ImageIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
+                        <span className="min-w-0">{content}</span>
+                      </button>
+                    ) : (
+                      <span className="inline-block max-w-full rounded-md border border-line bg-surface px-2.5 py-1.5 text-base leading-snug text-text">
+                        {content}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </details>
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2 border-t border-line-strong/60 pt-3">

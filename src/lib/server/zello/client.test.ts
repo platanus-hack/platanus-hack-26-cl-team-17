@@ -156,6 +156,22 @@ test("logon rechazado: muestra el motivo y reintenta", async () => {
   client.stop();
 });
 
+test("expulsado una y otra vez (otro puente con la misma cuenta): deja de reconectar y lo explica", async () => {
+  const { client, sockets, states } = setup({ baseBackoffMs: 1, maxBackoffMs: 5, maxKicks: 3, kickWindowMs: 60_000 });
+  client.start();
+  for (let i = 0; i < 3; i++) {
+    await logIn(sockets[i]);
+    sockets[i].json({ command: "on_error", error: "kicked" });
+    await tick(20);
+  }
+  assert.equal(sockets.length, 3, "después de la tercera expulsión no abre otra conexión");
+  await tick(30);
+  assert.equal(sockets.length, 3);
+  assert.equal(states.at(-1)?.online, false);
+  assert.match(states.at(-1)?.error ?? "", /3 veces en 1 min.*dejó de reconectar/);
+  client.stop();
+});
+
 test("sendVoice: start_stream con codec_header, paquetes con el stream_id y stop_stream", async () => {
   const { client, sockets } = setup();
   client.start();

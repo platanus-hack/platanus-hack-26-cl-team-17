@@ -89,6 +89,7 @@ export function TopBar({
   technicalHref,
   busy,
   compact,
+  alerts,
 }: {
   header: FichaHeader;
   onStatus: (s: IncidentStatus) => void;
@@ -97,6 +98,8 @@ export function TopBar({
   technicalHref: string;
   busy: boolean;
   compact: boolean;
+  /** Lo que está fallando (sin conexión, Zello, Vigía sin IA); null si todo anda. */
+  alerts?: ReactNode;
 }) {
   const now = useNow();
   return (
@@ -121,6 +124,7 @@ export function TopBar({
           {header.demo ? "Demo · datos ficticios" : "Análisis simulado"}
         </span>
       )}
+      {alerts}
       {header.unverified && (
         <button
           type="button"

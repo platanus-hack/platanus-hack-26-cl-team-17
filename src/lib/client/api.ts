@@ -21,6 +21,7 @@ import type {
   AnalyzeRequest,
   ApiError,
   BriefingSnapshot,
+  BriefingVigiaResponse,
   CompleteReportRequest,
   CreateMissionResponse,
   CreateReportResponse,
@@ -28,6 +29,7 @@ import type {
   DroneFrameResponse,
   LiveFrameAck,
   LiveInsightsResponse,
+  IncidentDiagnostics,
   IncidentListResponse,
   IncidentSnapshot,
   LoginRequest,
@@ -268,6 +270,9 @@ export const api = {
     /** Reconstrucción 3D (Gaussian Splatting); sin GPU genera la vista sintética. */
     reconstruct: (id: string, body: StartReconstructionInput = {}, o?: RequestOptions) =>
       post<{ reconstruction: Reconstruction }>(`/api/incidents/${seg(id)}/reconstruction`, body, o),
+    /** Diagnóstico para la vista técnica: qué subsistema está fallando. */
+    diagnostics: (id: string, o?: RequestOptions) =>
+      get<IncidentDiagnostics>(`/api/incidents/${seg(id)}/diagnostico`, undefined, o),
   },
 
   comms: {
@@ -324,6 +329,8 @@ export const api = {
   briefing: {
     get: (id: string, key: string, rev?: number | null, o?: RequestOptions) =>
       get<BriefingSnapshot | UnchangedResponse>(`/api/briefing/${seg(id)}`, { k: key, rev }, o),
+    vigia: (id: string, key: string, o?: RequestOptions) =>
+      get<BriefingVigiaResponse>(`/api/briefing/${seg(id)}/vigia`, { k: key }, o),
   },
 
   drone: {

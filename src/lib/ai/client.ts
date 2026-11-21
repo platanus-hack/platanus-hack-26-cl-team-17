@@ -55,6 +55,7 @@ import type {
 } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import type { z } from "zod";
 import { config } from "@/lib/config";
+import { recordClaudeCall } from "@/lib/server/diagnostics";
 import { isImageMediaType, type AITask, type UserContent } from "./types";
 
 /* ═══════════════════════════════ Errores ═══════════════════════════════ */
@@ -597,6 +598,23 @@ export function resetOutputModeMemo(): void {
   grammarRejected().clear();
 }
 
+/** Una solicitud HTTP a la API; su duración, modelo y tokens quedan en el registro de la vista técnica. */
+async function timedCreate(
+  transport: MessagesTransport,
+  params: MessageCreateParamsNonStreaming,
+  task: AITask,
+): Promise<BetaMessage> {
+  const call = { task, model: params.model, fast: params.speed === "fast", startedAt: Date.now() };
+  try {
+    const message = await transport.create(params);
+    recordClaudeCall(call, { message });
+    return message;
+  } catch (error) {
+    recordClaudeCall(call, { error });
+    throw error;
+  }
+}
+
 /** Una solicitud a la API, con el reintento a velocidad normal si se agota el modo rápido. */
 async function sendOnce(
   transport: MessagesTransport,
@@ -604,14 +622,14 @@ async function sendOnce(
   task: AITask,
 ): Promise<BetaMessage> {
   try {
-    return await transport.create(params);
+    return await timedCreate(transport, params, task);
   } catch (error) {
     // El modo rápido tiene su propio límite: si se agota, se sigue a velocidad normal.
     if (params.speed === "fast" && error instanceof RateLimitError) {
       console.warn("[vigia-ia] límite del modo rápido; reintento a velocidad normal", { task });
       const standard: MessageCreateParamsNonStreaming = { ...params };
       delete standard.speed;
-      return transport.create(standard);
+      return timedCreate(transport, standard, task);
     }
     throw error;
   }

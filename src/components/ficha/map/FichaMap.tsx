@@ -1,7 +1,8 @@
 "use client";
 /**
  * Mapa 3D de la ficha: mapa real inclinado (pitch 60°, rumbo −20°) con lo que la IA
- * ubicó encima. Vehículo o edificio afectado en naranjo translúcido, zonas de peligro
+ * ubicó encima. Casas como maqueta 3D con techo y ventanas (houses3d.ts, el piso del foco
+ * encendido), vehículo afectado en naranjo, zonas de peligro
  * como círculos tenues, conos azules de las cámaras de vecinos, ruta de llegada azul y
  * marcadores tipo Mapbox (punto con borde blanco + píldora blanca).
  *
@@ -18,6 +19,7 @@ import { cn } from "@/lib/cn";
 import type { FichaMap as FichaMapModel, LngLat, MapPin } from "../model";
 import { TONE_HEX } from "../tones";
 import { createMap, type MapHandle } from "./engine";
+import type { HouseLayer } from "./houses3d";
 import { MapHud } from "./hud";
 import { Halo, PinView } from "./pins";
 import { SmokeColumn } from "./smoke";
@@ -54,10 +56,11 @@ function polygon(ring: LngLat[], props: Record<string, unknown>): Feature<Polygo
   return { type: "Feature", properties: props, geometry: { type: "Polygon", coordinates: [ring] } };
 }
 
-function collections(model: FichaMapModel) {
+/** `blocks`: las casas van en prismas porque la maqueta 3D (three.js) no está disponible. */
+function collections(model: FichaMapModel, blocks: boolean) {
   const shapes: FeatureCollection = {
     type: "FeatureCollection",
-    features: model.parts.map((p) => ({
+    features: (blocks ? [...model.parts, ...model.houseBlocks] : model.parts).map((p) => ({
       type: "Feature",
       properties: { base: p.base, top: p.top, color: p.color, glass: Boolean(p.glass) },
       geometry: { type: "Polygon", coordinates: p.hole ? [p.ring, [...p.hole].reverse()] : [p.ring] },
@@ -111,8 +114,8 @@ function frameBounds(model: FichaMapModel, route: boolean): LngLatBoundsLike {
   ];
 }
 
-function addOverlays(map: MlMap, model: FichaMapModel) {
-  const c = collections(model);
+function addOverlays(map: MlMap, model: FichaMapModel, blocks: boolean) {
+  const c = collections(model, blocks);
   map.addSource("f-zones", { type: "geojson", data: c.zones });
   map.addSource("f-cones", { type: "geojson", data: c.cones });
   map.addSource("f-route", { type: "geojson", data: c.route });
@@ -159,7 +162,7 @@ function addOverlays(map: MlMap, model: FichaMapModel) {
     layout: { "line-cap": "round" },
     paint: { "line-color": "#151A21", "line-width": 4 },
   });
-  // Maquetas como en el esquema: muros translúcidos por piso y piezas opacas (losas, vehículos).
+  // Vehículos en prismas (y las casas, solo si la maqueta 3D no cargó): muros translúcidos y piezas opacas.
   const extrusion = (filter: unknown[]) => ({
     type: "fill-extrusion" as const,
     source: "f-shapes",
@@ -193,8 +196,8 @@ function hideBaseBuildings(map: MlMap, model: FichaMapModel) {
   }
 }
 
-function updateOverlays(map: MlMap, model: FichaMapModel) {
-  const c = collections(model);
+function updateOverlays(map: MlMap, model: FichaMapModel, blocks: boolean) {
+  const c = collections(model, blocks);
   (map.getSource("f-zones") as GeoJSONSource | undefined)?.setData(c.zones);
   (map.getSource("f-cones") as GeoJSONSource | undefined)?.setData(c.cones);
   (map.getSource("f-route") as GeoJSONSource | undefined)?.setData(c.route);
@@ -222,6 +225,9 @@ export default function FichaMap(props: FichaMapProps) {
   const [smokeEls, setSmokeEls] = useState<Record<string, HTMLElement>>({});
   const [haloEl, setHaloEl] = useState<HTMLElement | null>(null);
   const modelRef = useRef(model);
+  /** Casas 3D (three.js); si no cargan, `blocksRef` las deja en prismas. */
+  const houseLayerRef = useRef<HouseLayer | null>(null);
+  const blocksRef = useRef(false);
   const paddingRef = useRef(padding);
   const viewRef = useRef(view);
   const frameRouteRef = useRef(frameRoute);
@@ -251,8 +257,22 @@ export default function FichaMap(props: FichaMapProps) {
         created = h;
         h.map.on("load", () => {
           if (!alive) return;
-          addOverlays(h.map, modelRef.current);
+          addOverlays(h.map, modelRef.current, false);
           setReady(true);
+          // Las casas en 3D cargan three.js aparte; si algo falla, vuelven los prismas.
+          const toBlocks = (err: unknown) => {
+            console.warn("[ficha] casas 3D no disponibles, se usan prismas:", err);
+            blocksRef.current = true;
+            houseLayerRef.current = null;
+            if (alive) updateOverlays(h.map, modelRef.current, true);
+          };
+          import("./houses3d")
+            .then(({ addHouseLayer }) => {
+              if (!alive || blocksRef.current) return;
+              const m = modelRef.current;
+              houseLayerRef.current = addHouseLayer(h.map, m.center, m.houses, toBlocks);
+            })
+            .catch(toBlocks);
         });
         h.map.on("error", (e) => console.warn("[ficha] mapa:", e?.error?.message ?? e));
         h.map.on("rotate", () => setBearing(h.map.getBearing()));
@@ -274,6 +294,8 @@ export default function FichaMap(props: FichaMapProps) {
       liveSmoke.clear();
       haloRef.current?.marker.remove();
       haloRef.current = null;
+      houseLayerRef.current?.remove();
+      houseLayerRef.current = null;
       created?.map.remove();
     };
   }, []);
@@ -314,7 +336,9 @@ export default function FichaMap(props: FichaMapProps) {
 
   /* ── Capas propias ── */
   useEffect(() => {
-    if (ready && handle) updateOverlays(handle.map, model);
+    if (!ready || !handle) return;
+    updateOverlays(handle.map, model, blocksRef.current);
+    houseLayerRef.current?.update(model.center, model.houses);
   }, [ready, handle, model]);
 
   /* ── Marcadores ── */

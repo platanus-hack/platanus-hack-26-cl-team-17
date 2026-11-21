@@ -19,8 +19,11 @@ import { config } from "@/lib/config";
 import { ZelloBridge } from "@/lib/server/zello/bridge";
 import { ZelloClient } from "@/lib/server/zello/client";
 import { zelloTokenSource } from "@/lib/server/zello/jwt";
+import { otherBridgeOnline } from "@/lib/server/zello/guard";
 import { createVigiaApi } from "@/lib/server/zello/vigia-api";
+import type { ZelloStatusResponse } from "@/lib/contract";
 import { prepareForStt, speakToPackets, TEST_VOICE_ID } from "@/lib/server/zello/voice";
+import { listServerErrors, recordServerError } from "@/lib/server/diagnostics";
 import { transcribeAudio } from "@/lib/server/transcribe";
 import { sanitizeForObac, speechAllowed } from "@/lib/vigia/rules";
 
@@ -42,6 +45,7 @@ Uso: npm run zello -- [opciones]
                    Por defecto: todas las emergencias abiertas.
   --listen-only    Solo escuchar: Vigía no habla en el canal.
   --channel NOMBRE Canal de Zello (por defecto ZELLO_CHANNEL o demo-platanus).
+  --force          Arrancar aunque ese Vigía ya tenga otro puente conectado.
   -h, --help       Esta ayuda.
 
 Variables (.env.local): ZELLO_USERNAME, ZELLO_PASSWORD, ZELLO_AUTH_TOKEN o
@@ -55,6 +59,7 @@ function main(): number | void {
       incident: { type: "string" },
       "listen-only": { type: "boolean", default: false },
       channel: { type: "string" },
+      force: { type: "boolean", default: false },
       help: { type: "boolean", short: "h", default: false },
     },
   });
@@ -116,7 +121,12 @@ function main(): number | void {
     rules: { sanitize: sanitizeForObac, allowed: speechAllowed },
     transcribe: async (ogg) => {
       // Con margen y menos saturación se transcriben más transmisiones cortas; si ffmpeg falla, va el Ogg.
-      const wav = hasFfmpeg ? await prepareForStt(ogg).catch(() => null) : null;
+      const wav = hasFfmpeg
+        ? await prepareForStt(ogg).catch((err: unknown) => {
+            recordServerError("transcripcion", err, { context: "ffmpeg no preparó el audio; va el Ogg" });
+            return null;
+          })
+        : null;
       return wav ? transcribeAudio(wav, "audio/wav", "zello.wav") : transcribeAudio(ogg, "audio/ogg", "zello.ogg");
     },
     voice: listenOnly
@@ -130,7 +140,11 @@ function main(): number | void {
   async function heartbeat(): Promise<void> {
     if (!bridge) return;
     try {
-      await vigia.postStatus(bridge.status(listenOnly, stopped));
+      // Con los errores recientes de este proceso (p. ej. la transcripción): la vista técnica los muestra.
+      const errors = listServerErrors()
+        .slice(0, 5)
+        .map(({ at, first_at, count, source, message }) => ({ at, first_at, count, source, message }));
+      await vigia.postStatus({ ...bridge.status(listenOnly, stopped), ...(errors.length > 0 ? { errors } : {}) });
       if (heartbeatFailing) log("Vigía vuelve a recibir el estado del puente");
       heartbeatFailing = false;
     } catch (err) {
@@ -148,9 +162,28 @@ function main(): number | void {
   const speakTimer = setInterval(() => void bridge?.speakNext(), SPEAK_TICK_MS);
   const beatTimer = setInterval(() => void heartbeat(), HEARTBEAT_MS);
 
-  log(`puente Zello → ${url} · canal «${channel}» como ${config.zelloUsername}${listenOnly ? " · solo escucha" : ""}${values.incident ? ` · solo ${values.incident}` : " · todas las emergencias abiertas"}`);
-  client.start();
-  void heartbeat();
+  // Zello admite una conexión por cuenta: si este Vigía ya tiene otro puente conectado (p. ej. el de
+  // Cloud Run), arrancar otro haría que se expulsen cada 30 s. Si no se puede consultar, arranca igual.
+  void (async () => {
+    if (!values.force) {
+      const other = await fetch(`${url.replace(/\/$/, "")}/api/zello/status`, {
+        headers: config.bridgeToken ? { authorization: `Bearer ${config.bridgeToken}` } : {},
+        signal: AbortSignal.timeout(5_000),
+      })
+        .then(async (res) => (res.ok ? otherBridgeOnline((await res.json()) as ZelloStatusResponse) : null))
+        .catch(() => null);
+      if (other) {
+        console.error(
+          `No arranco: ${other}. Zello admite una sola conexión por cuenta y los dos se expulsarían cada 30 s.\n` +
+            "Detén el otro puente (el de la nube: INSTANCES=0 SKIP_BUILD=1 CONFIRM=1 bash deploy/zello-bridge.sh) o usa --force.",
+        );
+        process.exit(2);
+      }
+    }
+    log(`puente Zello → ${url} · canal «${channel}» como ${config.zelloUsername}${listenOnly ? " · solo escucha" : ""}${values.incident ? ` · solo ${values.incident}` : " · todas las emergencias abiertas"}`);
+    client.start();
+    void heartbeat();
+  })();
 
   let stopping = false;
   const shutdown = async () => {

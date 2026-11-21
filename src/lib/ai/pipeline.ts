@@ -32,6 +32,7 @@ import type {
   TrappedStatus,
 } from "@/lib/domain";
 import type { FileStorage, NewEvent, Store } from "@/lib/store/types";
+import { recordServerError } from "@/lib/server/diagnostics";
 import { isVigiaVoiceComm } from "@/lib/server/zello/channels";
 import type { SceneSanitizeContext } from "./scene-post";
 import { isImageMediaType } from "./types";
@@ -55,6 +56,11 @@ export interface PipelineDeps {
   engine: Engine;
   /** Motor de reglas: respaldo de la fusión y de comunicaciones si Claude falla. */
   fallbackEngine: Engine;
+  /**
+   * true si la mesa pidió "Vigía sin IA" en esta emergencia: la fusión y la radio van directo
+   * por reglas (sin esperar a un Claude lento o caído). Sin inyectar, nunca.
+   */
+  rulesOnly?: (incidentId: string) => Promise<boolean>;
   /** Extrae fotogramas del video en el servidor (ffmpeg) y los registra en el store. */
   extractFrames: (media: Media) => Promise<MediaFrame[]>;
   now?: () => Date;
@@ -389,6 +395,15 @@ function engineNote(kind: AnalysisEngine): string {
 
 export function createPipeline(deps: PipelineDeps): Pipeline {
   const { store, files, engine, fallbackEngine } = deps;
+
+  /** Motor de la fusión y de la radio: el de reglas si la mesa pidió "Vigía sin IA" aquí. */
+  async function primaryEngine(incidentId: string): Promise<Engine> {
+    try {
+      return deps.rulesOnly && (await deps.rulesOnly(incidentId)) ? fallbackEngine : engine;
+    } catch {
+      return engine;
+    }
+  }
   const clock = deps.now ?? (() => new Date());
   const nowIso = () => clock().toISOString();
 
@@ -567,6 +582,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         return { frames: await deps.extractFrames(media) };
       } catch (err) {
         console.error("[pipeline] falló la extracción de fotogramas en el servidor", media.id, err);
+        recordServerError("analisis", err, {
+          incidentId: media.incident_id,
+          incidentCode: incident.code,
+          context: `Extracción de fotogramas de ${media.label}`,
+        });
         return { error: errorMessage(err) };
       }
     };
@@ -622,6 +642,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       analysis = await engine.analyzeMedia(input);
     } catch (err) {
       console.error("[pipeline] falló el análisis del medio", media.id, err);
+      recordServerError("analisis", err, { incidentId: media.incident_id, incidentCode: incident.code, context: `Análisis de ${media.label}` });
       await failMedia(media, `No se pudo analizar ${media.label}: ${errorMessage(err)}`);
       // La nota del vecino igual puede aportar a la fusión (p. ej. "hay gente adentro").
       await requestFusionInner(media.incident_id, false);
@@ -674,6 +695,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   ): Promise<TaskOutcome<T>> {
     const label = FUSION_TASK_LABEL[task];
     const fail = async (err: unknown, title: string): Promise<TaskOutcome<T>> => {
+      recordServerError("analisis", err, { incidentId, context: title });
       errors.push(`${capitalize(label.name)}: ${errorMessage(err)}`);
       await safePipelinePatch(incidentId, { fusion_error: errors.join(" · ") });
       await safeEvent({
@@ -687,17 +709,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     };
 
     let value: T;
-    let kind: AnalysisEngine = engine.kind;
+    const primary = await primaryEngine(incidentId);
+    let kind: AnalysisEngine = primary.kind;
     let fallbackReason: string | null = null;
     try {
-      value = await run(engine);
+      value = await run(primary);
     } catch (err) {
-      console.error(`[pipeline] falló ${label.name} con el motor ${engine.kind}`, incidentId, err);
+      console.error(`[pipeline] falló ${label.name} con el motor ${primary.kind}`, incidentId, err);
       const failed = await fail(
         err,
-        `Falló ${label.the} (${engine.kind === "claude" ? "modelo" : "reglas"})`,
+        `Falló ${label.the} (${primary.kind === "claude" ? "modelo" : "reglas"})`,
       );
-      if (engine.kind !== "claude") return failed;
+      if (primary.kind !== "claude") return failed;
       fallbackReason = errorMessage(err);
       try {
         value = await run(fallbackEngine);
@@ -889,6 +912,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     } catch (err) {
       allOk = false;
       console.error("[pipeline] falló la fusión", incidentId, err);
+      recordServerError("analisis", err, { incidentId, context: "Falló la fusión" });
       await safePipelinePatch(incidentId, { fusion_error: `Falló la fusión: ${errorMessage(err)}` });
       await safeEvent({
         incident_id: incidentId,
@@ -987,7 +1011,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     };
 
     let analysis: CommsAnalysis;
-    let kind: AnalysisEngine = engine.kind;
+    const primary = await primaryEngine(incidentId);
+    let kind: AnalysisEngine = primary.kind;
     let fallbackReason: string | null = null;
     const recordError = async (err: unknown, title: string) => {
       await safePipelinePatch(incidentId, { comms_error: errorMessage(err) });
@@ -1000,11 +1025,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       });
     };
     try {
-      analysis = await engine.analyzeComms(input);
+      analysis = await primary.analyzeComms(input);
     } catch (err) {
       console.error("[pipeline] falló el análisis de comunicaciones", incidentId, err);
-      await recordError(err, `Falló el análisis de radio (${engine.kind === "claude" ? "modelo" : "reglas"})`);
-      if (engine.kind !== "claude") return { saved: false, ok: false };
+      await recordError(err, `Falló el análisis de radio (${primary.kind === "claude" ? "modelo" : "reglas"})`);
+      if (primary.kind !== "claude") return { saved: false, ok: false };
       fallbackReason = errorMessage(err);
       try {
         analysis = await fallbackEngine.analyzeComms(input);
@@ -1159,6 +1184,7 @@ async function defaultPipeline(): Promise<Pipeline> {
     files,
     engine: getEngine(),
     fallbackEngine: getSimulatedEngine(),
+    rulesOnly: async (incidentId) => (await (await import("@/lib/vigia/state-store")).getVigiaState(incidentId)).ai_off,
     extractFrames: (media) => extractFramesOnServer(media, { store, files }),
     anchorScene: (incident) => {
       const osm = import("@/lib/osm");

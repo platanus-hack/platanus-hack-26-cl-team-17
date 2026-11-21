@@ -63,6 +63,10 @@ import { findMediaByLabel, type ActivityTab, type CenterView, type MediaViewerTa
 /** Props de la vista de mando de un incidente. */
 export interface IncidentViewProps {
   id: string;
+  /** Franja fija bajo la barra del mando, sobre la vista (p. ej. el estado de los sistemas en /tecnica). */
+  banner?: ReactNode;
+  /** Capa que tapa la vista sin desmontarla (p. ej. el detalle del diagnóstico); null = no se muestra. */
+  overlay?: ReactNode;
 }
 
 /** Zonas de la vista en teléfono (< 768 px), donde se muestran como pestañas. */
@@ -84,8 +88,25 @@ const SCENE_FOOTER_H = 26;
 const FLOAT = "rounded-xl border border-line bg-surface shadow-[0_8px_24px_rgb(0_0_0/0.14)]";
 
 /** Vista de mando de un incidente; se reinicia por completo al cambiar de incidente. */
-export function IncidentView({ id }: IncidentViewProps) {
-  return <IncidentScreen key={id} id={id} />;
+export function IncidentView({ id, banner, overlay }: IncidentViewProps) {
+  return <IncidentScreen key={id} id={id} banner={banner} overlay={overlay} />;
+}
+
+/** Franja arriba y capa encima del contenido; sin ellas, el contenido tal cual. */
+function WithBanner({ banner, overlay, children }: { banner?: ReactNode; overlay?: ReactNode; children: ReactNode }) {
+  if (banner == null && overlay == null) return <>{children}</>;
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {banner}
+      <div className="relative min-h-0 flex-1">
+        {/* inert: con el detalle abierto, la vista sigue montada (y sondeando) pero no recibe foco. */}
+        <div className="h-full min-h-0" inert={overlay != null}>
+          {children}
+        </div>
+        {overlay != null && <div className="absolute inset-0 z-40 overflow-y-auto bg-bg">{overlay}</div>}
+      </div>
+    </div>
+  );
 }
 
 /* ───────────── Utilidades locales ───────────── */
@@ -155,7 +176,7 @@ function isUnauthorized(err: ApiClientError | null): boolean {
 
 /* ───────────── Pantalla ───────────── */
 
-function IncidentScreen({ id }: IncidentViewProps) {
+function IncidentScreen({ id, banner, overlay }: IncidentViewProps) {
   const router = useRouter();
   const pathname = usePathname();
   const { toast } = useToast();
@@ -355,7 +376,9 @@ function IncidentScreen({ id }: IncidentViewProps) {
   if (!snapshot || !incident) {
     return (
       <MandoShell title="Incidente" back={{ href: "/mando", label: "Incidentes" }} mode={mode} staff={staff}>
-        <NoSnapshotState error={error} unauthorized={unauthorized} onRetry={refreshNow} />
+        <WithBanner banner={banner} overlay={overlay}>
+          <NoSnapshotState error={error} unauthorized={unauthorized} onRetry={refreshNow} />
+        </WithBanner>
       </MandoShell>
     );
   }
@@ -733,9 +756,11 @@ function IncidentScreen({ id }: IncidentViewProps) {
 
   return (
     <MandoShell title="Incidente" back={{ href: "/mando", label: "Incidentes" }} mode={mode} staff={staff}>
-      <div ref={setRootEl} className="h-full min-h-0">
-        {immersive ? renderImmersive() : renderColumns()}
-      </div>
+      <WithBanner banner={banner} overlay={overlay}>
+        <div ref={setRootEl} className="h-full min-h-0">
+          {immersive ? renderImmersive() : renderColumns()}
+        </div>
+      </WithBanner>
 
       <MediaViewer
         incidentId={incident.id}

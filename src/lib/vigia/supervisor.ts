@@ -7,6 +7,7 @@
  * Arranca en src/instrumentation.ts y, por si acaso, con la primera consulta a Vigía.
  */
 import { config } from "@/lib/config";
+import { recordServerError } from "@/lib/server/diagnostics";
 import { getStore } from "@/lib/store";
 import { runVigiaTurn } from "./agent";
 import { getVigiaState } from "./state-store";
@@ -93,13 +94,17 @@ async function tick(sup: Supervisor): Promise<void> {
       w.checkedAt = now;
       w.running = true;
       void turnWithLock(id)
-        .catch((error: unknown) => console.warn("[vigia] supervisor: vuelta fallida", { id, error: String(error) }))
+        .catch((error: unknown) => {
+          console.warn("[vigia] supervisor: vuelta fallida", { id, error: String(error) });
+          recordServerError("agente", error, { incidentId: id, context: "Escucha continua: vuelta fallida" });
+        })
         .finally(() => {
           w.running = false;
         });
     }
   } catch (error) {
     console.warn("[vigia] supervisor: no pude revisar las emergencias", { error: error instanceof Error ? error.message : String(error) });
+    recordServerError("agente", error, { context: "Escucha continua: no pude revisar las emergencias" });
   } finally {
     sup.ticking = false;
   }
