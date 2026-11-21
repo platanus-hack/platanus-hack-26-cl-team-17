@@ -80,3 +80,54 @@ export async function speakToPackets(
   const packets = await encodeOpus60ms(pcm, { ffmpeg: opts.ffmpeg });
   return { packets, codecHeader: buildCodecHeader(VIGIA_TX_CODEC), packetDurationMs: VIGIA_TX_CODEC.frameSizeMs };
 }
+
+/** WAV PCM 16 bits mono a partir de muestras crudas. */
+export function wavFromPcm16(pcm: Uint8Array, sampleRate: number): Uint8Array {
+  const out = new Uint8Array(44 + pcm.byteLength);
+  const v = new DataView(out.buffer);
+  const tag = (o: number, t: string) => [...t].forEach((c, i) => (out[o + i] = c.charCodeAt(0)));
+  tag(0, "RIFF");
+  v.setUint32(4, 36 + pcm.byteLength, true);
+  tag(8, "WAVE");
+  tag(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  tag(36, "data");
+  v.setUint32(40, pcm.byteLength, true);
+  out.set(pcm, 44);
+  return out;
+}
+
+/**
+ * Prepara una transmisión para la transcripción: los teléfonos llegan muy saturados y
+ * las transmisiones cortas sin margen; con 0,6 s de silencio a cada lado, menos volumen
+ * y sin graves, ElevenLabs transcribe más de las cortas (medido con grabaciones reales).
+ * Devuelve un WAV de 16 kHz.
+ */
+export function prepareForStt(ogg: Uint8Array, opts: { ffmpeg?: string } = {}): Promise<Uint8Array> {
+  const args = [
+    "-hide_banner", "-loglevel", "error",
+    "-f", "ogg", "-i", "pipe:0",
+    "-af", "highpass=f=120,volume=-9dB,adelay=600:all=1,apad=pad_dur=0.6",
+    "-ar", "16000", "-ac", "1", "-f", "s16le", "pipe:1",
+  ];
+  return new Promise((resolve, reject) => {
+    const proc = spawn(opts.ffmpeg ?? "ffmpeg", args, { stdio: ["pipe", "pipe", "pipe"] });
+    const out: Buffer[] = [];
+    let err = "";
+    proc.stdout.on("data", (d: Buffer) => out.push(d));
+    proc.stderr.on("data", (d: Buffer) => (err += d.toString()));
+    proc.on("error", (e) => reject(new Error(`no se pudo ejecutar ffmpeg: ${e.message}`)));
+    proc.on("close", (code) => {
+      if (code !== 0) return reject(new Error(`ffmpeg terminó con código ${code}: ${err.slice(0, 300)}`));
+      resolve(wavFromPcm16(new Uint8Array(Buffer.concat(out)), 16_000));
+    });
+    proc.stdin.on("error", () => undefined);
+    proc.stdin.end(Buffer.from(ogg.buffer, ogg.byteOffset, ogg.byteLength));
+  });
+}

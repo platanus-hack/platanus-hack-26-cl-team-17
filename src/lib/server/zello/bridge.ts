@@ -29,7 +29,8 @@ export type SpeechPriority = "persona" | "riesgo" | "recursos" | "resto";
 /** Reglas duras de lo que Vigía dice (las de src/lib/vigia/rules.ts). */
 export interface SpeechRules {
   sanitize(text: string): { text: string; blocked: boolean; reasons: string[] };
-  allowed(p: { priority: SpeechPriority; lastSpokenAt: number | null; now: number; silenced: boolean }): boolean;
+  /** kind "respuesta" (el OBAC preguntó) no espera los 20 s; "persona" pasa siempre. */
+  allowed(p: { priority: SpeechPriority; kind?: string; lastSpokenAt: number | null; now: number; silenced: boolean }): boolean;
 }
 
 /** Lo que el puente usa del cliente de Zello. */
@@ -75,7 +76,9 @@ interface QueuedSpeech {
   origin: string;
   /** Emergencia de origen: ahí se anota lo que Vigía dijo. */
   incidentId: string | null;
-  /** true = responde una pregunta del OBAC: nunca se queda callado. */
+  /** kind de la salida del agente ("respuesta", "alerta", "resumen"…); "respuesta" para /ask. */
+  kind: string | null;
+  /** true = responde una pregunta del OBAC: sale sin esperar los 20 s y nunca se queda callado. */
   answer: boolean;
 }
 
@@ -215,7 +218,7 @@ export class ZelloBridge {
     if (this.salidaMissing !== true) return; // la responde el agente por su salida
     try {
       const { answer } = await this.d.vigia.ask(inc.id, question);
-      if (answer.trim()) this.enqueue({ text: answer.trim(), priority: "resto", origin: `/ask ${inc.code}`, incidentId: inc.id, answer: true });
+      if (answer.trim()) this.enqueue({ text: answer.trim(), priority: "resto", origin: `/ask ${inc.code}`, incidentId: inc.id, kind: "respuesta" });
     } catch (err) {
       this.d.log(`/ask no respondió: ${String(err)}`);
     }
@@ -284,18 +287,28 @@ export class ZelloBridge {
       origin: `${inc.code} #${item.seq}`,
       expiresAt: base + SPEECH_TTL_MS,
       incidentId: inc.id,
-      answer: item.kind === "respuesta",
+      kind: item.kind ?? null,
     });
   }
 
-  enqueue(s: { text: string; priority: SpeechPriority; origin: string; expiresAt?: number; incidentId?: string | null; answer?: boolean }): void {
+  enqueue(s: {
+    text: string;
+    priority: SpeechPriority;
+    origin: string;
+    expiresAt?: number;
+    incidentId?: string | null;
+    kind?: string | null;
+    answer?: boolean;
+  }): void {
+    const kind = s.kind ?? (s.answer ? "respuesta" : null);
     this.queue.push({
       text: s.text,
       priority: s.priority,
       origin: s.origin,
       expiresAt: s.expiresAt ?? this.now() + SPEECH_TTL_MS,
       incidentId: s.incidentId ?? null,
-      answer: s.answer ?? false,
+      kind,
+      answer: kind === "respuesta",
     });
   }
 
@@ -316,18 +329,23 @@ export class ZelloBridge {
     return null;
   }
 
-  /** Siguiente mensaje: primero "persona", luego por orden de llegada. */
-  private nextSpeech(): QueuedSpeech | null {
-    const now = this.now();
+  /**
+   * Siguiente mensaje que las reglas dejan decir ahora: primero "persona", luego las
+   * respuestas al OBAC, luego por prioridad y orden de llegada. Un resumen que espera
+   * sus 20 s no tapa una respuesta que puede salir ya.
+   */
+  private nextSpeech(now: number): QueuedSpeech | null {
     for (let i = this.queue.length - 1; i >= 0; i--) {
       if (this.queue[i].expiresAt < now) {
         this.d.log(`no se alcanzó a decir (${this.queue[i].origin}): ${clip(this.queue[i].text, 80)}`);
         this.queue.splice(i, 1);
       }
     }
-    for (const p of PRIORITY_ORDER) {
-      const idx = this.queue.findIndex((q) => q.priority === p);
-      if (idx >= 0) return this.queue[idx];
+    const rank = (q: QueuedSpeech) => (q.priority === "persona" ? 0 : q.answer ? 1 : 2 + PRIORITY_ORDER.indexOf(q.priority));
+    const ordered = this.queue.map((q, i) => ({ q, i })).sort((a, b) => rank(a.q) - rank(b.q) || a.i - b.i);
+    for (const { q } of ordered) {
+      const ok = this.d.rules.allowed({ priority: q.priority, kind: q.kind ?? undefined, lastSpokenAt: this.lastSpokenAt, now, silenced: false });
+      if (ok) return q;
     }
     return null;
   }
@@ -338,7 +356,8 @@ export class ZelloBridge {
    */
   async speakNext(): Promise<boolean> {
     if (this.speaking) return false;
-    const item = this.nextSpeech();
+    const now = this.now();
+    const item = this.nextSpeech(now);
     if (!item) return false;
 
     const clean = this.speakable(item);
@@ -348,8 +367,6 @@ export class ZelloBridge {
       return false;
     }
     if (clean.note) this.d.log(`${clean.note}: ${clip(item.text, 100)}`);
-    const now = this.now();
-    if (!this.d.rules.allowed({ priority: item.priority, lastSpokenAt: this.lastSpokenAt, now, silenced: false })) return false;
     if (!this.d.radio.state.online) return false;
     if (this.d.radio.receiving) {
       // No hablar encima de nadie; si alguien no suelta el PTT, el mensaje igual caduca.

@@ -283,3 +283,36 @@ test("avisa cuando hay varias emergencias abiertas y no hay --incident; el latid
   assert.equal(st.stopped, true);
   assert.equal(st.connected, false);
 });
+
+test("una respuesta al OBAC sale sin esperar los 20 s y pasa delante de un resumen en espera", async () => {
+  const { bridge, spoken, advance } = setup();
+  bridge.enqueue({ text: "Resumen: B-5 llegando.", priority: "resto", origin: "t" });
+  assert.equal(await bridge.speakNext(), true);
+  advance(3_000);
+  bridge.enqueue({ text: "Resumen: B-3 pide 2-2.", priority: "resto", origin: "t" });
+  bridge.enqueue({ text: "OBAC, Vigía: B-3 está en 6-3.", priority: "resto", origin: "t", kind: "respuesta" });
+  assert.equal(await bridge.speakNext(), true);
+  assert.equal(spoken[1], "OBAC, Vigía: B-3 está en 6-3.");
+  assert.equal(await bridge.speakNext(), false); // el resumen sí espera sus 20 s
+  advance(20_000);
+  assert.equal(await bridge.speakNext(), true);
+  assert.equal(spoken[2], "Resumen: B-3 pide 2-2.");
+});
+
+test("la salida del agente con kind respuesta no queda retenida por el límite", async () => {
+  const { bridge, vigia, spoken, advance } = setup();
+  bridge.enqueue({ text: "Resumen previo.", priority: "resto", origin: "t" });
+  assert.equal(await bridge.speakNext(), true);
+  advance(2_000);
+  vigia.salidaItems = [{ seq: 4, at: "2026-11-21T18:00:11.000Z", text: "OBAC, Vigía: no veo el lado C.", priority: "resto", speak: true, kind: "respuesta" }];
+  await bridge.pollSalida();
+  assert.equal(await bridge.speakNext(), true);
+  assert.equal(spoken[1], "OBAC, Vigía: no veo el lado C.");
+});
+
+test("reconoce como pregunta del OBAC lo que la transcripción deformó en la prueba real", () => {
+  const z = (text: string) => ({ source: "zello" as const, speaker: "Agustin_Arevalo", text });
+  assert.equal(isObacCommWith(z("Eh, atento, Viking. Necesito conocer la situación del incendio."), ""), true);
+  assert.equal(isObacCommWith(z("Si hay alguien que me está hablando, por favor, que se ubique. Ese vigila"), ""), true);
+  assert.equal(isObacCommWith(z("Lucas por favor pide el cambio"), ""), false);
+});

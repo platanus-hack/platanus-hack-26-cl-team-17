@@ -4,7 +4,7 @@
  */
 import type { CommEntry } from "@/lib/domain";
 import { config } from "@/lib/config";
-import { fold } from "@/lib/vigia/rules";
+import { fold, mentionsVigia } from "@/lib/vigia/rules";
 
 /** Speaker con que el puente registra lo que Vigía dice en el canal (el agente ignora "Vigía…"). */
 export const VIGIA_SPEAKER = "Vigía";
@@ -20,12 +20,13 @@ export function isObacCommWith(comm: Pick<CommEntry, "source" | "speaker" | "tex
   if (comm.source !== "zello" || isVigiaVoiceComm(comm)) return false;
   const obac = obacUsername.trim().toLowerCase();
   if (obac && comm.speaker.trim().toLowerCase() === obac) return true;
-  return VOCATIVE.test(fold(comm.text));
+  // mentionsVigia (del agente) tolera «Viking», «vigila», «bigía»… al inicio o al final.
+  return VOCATIVE.test(fold(comm.text)) || mentionsVigia(comm.text);
 }
 
 /**
  * true si la entrada es una pregunta del OBAC a Vigía: llegó por Zello y la dijo el
- * usuario ZELLO_OBAC_USERNAME, o empieza con «Vigía, …».
+ * usuario ZELLO_OBAC_USERNAME, o le habla a Vigía («Vigía, …», «… ese vigila»).
  */
 export function isObacComm(comm: Pick<CommEntry, "source" | "speaker" | "text">): boolean {
   return isObacCommWith(comm, config.zelloObacUsername);

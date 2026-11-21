@@ -20,7 +20,7 @@ import { ZelloBridge } from "@/lib/server/zello/bridge";
 import { ZelloClient } from "@/lib/server/zello/client";
 import { zelloTokenSource } from "@/lib/server/zello/jwt";
 import { createVigiaApi } from "@/lib/server/zello/vigia-api";
-import { speakToPackets, TEST_VOICE_ID } from "@/lib/server/zello/voice";
+import { prepareForStt, speakToPackets, TEST_VOICE_ID } from "@/lib/server/zello/voice";
 import { transcribeAudio } from "@/lib/server/transcribe";
 import { sanitizeForObac, speechAllowed } from "@/lib/vigia/rules";
 
@@ -114,7 +114,11 @@ function main(): number | void {
     vigia,
     radio: client,
     rules: { sanitize: sanitizeForObac, allowed: speechAllowed },
-    transcribe: (ogg) => transcribeAudio(ogg, "audio/ogg", "zello.ogg"),
+    transcribe: async (ogg) => {
+      // Con margen y menos saturación se transcriben más transmisiones cortas; si ffmpeg falla, va el Ogg.
+      const wav = hasFfmpeg ? await prepareForStt(ogg).catch(() => null) : null;
+      return wav ? transcribeAudio(wav, "audio/wav", "zello.wav") : transcribeAudio(ogg, "audio/ogg", "zello.ogg");
+    },
     voice: listenOnly
       ? null
       : (text) => speakToPackets(text, { apiKey: config.elevenLabsApiKey, voiceId: config.elevenLabsVoiceId, modelId: config.ttsModel }),
