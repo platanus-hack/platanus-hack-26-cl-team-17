@@ -1,0 +1,1050 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>Vigía · Dron D1 en la emergencia</title>
+<!--
+  Animación del simulacro de Av. Independencia 1350 (datos ficticios, ver src/lib/demo/data-scenario.ts):
+  el dron D1 despega, llega a la emergencia, orbita a 50 m y 40 m de altura, graba desde arriba
+  y sus hallazgos se suman al informe de situación junto a los videos de vecinos y la radio.
+  Todo es determinista: window.renderAt(t) dibuja el instante t (segundos). render.mjs lo recorre
+  cuadro a cuadro. Abierto en el navegador (vía render.mjs --preview) se reproduce en tiempo real.
+-->
+<style>
+  @font-face { font-family: Inter; src: url(assets/inter.woff2) format("woff2"); font-weight: 100 900; }
+  @font-face { font-family: "JetBrains Mono"; src: url(assets/jetbrains-mono.woff2) format("woff2"); font-weight: 100 800; }
+  :root {
+    --bg: #ffffff; --surface-2: #f7f9f9; --line: #eff3f4; --line-strong: #cfd9de;
+    --text: #0f1419; --muted: #536471; --faint: #8b98a5;
+    --accent: #1d9bf0; --critical: #dc1f2c; --warning: #b54708; --ok: #00875a;
+    --drone: #7856ff; --fire: #ea580c;
+    --hud: rgba(255,255,255,.92);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: #05080d; }
+  body { font-family: Inter, sans-serif; color: #fff; -webkit-font-smoothing: antialiased; }
+  .mono { font-family: "JetBrains Mono", monospace; font-variant-numeric: tabular-nums; }
+  #stage { position: absolute; inset: 0; }
+  canvas { position: absolute; inset: 0; display: block; }
+  .layer { position: absolute; inset: 0; pointer-events: none; }
+  .hide { opacity: 0; }
+
+  /* Viñeta y grano */
+  #vignette { background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.55) 100%); }
+
+  /* Marca permanente */
+  #brand { position: absolute; left: 48px; top: 40px; display: flex; align-items: center; gap: 14px; }
+  #brand .name { font-size: 30px; font-weight: 650; letter-spacing: -.01em; }
+  .sim { display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 14px; border-radius: 999px;
+         background: rgba(181,71,8,.18); border: 1px solid rgba(255,170,90,.55); color: #ffcf9e;
+         font-size: 14px; font-weight: 600; letter-spacing: .02em; }
+  #clock { position: absolute; right: 48px; top: 44px; font-size: 22px; color: rgba(255,255,255,.85); }
+
+  /* Rótulo inferior */
+  #lower { position: absolute; left: 48px; bottom: 64px; max-width: 980px; }
+  #lower .kicker { font-size: 16px; font-weight: 600; color: #ffb27a; letter-spacing: .08em; text-transform: uppercase; }
+  #lower .title { margin-top: 10px; font-size: 46px; font-weight: 700; line-height: 1.08; letter-spacing: -.02em; }
+  #lower .sub { margin-top: 12px; font-size: 22px; color: rgba(255,255,255,.75); }
+
+  /* Pines 3D proyectados */
+  .pin { position: absolute; transform: translate(-50%, -100%); display: flex; flex-direction: column; align-items: center; }
+  .pin .card { background: rgba(10,14,20,.82); border: 1px solid rgba(255,255,255,.18); border-radius: 14px;
+               padding: 10px 14px; min-width: 210px; backdrop-filter: blur(6px); }
+  .pin .card .h { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 650; }
+  .pin .card .d { margin-top: 4px; font-size: 14px; color: rgba(255,255,255,.72); line-height: 1.3; max-width: 260px; }
+  .pin .stem { width: 2px; height: 34px; background: rgba(255,255,255,.6); }
+  .pin .dot { width: 14px; height: 14px; border-radius: 50%; border: 3px solid #fff; margin-top: -2px; }
+  .chip { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 700; letter-spacing: .03em; }
+
+  /* Radio */
+  #radio { position: absolute; left: 50%; bottom: 60px; transform: translateX(-50%); width: 1180px;
+           display: flex; gap: 18px; align-items: flex-start; background: rgba(8,11,16,.84);
+           border: 1px solid rgba(255,255,255,.14); border-radius: 18px; padding: 18px 24px; }
+  #radio .ico { flex: none; width: 44px; height: 44px; border-radius: 50%; background: rgba(29,155,240,.18);
+                display: grid; place-items: center; }
+  #radio .who { font-size: 15px; font-weight: 650; color: #8fd0ff; }
+  #radio .who span { color: rgba(255,255,255,.55); font-weight: 500; margin-left: 8px; }
+  #radio .txt { margin-top: 4px; font-size: 24px; line-height: 1.35; }
+  .bars { display: flex; gap: 3px; align-items: center; height: 20px; }
+  .bars i { width: 3px; background: #8fd0ff; border-radius: 2px; }
+
+  /* Telemetría (tarjeta oscura) */
+  #tele { position: absolute; right: 48px; top: 120px; width: 380px; background: rgba(10,14,20,.84);
+          border: 1px solid rgba(120,86,255,.45); border-radius: 18px; padding: 20px 22px; }
+  #tele .h { display: flex; align-items: center; justify-content: space-between; }
+  #tele .h b { font-size: 20px; font-weight: 700; }
+  #tele .state { font-size: 13px; font-weight: 700; letter-spacing: .06em; color: #c9bcff; background: rgba(120,86,255,.22);
+                 padding: 5px 10px; border-radius: 999px; }
+  #tele .grid { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px 18px; }
+  #tele .k { font-size: 12px; color: rgba(255,255,255,.55); letter-spacing: .08em; text-transform: uppercase; }
+  #tele .v { margin-top: 3px; font-size: 26px; }
+  #tele .bar { margin-top: 18px; height: 6px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; }
+  #tele .bar i { display: block; height: 100%; background: var(--drone); }
+  #tele .foot { margin-top: 10px; font-size: 14px; color: rgba(255,255,255,.65); }
+
+  /* HUD de la cámara del dron */
+  #hud { position: absolute; left: 0; top: 0; height: 1080px; overflow: hidden; }
+  #hud .frame { position: absolute; inset: 28px; border: 1px solid rgba(255,255,255,.0); }
+  #hud .corner { position: absolute; width: 46px; height: 46px; border-color: var(--hud); border-style: solid; }
+  #hud .tl { left: 28px; top: 28px; border-width: 3px 0 0 3px; }
+  #hud .tr { right: 28px; top: 28px; border-width: 3px 3px 0 0; }
+  #hud .bl { left: 28px; bottom: 28px; border-width: 0 0 3px 3px; }
+  #hud .br { right: 28px; bottom: 28px; border-width: 0 3px 3px 0; }
+  #hud .top { position: absolute; left: 64px; right: 64px; top: 56px; display: flex; justify-content: space-between; align-items: center; }
+  #hud .rec { display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 700; }
+  #hud .rec i { width: 16px; height: 16px; border-radius: 50%; background: #ff3b3b; box-shadow: 0 0 12px #ff3b3b; }
+  #hud .rec em { font-style: normal; font-weight: 500; color: rgba(255,255,255,.8); }
+  #hud .t { font-size: 22px; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+  #hud .cross { position: absolute; left: 50%; top: 50%; width: 70px; height: 70px; transform: translate(-50%,-50%); }
+  #hud .bottom { position: absolute; left: 64px; right: 64px; bottom: 56px; display: flex; justify-content: space-between; align-items: flex-end; }
+  #hud .tl2 { display: flex; gap: 28px; }
+  #hud .tl2 div { font-size: 13px; color: rgba(255,255,255,.7); letter-spacing: .08em; }
+  #hud .tl2 b { display: block; margin-top: 2px; font-size: 26px; color: #fff; font-weight: 500; letter-spacing: 0; text-shadow: 0 1px 3px rgba(0,0,0,.7); }
+  #compass { position: absolute; left: 50%; top: 52px; transform: translateX(-50%); width: 520px; height: 46px; overflow: hidden;
+             -webkit-mask-image: linear-gradient(90deg, transparent, #000 20%, #000 80%, transparent); }
+  #compass .tape { position: absolute; top: 0; height: 46px; }
+  #compass .tick { position: absolute; top: 0; width: 2px; background: rgba(255,255,255,.8); }
+  #compass .lab { position: absolute; top: 22px; transform: translateX(-50%); font-size: 15px; }
+  #compass-mark { position: absolute; left: 50%; top: 100px; transform: translateX(-50%); font-size: 16px; }
+
+  /* Detecciones */
+  .det { position: absolute; }
+  .det .box { position: absolute; inset: 0; }
+  .det .box b { position: absolute; width: 18px; height: 18px; border-color: currentColor; border-style: solid; }
+  .det .box b:nth-child(1) { left: 0; top: 0; border-width: 3px 0 0 3px; }
+  .det .box b:nth-child(2) { right: 0; top: 0; border-width: 3px 3px 0 0; }
+  .det .box b:nth-child(3) { left: 0; bottom: 0; border-width: 0 0 3px 3px; }
+  .det .box b:nth-child(4) { right: 0; bottom: 0; border-width: 0 3px 3px 0; }
+  .dlab { position: absolute; left: 0; top: 0; white-space: nowrap; display: flex; align-items: center; gap: 8px;
+          background: rgba(8,11,16,.88); border-left: 4px solid currentColor; padding: 7px 12px 7px 10px; border-radius: 4px 10px 10px 4px; }
+  .dlab span { color: #fff; font-size: 17px; font-weight: 600; }
+  .dlab small { color: rgba(255,255,255,.62); font-size: 13px; font-weight: 500; }
+  .dln { position: absolute; width: 2px; opacity: .8; }
+
+  /* Tira de cuadros enviados */
+  #strip { position: absolute; left: 50%; transform: translateX(-50%); bottom: 150px; display: flex; gap: 12px; align-items: flex-end; }
+  #strip .lbl { position: absolute; left: 0; top: -30px; font-size: 14px; color: rgba(255,255,255,.75); white-space: nowrap; }
+  #strip figure { width: 176px; border-radius: 10px; overflow: hidden; background: #000; border: 2px solid rgba(255,255,255,.75); position: relative; }
+  #strip img { display: block; width: 100%; height: 99px; object-fit: cover; }
+  #strip figcaption { position: absolute; left: 0; right: 0; bottom: 0; font-size: 12px; padding: 4px 8px; background: rgba(0,0,0,.65);
+                      display: flex; justify-content: space-between; }
+  #flash { background: #fff; }
+
+  /* Panel del informe (estilo Vigía, claro) */
+  #panel { position: absolute; top: 0; right: 0; width: 700px; height: 1080px; background: var(--bg); color: var(--text);
+           padding: 40px 40px 0; box-shadow: -20px 0 60px rgba(0,0,0,.35); overflow: hidden; }
+  #panel .ph { display: flex; justify-content: space-between; align-items: center; }
+  #panel h2 { font-size: 30px; font-weight: 750; letter-spacing: -.02em; }
+  #panel .badge { height: 26px; padding: 0 12px; border-radius: 999px; font-size: 13px; font-weight: 650; display: inline-flex; align-items: center; gap: 6px; }
+  #panel .meta { margin-top: 6px; font-size: 16px; color: var(--muted); }
+  #panel .src { margin-top: 22px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #panel .s { border: 1px solid var(--line-strong); border-radius: 14px; padding: 11px 14px; display: flex; align-items: center; gap: 12px; }
+  #panel .s .ic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; flex: none; }
+  #panel .s b { display: block; font-size: 15px; font-weight: 650; }
+  #panel .s small { display: block; font-size: 13px; color: var(--muted); margin-top: 1px; }
+  #panel .s.dr { border-color: var(--drone); box-shadow: 0 0 0 3px rgba(120,86,255,.14); }
+  #panel .sec { margin-top: 22px; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; }
+  #panel .items { margin-top: 10px; display: flex; flex-direction: column; gap: 10px; }
+  #panel .it { border-radius: 14px; padding: 13px 16px; background: var(--surface-2); display: flex; gap: 14px; align-items: flex-start; }
+  #panel .it.new { background: #f3f0ff; box-shadow: inset 0 0 0 2px rgba(120,86,255,.55); }
+  #panel .it .bar { width: 5px; align-self: stretch; border-radius: 3px; flex: none; }
+  #panel .it .c { flex: 1; }
+  #panel .it .row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  #panel .it .row .k { font-size: 12px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+  #panel .it .tx { margin-top: 4px; font-size: 18px; font-weight: 600; line-height: 1.3; }
+  #panel .it .why { margin-top: 3px; font-size: 14px; color: var(--muted); line-height: 1.35; }
+  #panel .tag { font-size: 11px; font-weight: 750; letter-spacing: .05em; padding: 3px 8px; border-radius: 999px; }
+  #panel .tag.d { background: var(--drone); color: #fff; }
+  #panel .tag.g { background: #e7ecee; color: var(--muted); }
+  #panel .conf { margin-top: 16px; display: flex; align-items: center; gap: 14px; font-size: 15px; color: var(--muted); }
+  #panel .conf .m { display: flex; gap: 4px; }
+  #panel .conf .m i { width: 30px; height: 8px; border-radius: 4px; background: #e1e8ed; }
+  .spin { width: 16px; height: 16px; border-radius: 50%; border: 2.5px solid rgba(120,86,255,.25); border-top-color: var(--drone); }
+
+  /* Aviso de briefing */
+  #toast { position: absolute; right: 40px; bottom: 40px; width: 620px; background: #0f1419; color: #fff; border-radius: 16px;
+           padding: 16px 20px; display: flex; gap: 14px; align-items: center; box-shadow: 0 12px 40px rgba(0,0,0,.35); }
+  #toast b { display: block; font-size: 17px; }
+  #toast small { display: block; font-size: 14px; color: rgba(255,255,255,.7); margin-top: 2px; }
+
+  /* Cierre */
+  #end { background: #05080d; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+  #end .w { display: flex; align-items: center; gap: 26px; }
+  #end .w span { font-size: 112px; font-weight: 700; letter-spacing: -.03em; }
+  #end .tg { margin-top: 18px; font-size: 30px; color: rgba(255,255,255,.75); }
+  #end .flow { margin-top: 64px; display: flex; gap: 14px; align-items: center; font-size: 24px; font-weight: 600; }
+  #end .flow .p { padding: 12px 22px; border-radius: 999px; border: 1px solid rgba(255,255,255,.25); }
+  #end .flow .p.d { border-color: var(--drone); color: #cfc3ff; background: rgba(120,86,255,.14); }
+  #end .flow .r { padding: 12px 22px; border-radius: 999px; background: #fff; color: #0f1419; }
+  #end .flow em { color: rgba(255,255,255,.45); font-style: normal; }
+  #end .fine { position: absolute; bottom: 56px; font-size: 18px; color: rgba(255,255,255,.5); }
+  #fade { background: #000; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="gl" width="1920" height="1080"></canvas>
+  <div id="vignette" class="layer"></div>
+
+  <!-- Pines del plano general -->
+  <div id="pins" class="layer"></div>
+
+  <!-- HUD del dron -->
+  <div id="hud" class="layer">
+    <div class="corner tl"></div><div class="corner tr"></div><div class="corner bl"></div><div class="corner br"></div>
+    <div id="dets" class="layer"></div>
+    <div class="top">
+      <div class="rec"><i id="recdot"></i>REC <em>Dron D1 · cámara</em> <span class="sim" style="margin-left:6px">SIMULACRO</span></div>
+      <div class="t mono" id="hudclock">20:52:10</div>
+    </div>
+    <div id="compass"><div class="tape" id="tape"></div></div>
+    <div id="compass-mark" class="mono">▲ <span id="hdg">050°</span></div>
+    <svg class="cross" viewBox="0 0 70 70" fill="none" stroke="rgba(255,255,255,.85)" stroke-width="2">
+      <path d="M35 8v16M35 46v16M8 35h16M46 35h16"/><circle cx="35" cy="35" r="2.5" fill="rgba(255,255,255,.85)"/>
+    </svg>
+    <div id="strip"><div class="lbl" id="striplbl">Lote M3 → Vigía</div></div>
+    <div class="bottom">
+      <div class="tl2 mono">
+        <div>ALT<b id="h-alt">40 m</b></div>
+        <div>RADIO<b id="h-r">50 m</b></div>
+        <div>VEL<b id="h-v">8,0 m/s</b></div>
+        <div>GIMBAL<b id="h-g">−34°</b></div>
+        <div>BAT<b id="h-b">86 %</b></div>
+      </div>
+      <div class="t mono" style="text-align:right;font-size:18px;line-height:1.5">
+        <span id="h-pos">−33,41870 · −70,65590</span><br>
+        <span style="color:rgba(255,255,255,.7)">Órbita 230° → 330° · <span id="h-orb">0</span> %</span>
+      </div>
+    </div>
+  </div>
+  <div id="flash" class="layer"></div>
+
+  <!-- Tarjeta de telemetría (planos de vuelo) -->
+  <div id="tele">
+    <div class="h"><b>Dron D1</b><span class="state" id="t-state">DESPEGANDO</span></div>
+    <div class="grid mono">
+      <div><div class="k">Altura</div><div class="v" id="t-alt">0 m</div></div>
+      <div><div class="k">Velocidad</div><div class="v" id="t-vel">0,0 m/s</div></div>
+      <div><div class="k">Al objetivo</div><div class="v" id="t-dist">—</div></div>
+      <div><div class="k">Batería</div><div class="v" id="t-bat">94 %</div></div>
+    </div>
+    <div class="bar"><i id="t-bar" style="width:0%"></i></div>
+    <div class="foot">Misión: órbita de 50 m a 40 m de altura sobre el edificio</div>
+  </div>
+
+  <!-- Marca, reloj, rótulo -->
+  <div id="brand">
+    <svg width="40" height="40" viewBox="0 0 32 32" fill="none">
+      <g stroke="#fff" stroke-width="2"><path stroke-linecap="square" d="M3 10V3h7M22 3h7v7M29 22v7h-7M10 29H3v-7"/>
+      <path stroke-width="2.5" stroke-linejoin="round" d="M5.5 16c3.4-4.9 6.9-7 10.5-7s7.1 2.1 10.5 7c-3.4 4.9-6.9 7-10.5 7s-7.1-2.1-10.5-7Z"/></g>
+      <circle cx="16" cy="16" r="4" fill="#1d9bf0"/>
+    </svg>
+    <span class="name">Vigía</span>
+    <span class="sim">SIMULACRO · DATOS FICTICIOS</span>
+  </div>
+  <div id="clock" class="mono">20:51:57</div>
+  <div id="lower">
+    <div class="kicker" id="l-k">Incendio estructural · 2ª alarma</div>
+    <div class="title" id="l-t">Edificio de departamentos de 4 pisos<br>Av. Independencia 1350</div>
+    <div class="sub" id="l-s">Fuego en el 3er piso · persona en balcón · B-3 a cargo</div>
+  </div>
+
+  <div id="radio">
+    <div class="ico"><div class="bars" id="bars"></div></div>
+    <div><div class="who" id="r-who">Segundo Comandante <span>Canal 2</span></div><div class="txt" id="r-txt"></div></div>
+  </div>
+
+  <!-- Informe de situación -->
+  <div id="panel">
+    <div class="ph">
+      <h2>Informe de situación</h2>
+      <span class="badge" style="background:#fff4e5;color:var(--warning)">Simulacro</span>
+    </div>
+    <div class="meta">Av. Independencia 1350 · revisión <span class="mono" id="p-rev">14</span> · <span class="mono" id="p-clock">20:52:31</span></div>
+
+    <div class="src">
+      <div class="s"><div class="ic" style="background:#e8f5fd"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d9bf0" stroke-width="2.2"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg></div><div><b>M1 · Vecino</b><small>Video 18 s · 20:41</small></div></div>
+      <div class="s"><div class="ic" style="background:#e8f5fd"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1d9bf0" stroke-width="2.2"><rect x="3" y="6" width="13" height="12" rx="2"/><path d="m16 10 5-3v10l-5-3"/></svg></div><div><b>M2 · Vecina</b><small>Video 20 s · 20:44</small></div></div>
+      <div class="s"><div class="ic" style="background:#eef1f3"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#536471" stroke-width="2.2"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg></div><div><b>Radio · Canal 1 y 2</b><small>17 transmisiones</small></div></div>
+      <div class="s dr"><div class="ic" style="background:#efeaff"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#7856ff" stroke-width="2"><circle cx="5" cy="5" r="2.5"/><circle cx="19" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M7 7l3 3M17 7l-3 3M7 17l3-3M17 17l-3-3"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg></div>
+        <div style="flex:1"><b>M3 · Dron D1</b><small id="p-dstate">Analizando 5 cuadros…</small></div><div id="p-spin" class="spin"></div></div>
+    </div>
+
+    <div class="sec">Lo crítico</div>
+    <div class="items" id="items"></div>
+    <div class="conf"><span>Confianza del análisis</span><span class="m"><i style="background:#b54708"></i><i style="background:#b54708"></i><i></i></span><b style="color:var(--warning)">Media</b></div>
+  </div>
+  <div id="toast">
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#7fd4a8" stroke-width="2.2"><path d="M4 12.5 9 17 20 6"/></svg>
+    <div><b>Briefing actualizado · avisado a B-5 y B-12 en ruta</b><small>Lo crítico primero: 4º piso, entretecho y techumbre comprometida.</small></div>
+  </div>
+
+  <div id="end" class="layer">
+    <div class="w">
+      <svg width="120" height="120" viewBox="0 0 32 32" fill="none">
+        <g stroke="#fff" stroke-width="2"><path stroke-linecap="square" d="M3 10V3h7M22 3h7v7M29 22v7h-7M10 29H3v-7"/>
+        <path stroke-width="2.5" stroke-linejoin="round" d="M5.5 16c3.4-4.9 6.9-7 10.5-7s7.1 2.1 10.5 7c-3.4 4.9-6.9 7-10.5 7s-7.1-2.1-10.5-7Z"/></g>
+        <circle cx="16" cy="16" r="4" fill="#1d9bf0"/>
+      </svg>
+      <span>Vigía</span>
+    </div>
+    <div class="tg">Puesto de mando asistido por IA para Bomberos</div>
+    <div class="flow"><span class="p">Vecinos</span><em>+</em><span class="p d">Dron</span><em>+</em><span class="p">Radio</span><em>→</em><span class="r">Un solo informe para el mando</span></div>
+    <div class="fine">La IA apoya, decide el oficial a cargo · Simulacro con datos ficticios · Platanus Hack 26</div>
+  </div>
+  <div id="fade" class="layer"></div>
+</div>
+
+<script type="importmap">{ "imports": { "three": "./three/three.module.js" } }</script>
+<script type="module">
+import * as THREE from "three";
+
+const W = 1920, H = 1080;
+const DURATION = 38;
+
+/* ───────── utilidades ───────── */
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, k) => a + (b - a) * k;
+const smooth = (a, b, x) => { const k = clamp((x - a) / (b - a)); return k * k * (3 - 2 * k); };
+const ease = (k) => (k < .5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
+const frac = (x) => x - Math.floor(x);
+const hash = (n) => frac(Math.sin(n * 127.1 + 311.7) * 43758.5453);
+function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+const $ = (id) => document.getElementById(id);
+/** Ventana de aparición: 0 → 1 en [a, a+fi], 1 → 0 en [b-fo, b]. */
+const win = (t, a, b, fi = .35, fo = .35) => Math.min(smooth(a, a + fi, t), 1 - smooth(b - fo, b, t));
+const fmtClock = (s) => { const x = Math.floor(s); const h = Math.floor(x / 3600), m = Math.floor(x / 60) % 60, sec = x % 60; return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`; };
+const CLOCK0 = 20 * 3600 + 51 * 60 + 57; // t = 13 s → 20:52:10, primer cuadro del lote M3
+const dec = (x, d = 1) => x.toFixed(d).replace(".", ",");
+
+/* ───────── renderer y escena ───────── */
+const canvas = $("gl");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(W, H, false);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+
+const scene = new THREE.Scene();
+const FOG = new THREE.Color(0x0b1322);
+scene.background = FOG.clone();
+scene.fog = new THREE.FogExp2(FOG, 0.0048);
+
+scene.add(new THREE.HemisphereLight(0x3a5684, 0x10141c, 0.9));
+const moon = new THREE.DirectionalLight(0x9db4ff, 0.55);
+moon.position.set(-60, 120, 40);
+scene.add(moon);
+const fireLight = new THREE.PointLight(0xff7a2a, 900, 90, 1.6);
+fireLight.position.set(-10, 8, 0);
+scene.add(fireLight);
+const roofLight = new THREE.PointLight(0xff8a3a, 500, 60, 1.6);
+roofLight.position.set(0, 15, -1);
+scene.add(roofLight);
+const sirenR = new THREE.PointLight(0xff2030, 0, 30, 1.6);
+const sirenB = new THREE.PointLight(0x2050ff, 0, 30, 1.6);
+sirenR.position.set(-19, 4, -4); sirenB.position.set(-19, 4, 14);
+scene.add(sirenR, sirenB);
+
+/* ───────── texturas generadas ───────── */
+function canvasTex(w, h, draw) { const c = document.createElement("canvas"); c.width = w; c.height = h; draw(c.getContext("2d"), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+const puffTex = canvasTex(128, 128, (g, w) => {
+  const r = rng(7);
+  for (let i = 0; i < 26; i++) {
+    const x = w / 2 + (r() - .5) * 46, y = w / 2 + (r() - .5) * 46, rad = 18 + r() * 30;
+    const gr = g.createRadialGradient(x, y, 0, x, y, rad);
+    gr.addColorStop(0, "rgba(255,255,255,.28)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+    g.fillStyle = gr; g.fillRect(0, 0, w, w);
+  }
+});
+const glowTex = canvasTex(128, 128, (g, w) => {
+  const gr = g.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2);
+  gr.addColorStop(0, "rgba(255,255,255,1)"); gr.addColorStop(.25, "rgba(255,255,255,.55)"); gr.addColorStop(1, "rgba(255,255,255,0)");
+  g.fillStyle = gr; g.fillRect(0, 0, w, w);
+});
+function windowsTex(seed, cols, rows, litRatio) {
+  return canvasTex(cols * 16, rows * 24, (g, w, h) => {
+    const r = rng(seed);
+    g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
+    for (let y = 0; y < rows; y++) for (let x = 0; x < cols; x++) {
+      const lit = r() < litRatio;
+      const warm = r();
+      g.fillStyle = lit ? (warm < .7 ? `rgba(255,${200 + warm * 40 | 0},${130 + warm * 60 | 0},${.55 + r() * .45})` : `rgba(180,210,255,${.4 + r() * .4})`) : "rgba(30,40,60,.6)";
+      g.fillRect(x * 16 + 4, y * 24 + 6, 8, 12);
+    }
+  });
+}
+
+/* ───────── materiales ───────── */
+const M = {
+  ground: new THREE.MeshLambertMaterial({ color: 0x1a1f27 }),
+  road: new THREE.MeshLambertMaterial({ color: 0x23272e }),
+  walk: new THREE.MeshLambertMaterial({ color: 0x3b4048 }),
+  grass: new THREE.MeshLambertMaterial({ color: 0x1b2a1f }),
+  concrete: new THREE.MeshLambertMaterial({ color: 0x8c8f93 }),
+  concreteDark: new THREE.MeshLambertMaterial({ color: 0x5f6267 }),
+  roofSheet: new THREE.MeshLambertMaterial({ color: 0x4a4f55 }),
+  roofBurnt: new THREE.MeshLambertMaterial({ color: 0x1a1512, emissive: 0x3a1204 }),
+  neighbor: new THREE.MeshLambertMaterial({ color: 0x9a8f80 }),
+  house: new THREE.MeshLambertMaterial({ color: 0xb8a78a }),
+  winDark: new THREE.MeshBasicMaterial({ color: 0x0c131d }),
+  winLit: new THREE.MeshBasicMaterial({ color: 0xffd8a0 }),
+  winFire: new THREE.MeshBasicMaterial({ color: 0xff7a20 }),
+  winFire2: new THREE.MeshBasicMaterial({ color: 0xff6a10 }),
+  rail: new THREE.MeshLambertMaterial({ color: 0x2d3238 }),
+  red: new THREE.MeshLambertMaterial({ color: 0xc4121d }),
+  white: new THREE.MeshLambertMaterial({ color: 0xdfe3e6 }),
+  black: new THREE.MeshLambertMaterial({ color: 0x15181c }),
+  chrome: new THREE.MeshLambertMaterial({ color: 0xb8bec4 }),
+  pole: new THREE.MeshLambertMaterial({ color: 0x4d4a44 }),
+  tree: new THREE.MeshLambertMaterial({ color: 0x17301e }),
+  trunk: new THREE.MeshLambertMaterial({ color: 0x2b2118 }),
+  hose: new THREE.MeshLambertMaterial({ color: 0xd9cfa8 }),
+  yellow: new THREE.MeshLambertMaterial({ color: 0xd9b53a, emissive: 0x2a2000 }),
+  helmetW: new THREE.MeshLambertMaterial({ color: 0xf2f2f2 }),
+  person: new THREE.MeshLambertMaterial({ color: 0x5b6f8a }),
+  drone: new THREE.MeshLambertMaterial({ color: 0x2b2e35 }),
+  droneArm: new THREE.MeshLambertMaterial({ color: 0x3a3e46 }),
+  prop: new THREE.MeshBasicMaterial({ color: 0x9aa3ad, transparent: true, opacity: .35, side: THREE.DoubleSide, depthWrite: false }),
+};
+const box = (w, h, d, m, x, y, z, parent = scene) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); parent.add(o); return o; };
+
+/* ───────── suelo y calles ─────────
+   Ejes: x = oriente, y = arriba, z = sur (el norte es −z). Origen en el centro del edificio. */
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), M.ground); ground.rotation.x = -Math.PI / 2; scene.add(ground);
+function flat(w, d, m, x, z, y = .02) { const o = new THREE.Mesh(new THREE.PlaneGeometry(w, d), m); o.rotation.x = -Math.PI / 2; o.position.set(x, y, z); scene.add(o); return o; }
+flat(18, 1200, M.road, -23, 0);                // Av. Independencia (norte-sur)
+flat(5, 1200, M.walk, -11.5, 0, .05);          // vereda oriente
+flat(5, 1200, M.walk, -34.5, 0, .05);          // vereda poniente
+for (const zc of [-120, 70, 200, -260]) flat(1200, 12, M.road, 0, zc, .03); // calles transversales
+flat(2, 30, M.grass, -8, 0, .06);              // antejardín
+const dash = new THREE.MeshBasicMaterial({ color: 0x8a8f96 });
+for (let z = -500; z < 500; z += 9) flat(.25, 4, dash, -23, z, .04);
+
+/* ───────── edificio del incidente (4 pisos) ───────── */
+const B = { x0: -7, x1: 7, z0: -12, z1: 12, fh: 3, floors: 4 };
+box(14, 12, 24, M.concrete, 0, 6, 0);
+for (let f = 1; f <= 4; f++) box(14.2, .25, 24.2, M.concreteDark, 0, f * 3, 0); // líneas de losa
+box(14.6, .5, 24.6, M.concreteDark, 0, 12.25, 0);   // losa de techo
+box(13.6, .35, 23.6, M.roofSheet, 0, 12.7, 0);        // planchas metálicas
+const burnt = box(6.5, .38, 7, M.roofBurnt, 0.5, 12.72, -1); // sector central deformado
+// Ventanas de la fachada poniente (x = −7) y del costado sur/norte
+const WZ = [-10, -6, -2, 2, 6, 10];
+const winGeo = new THREE.PlaneGeometry(1.8, 1.6);
+const fireWins = [];
+for (let f = 1; f <= 4; f++) for (const z of WZ) {
+  let m = M.winDark;
+  const isFire3 = f === 3 && (z === -2 || z === 2), isFire4 = f === 4 && z === -2;
+  if (isFire3) m = M.winFire; else if (isFire4) m = M.winFire2; else if (hash(f * 13 + z) < .22) m = M.winLit;
+  const w = new THREE.Mesh(winGeo, m); w.rotation.y = -Math.PI / 2; w.position.set(-7.02, (f - 1) * 3 + 1.7, z); scene.add(w);
+  const bw = new THREE.Mesh(winGeo, hash(f * 7 + z) < .2 ? M.winLit : M.winDark); bw.rotation.y = Math.PI / 2; bw.position.set(7.02, (f - 1) * 3 + 1.7, z); scene.add(bw);
+}
+for (let f = 1; f <= 4; f++) for (const x of [-4, 0, 4]) {
+  for (const zs of [-1, 1]) { const w = new THREE.Mesh(winGeo, hash(f * 3 + x + zs) < .25 ? M.winLit : M.winDark); w.rotation.y = zs > 0 ? 0 : Math.PI; w.position.set(x, (f - 1) * 3 + 1.7, zs * 12.02); scene.add(w); }
+}
+// Balcones en los extremos de la fachada, pisos 2 a 4
+for (let f = 2; f <= 4; f++) for (const z of [-10, 10]) {
+  const y = (f - 1) * 3;
+  box(1.5, .2, 3, M.concreteDark, -7.75, y, z);
+  box(.08, 1, 3, M.rail, -8.45, y + .55, z);
+  box(1.5, 1, .08, M.rail, -7.75, y + .55, z - 1.5); box(1.5, 1, .08, M.rail, -7.75, y + .55, z + 1.5);
+}
+// Acceso y numeración
+box(.1, 2.4, 2.2, M.winLit, -7.05, 1.2, 0);
+box(2, 1, .1, M.rail, -9, .5, -15.0 + 3);  // reja antejardín (tramos)
+
+/* Edificio vecino del norte (3 pisos) y casa del sur (1 piso) */
+box(13, 9, 17, M.neighbor, 0, 4.5, -23.5);
+box(13.3, .4, 17.3, M.concreteDark, 0, 9.2, -23.5);
+for (let f = 1; f <= 3; f++) for (const z of [-30, -26, -21, -17]) { const w = new THREE.Mesh(winGeo, hash(f * 5 + z) < .35 ? M.winLit : M.winDark); w.rotation.y = -Math.PI / 2; w.position.set(-6.52, (f - 1) * 3 + 1.7, z); scene.add(w); }
+box(12, 3.4, 11, M.house, -.5, 1.7, 19.5);
+const houseRoof = new THREE.Mesh(new THREE.ConeGeometry(9, 2.2, 4), new THREE.MeshLambertMaterial({ color: 0x6b3a2a })); houseRoof.rotation.y = Math.PI / 4; houseRoof.scale.set(1, 1, .8); houseRoof.position.set(-.5, 4.5, 19.5); scene.add(houseRoof);
+box(.1, 2, 4, M.winLit, -6.52, 1.4, 19); // local comercial
+
+/* ───────── barrio ───────── */
+const winTexes = [windowsTex(11, 8, 16, .28), windowsTex(23, 8, 16, .18), windowsTex(37, 8, 16, .35), windowsTex(41, 8, 16, .12)];
+const cityR = rng(2026);
+function distToSeg(px, pz, ax, az, bx, bz) { const vx = bx - ax, vz = bz - az; const k = clamp(((px - ax) * vx + (pz - az) * vz) / (vx * vx + vz * vz)); return Math.hypot(px - ax - k * vx, pz - az - k * vz); }
+const blocks = [];
+for (let gx = -6; gx <= 6; gx++) for (let gz = -6; gz <= 6; gz++) {
+  const cx = gx * 62 + 22, cz = gz * 62 + 8;
+  for (let k = 0; k < 4; k++) {
+    const ox = cx + (k % 2 ? 14 : -14) + (cityR() - .5) * 6, oz = cz + (k < 2 ? -14 : 14) + (cityR() - .5) * 6;
+    if (ox > -48 && ox < 30 && oz > -50 && oz < 40) continue;   // manzana del incidente despejada
+    if (ox > -40 && ox < -6) continue;                           // la avenida
+    if (Math.abs(oz + 120) < 14 || Math.abs(oz - 70) < 14 || Math.abs(oz - 200) < 14) continue;
+    const w = 12 + cityR() * 12, d = 12 + cityR() * 12;
+    let h = 4 + Math.pow(cityR(), 2.2) * 34;
+    // Corredor libre entre el puesto de mando (−150, 110) y el edificio, y hacia las cámaras del suroeste
+    const segD = distToSeg(ox, oz, -160, 118, 0, 0);
+    if (Math.hypot(ox + 150, oz - 110) < 48 || Math.hypot(ox + 180, oz - 136) < 30) continue;
+    if (segD < 70 || (ox < 0 && oz > 0 && Math.atan2(oz, -ox) > .35 && Math.atan2(oz, -ox) < 1.15 && Math.hypot(ox, oz) < 260)) h = 3 + cityR() * 4;
+    blocks.push({ ox, oz, w, d, h });
+  }
+}
+for (const b of blocks) {
+  const tex = winTexes[(Math.abs(b.ox * 7 + b.oz) | 0) % 4].clone(); tex.needsUpdate = true;
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(Math.max(1, b.w / 12), Math.max(.25, b.h / 24));
+  const side = new THREE.MeshLambertMaterial({ color: 0x2a2f38, emissive: 0xffffff, emissiveMap: tex, emissiveIntensity: .7 });
+  const top = new THREE.MeshLambertMaterial({ color: 0x2b3038 });
+  const o = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, b.d), [side, side, top, top, side, side]); o.position.set(b.ox, b.h / 2, b.oz); scene.add(o);
+}
+
+/* Árboles, postes, cables, faroles */
+function tree(x, z, s = 1) { box(.3, 2.2 * s, .3, M.trunk, x, 1.1 * s, z); const c = new THREE.Mesh(new THREE.IcosahedronGeometry(2 * s, 0), M.tree); c.position.set(x, 3.4 * s, z); scene.add(c); }
+for (let z = -90; z <= 90; z += 14) { if (Math.abs(z) > 20 || z === -20) tree(-35.5, z + 3, 1.1); if (Math.abs(z - 2) > 18) tree(-10, z + 7, 1); }
+tree(-10, -16, 1.05); tree(-10, 24, 1);
+const poles = [-38, -12, 13, 38, 63];
+for (const z of poles) box(.3, 9, .3, M.pole, -13.5, 4.5, z);
+const wireMat = new THREE.LineBasicMaterial({ color: 0x7c8794 });
+for (let i = 0; i < poles.length - 1; i++) for (const [yy, dx] of [[8.6, -.4], [8.0, .4], [7.4, 0]]) {
+  const pts = []; for (let k = 0; k <= 20; k++) { const u = k / 20; pts.push(new THREE.Vector3(-13.5 + dx, yy - Math.sin(u * Math.PI) * .7, lerp(poles[i], poles[i + 1], u))); }
+  scene.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), wireMat));
+}
+const lampGlows = [];
+for (let z = -150; z <= 150; z += 30) {
+  box(.2, 7, .2, M.pole, -32.5, 3.5, z); box(2.2, .15, .2, M.pole, -31.5, 7, z);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xffb468, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: .8 }));
+  s.position.set(-30.6, 6.8, z); s.scale.set(3, 3, 1); scene.add(s); lampGlows.push(s);
+}
+const streetL = new THREE.PointLight(0xffa860, 120, 26, 1.8); streetL.position.set(-30.6, 6.5, 30); scene.add(streetL);
+const streetL2 = new THREE.PointLight(0xffa860, 120, 26, 1.8); streetL2.position.set(-30.6, 6.5, -30); scene.add(streetL2);
+
+/* ───────── carros, escala, grifo, mangueras ───────── */
+const strobes = [];
+function truck(x, z, len, color, label) {
+  const g = new THREE.Group(); g.position.set(x, 0, z); scene.add(g);
+  box(2.5, 2.4, len, color, 0, 1.6, 0, g);
+  box(2.5, 1.4, 2.4, color, 0, 2.6, -len / 2 + 1.2, g);
+  box(2.3, .8, .05, M.winDark, 0, 2.7, -len / 2 - .01, g);
+  box(2.56, .18, len, M.white, 0, 1.3, 0, g);
+  for (const zz of [-len / 2 + 1.4, len / 2 - 1.6]) for (const xx of [-1.2, 1.2]) { const wh = new THREE.Mesh(new THREE.CylinderGeometry(.55, .55, .4, 14), M.black); wh.rotation.z = Math.PI / 2; wh.position.set(xx, .55, zz); g.add(wh); }
+  for (const [xx, col] of [[-.7, 0xff2030], [.7, 0x2a6bff]]) {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: col, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+    s.position.set(xx, 3.5, -len / 2 + 1.2); s.scale.set(2.4, 2.4, 1); g.add(s); strobes.push({ s, phase: xx > 0 ? .5 : 0, hz: 2.4 });
+  }
+  return g;
+}
+truck(-19, -4, 9, M.red, "B-3");   // carro bomba
+truck(-19, 13, 11, M.red, "Q-8");  // mecánica
+truck(-27, -9, 8.5, M.red, "B-5");
+const police = truck(-25, 46, 4.6, M.white, "Carabineros");
+// Escala de la mecánica hacia el balcón sur del 3er piso
+{
+  const a = new THREE.Vector3(-19, 3.1, 12), b = new THREE.Vector3(-8.7, 6.7, 10);
+  const dir = b.clone().sub(a), len = dir.length();
+  const g = new THREE.Group(); g.position.copy(a); g.lookAt(b); scene.add(g);
+  for (const xx of [-.45, .45]) box(.12, .14, len, M.chrome, xx, 0, len / 2, g);
+  for (let k = .5; k < len; k += .45) box(.9, .06, .06, M.chrome, 0, 0, k, g);
+  box(1.2, .7, 1.2, M.chrome, 0, -.2, 0, g);
+}
+function figure(x, y, z, body, helmet, s = 1) {
+  const g = new THREE.Group(); g.position.set(x, y, z); g.scale.setScalar(s); scene.add(g);
+  const b = new THREE.Mesh(new THREE.CapsuleGeometry(.24, .9, 4, 8), body); b.position.y = .7; g.add(b);
+  const h = new THREE.Mesh(new THREE.SphereGeometry(.2, 10, 8), helmet); h.position.y = 1.42; g.add(h);
+  return g;
+}
+const victim = figure(-8.1, 6.1, 10.4, new THREE.MeshLambertMaterial({ color: 0xc2a4c8 }), new THREE.MeshLambertMaterial({ color: 0xd8c0a8 }));
+figure(-9.4, 6.1, 10.6, M.yellow, M.helmetW);      // bombero en lo alto de la escala
+figure(-10.6, 5.4, 10.8, M.yellow, M.helmetW);
+for (const [x, z] of [[-16.3, -4], [-15.5, -1.5], [-16.5, 9], [-21.6, 13.5], [-12, 4.5]]) figure(x, 0, z, M.yellow, M.helmetW);
+const crowdR = rng(5);
+for (let i = 0; i < 14; i++) figure(-34.5 + (crowdR() - .5) * 3, 0, -10 + crowdR() * 18, M.person, new THREE.MeshLambertMaterial({ color: 0x3a3a3a }), .95);
+// Grifo con manguera conectada
+const hydrant = new THREE.Mesh(new THREE.CylinderGeometry(.25, .3, 1, 12), new THREE.MeshLambertMaterial({ color: 0xffd400, emissive: 0x332a00 })); hydrant.position.set(-12.6, .5, 6); scene.add(hydrant);
+function hoseLine(pts) { const c = new THREE.CatmullRomCurve3(pts.map(([x, y, z]) => new THREE.Vector3(x, y, z))); scene.add(new THREE.Mesh(new THREE.TubeGeometry(c, 60, .09, 6), M.hose)); }
+hoseLine([[-12.6, .5, 6], [-14, .1, 4], [-16.5, .1, 1], [-17.6, .6, -1]]);
+hoseLine([[-17.6, .6, -6], [-15, .1, -5], [-11, .1, -2], [-8.5, .1, -.5], [-7.2, .2, 0]]);
+// Puesto de mando del dron (al sur por la avenida)
+const BASE = new THREE.Vector3(-150, 0, 110);
+truck(-152, 106, 6, M.white, "Mando");
+flat(5, 5, new THREE.MeshBasicMaterial({ color: 0x5a49b8 }), BASE.x, BASE.z, .07);
+
+/* ───────── partículas: fuego y humo (deterministas en t) ───────── */
+const particleVS = `
+  attribute float size; attribute float alpha; attribute vec3 tint;
+  varying float vA; varying vec3 vC; varying float vFog;
+  uniform float scale; uniform float fogDensity;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = clamp(size * scale / -mv.z, 1.0, 900.0);
+    gl_Position = projectionMatrix * mv;
+    vA = alpha; vC = tint;
+    float d = length(mv.xyz); vFog = 1.0 - exp(-fogDensity * fogDensity * d * d);
+  }`;
+const particleFS = `
+  uniform sampler2D map; uniform vec3 fogColor; uniform float additive;
+  varying float vA; varying vec3 vC; varying float vFog;
+  void main() {
+    vec4 tx = texture2D(map, gl_PointCoord);
+    float a = tx.a * vA;
+    vec3 c = vC * tx.rgb;
+    if (additive > 0.5) { gl_FragColor = vec4(c * a * (1.0 - vFog), 1.0); }
+    else { gl_FragColor = vec4(mix(c, fogColor, vFog), a); }
+  }`;
+const systems = [];
+function system(n, additive, tex, spec) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  g.setAttribute("size", new THREE.BufferAttribute(new Float32Array(n), 1));
+  g.setAttribute("alpha", new THREE.BufferAttribute(new Float32Array(n), 1));
+  g.setAttribute("tint", new THREE.BufferAttribute(new Float32Array(n * 3), 3));
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: particleVS, fragmentShader: particleFS, transparent: true, depthWrite: false,
+    blending: additive ? THREE.CustomBlending : THREE.NormalBlending,
+    blendSrc: THREE.OneFactor, blendDst: THREE.OneFactor,
+    uniforms: { map: { value: tex }, scale: { value: 500 }, fogDensity: { value: .0048 }, fogColor: { value: FOG }, additive: { value: additive ? 1 : 0 } },
+  });
+  const p = new THREE.Points(g, mat); p.frustumCulled = false; scene.add(p);
+  const s = { n, g, mat, spec, seed: systems.length * 97 + 3 }; systems.push(s); return s;
+}
+const WIND = new THREE.Vector3(.72, 0, -.69); // hacia el nororiente
+// Humo de la techumbre (gris, a presión, deriva al NE sobre el vecino)
+system(340, false, puffTex, { base: [0.5, 12.8, -1], spread: [3, 0, 3.2], grow: 2.5, rate: .15, rise: 58, size: [5, 34], wind: 38, wob: 4, alpha: .8,
+  color: (a, h) => { const k = clamp(a * 5); const g = lerp(.42, .24, k) + h * .05; return [lerp(1.0, g, k), lerp(.55, g, k), lerp(.25, g * 1.02, k)]; }, intensity: () => 1 });
+// Humo negro saliendo por la fachada (3er y 4º piso)
+system(140, false, puffTex, { base: [-7.6, 8.4, 0], spread: [.4, .6, 2.6], rate: .24, rise: 18, size: [2.4, 12], wind: 10, out: -2.2, wob: 1.2, alpha: .9,
+  color: (a, h) => { const g = .12 + h * .05 + a * .08; return [g, g, g * 1.05]; }, intensity: () => 1 });
+// Vapor blanco del 3er piso (agua aplicada desde adentro)
+system(50, false, puffTex, { base: [-7.6, 7.2, 2], spread: [.3, .4, .7], rate: .5, rise: 5, size: [1.2, 5], wind: 3, out: -1.5, wob: .6, alpha: .55,
+  color: () => [.85, .87, .9], intensity: () => 1 });
+// Llamas: 3er piso (ventana izquierda), 4º piso y entre las planchas de la techumbre
+const flameColor = (a) => [1.0, lerp(.85, .25, a), lerp(.45, .02, a)];
+system(70, true, glowTex, { base: [-7.35, 6.6, -2], spread: [.2, .1, .7], rate: 1.6, rise: 2.6, size: [2.2, .6], wind: .6, out: -1.1, wob: .3, alpha: .55, color: flameColor, intensity: () => .7 });
+system(90, true, glowTex, { base: [-7.35, 9.6, -2], spread: [.2, .1, .75], rate: 1.5, rise: 3.8, size: [2.6, .7], wind: .8, out: -1.3, wob: .35, alpha: .75, color: flameColor, intensity: (t) => lerp(.6, 1, smooth(0, 12, t)) });
+system(50, true, glowTex, { base: [0.5, 12.9, -1], spread: [2.4, 0, 2.6], rate: 2.0, rise: 1.8, size: [1.6, .4], wind: .6, wob: .2, alpha: .55, color: flameColor, intensity: () => 1 });
+
+function updateSystems(t, cam, viewportH) {
+  const scale = viewportH / (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)));
+  for (const s of systems) {
+    const { spec: p, n } = s;
+    const pos = s.g.attributes.position.array, size = s.g.attributes.size.array, al = s.g.attributes.alpha.array, ti = s.g.attributes.tint.array;
+    const I = p.intensity(t);
+    for (let i = 0; i < n; i++) {
+      const h1 = hash(s.seed + i * 1.7), h2 = hash(s.seed + i * 3.1), h3 = hash(s.seed + i * 5.3), h4 = hash(s.seed + i * 7.9), h5 = hash(s.seed + i * 9.7);
+      const a = frac(t * p.rate * (.75 + .5 * h1) + h2);
+      const out = (p.out || 0) * Math.sqrt(a);
+      const wob = Math.sin(t * 1.7 + h5 * 6.28) * p.wob * a;
+      const wa = a * a * p.wind;
+      const gr = 1 + a * (p.grow ?? 1);
+      pos[i * 3] = p.base[0] + (h3 - .5) * 2 * p.spread[0] * gr + out + WIND.x * wa + wob;
+      pos[i * 3 + 1] = p.base[1] + (h4 - .5) * 2 * p.spread[1] + a * p.rise * (.7 + .5 * h1);
+      pos[i * 3 + 2] = p.base[2] + (h5 - .5) * 2 * p.spread[2] * gr + WIND.z * wa + Math.cos(t * 1.3 + h3 * 6.28) * p.wob * a * .6;
+      size[i] = lerp(p.size[0], p.size[1], a) * (.7 + .6 * h3);
+      al[i] = p.alpha * I * Math.pow(Math.sin(Math.PI * Math.min(1, a * 1.0 + .02)), .7) * (a < .08 ? a / .08 : 1);
+      const c = p.color(a, h4); ti[i * 3] = c[0]; ti[i * 3 + 1] = c[1]; ti[i * 3 + 2] = c[2];
+    }
+    s.g.attributes.position.needsUpdate = s.g.attributes.size.needsUpdate = s.g.attributes.alpha.needsUpdate = s.g.attributes.tint.needsUpdate = true;
+    s.mat.uniforms.scale.value = scale;
+  }
+}
+// Resplandor de las ventanas con fuego
+const fireGlows = [[-7.6, 7.6, -2, 7], [-7.6, 7.6, 2, 4.5], [-7.6, 10.6, -2, 7.5], [0.5, 13.2, -1, 9]].map(([x, y, z, s]) => {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xff6a1a, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: .55 }));
+  sp.position.set(x, y, z); sp.scale.set(s, s, 1); scene.add(sp); return { sp, s };
+});
+
+/* ───────── dron ───────── */
+const drone = new THREE.Group(); scene.add(drone);
+const droneBody = new THREE.Group(); drone.add(droneBody); droneBody.scale.setScalar(2.2);
+box(.5, .16, .7, M.drone, 0, 0, 0, droneBody);
+box(.3, .1, .3, M.droneArm, 0, .12, .05, droneBody);
+const gimbal = new THREE.Mesh(new THREE.SphereGeometry(.1, 10, 8), M.black); gimbal.position.set(0, -.14, -.3); droneBody.add(gimbal);
+const props = [];
+for (const [x, z] of [[-.5, -.5], [.5, -.5], [-.5, .5], [.5, .5]]) {
+  const arm = box(.06, .05, .75, M.droneArm, x / 2, 0, z / 2, droneBody); arm.rotation.set(0, Math.atan2(x, z), 0);
+  box(.09, .1, .09, M.black, x, .06, z, droneBody);
+  const disc = new THREE.Mesh(new THREE.CircleGeometry(.32, 24), M.prop); disc.rotation.x = -Math.PI / 2; disc.position.set(x, .13, z); droneBody.add(disc);
+  const blade = box(.6, .01, .05, M.black, x, .14, z, droneBody); props.push(blade);
+}
+const beacon = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x9d85ff, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+beacon.scale.set(1.8, 1.8, 1); drone.add(beacon); beacon.position.set(0, .2, 0);
+const navR = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xff3030, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+const navG = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x30ff60, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
+navR.scale.set(.42, .42, 1); navG.scale.set(.42, .42, 1); droneBody.add(navR, navG); navR.position.set(-.55, 0, -.55); navG.position.set(.55, 0, -.55);
+const droneSpot = new THREE.PointLight(0xb9a8ff, 0, 18, 2); drone.add(droneSpot);
+
+// Órbita 50 m a 40 m de altura (punteada, color dron)
+const ORBIT_R = 50, ORBIT_ALT = 40;
+const ringPts = []; for (let k = 0; k <= 180; k++) { const a = k / 180 * Math.PI * 2; ringPts.push(new THREE.Vector3(Math.sin(a) * ORBIT_R, ORBIT_ALT, -Math.cos(a) * ORBIT_R)); }
+const ringMat = new THREE.LineDashedMaterial({ color: 0x9d85ff, dashSize: 2.5, gapSize: 1.8, transparent: true, opacity: 0, fog: false });
+const ring = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ringPts), ringMat); ring.computeLineDistances(); scene.add(ring);
+// Línea vertical del dron al suelo (sombra/plomada)
+const plumbMat = new THREE.LineDashedMaterial({ color: 0x9d85ff, dashSize: 1, gapSize: 1, transparent: true, opacity: 0, fog: false });
+const plumb = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, -1, 0)]), plumbMat); scene.add(plumb);
+// Cono de visión de la cámara del dron
+const coneMat = new THREE.MeshBasicMaterial({ color: 0x9d85ff, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, fog: false });
+const coneGeo = new THREE.BufferGeometry(); coneGeo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(36), 3));
+const cone = new THREE.Mesh(coneGeo, coneMat); cone.frustumCulled = false; scene.add(cone);
+
+/* Trayectoria: despegue en el puesto de mando, tránsito y entrada a la órbita en el rumbo 230° */
+const T_TAKEOFF = 5.2, T_ORBIT = 13;
+const bearingPos = (deg) => { const r = THREE.MathUtils.degToRad(deg); return new THREE.Vector3(Math.sin(r) * ORBIT_R, ORBIT_ALT, -Math.cos(r) * ORBIT_R); };
+const P_ORBIT0 = bearingPos(230);
+const route = new THREE.CatmullRomCurve3([
+  BASE.clone().setY(.4), BASE.clone().setY(6), new THREE.Vector3(-146, 26, 106), new THREE.Vector3(-118, 41, 86),
+  new THREE.Vector3(-80, 42, 62), new THREE.Vector3(-55, 41, 44), P_ORBIT0,
+], false, "centripetal");
+const routeLen = route.getLength();
+const ORBIT_W = THREE.MathUtils.degToRad(5); // 230° → 330° en 20 s, como el lote M3
+const ORBIT_V = ORBIT_W * ORBIT_R;
+function droneState(t) {
+  if (t < T_TAKEOFF) return { p: BASE.clone().setY(.4), fwd: new THREE.Vector3(.8, 0, -.6).normalize(), speed: 0, phase: "ground" };
+  if (t < T_ORBIT) {
+    const k = (t - T_TAKEOFF) / (T_ORBIT - T_TAKEOFF);
+    const u = k < .18 ? .03 * (k / .18) * (k / .18) : lerp(.03, 1, (() => { const q = (k - .18) / .82; return 1 - Math.pow(1 - q, 1.6) * (1 - q * .0); })());
+    const uu = clamp(u);
+    const p = route.getPointAt(uu), tan = route.getTangentAt(Math.min(.999, uu + .002));
+    const p2 = route.getPointAt(clamp(uu + .01));
+    const speed = k < .18 ? 2.5 + k * 15 : lerp(20, ORBIT_V, smooth(.6, 1, k));
+    return { p, fwd: new THREE.Vector3(tan.x, 0, tan.z).normalize(), speed, phase: k < .18 ? "takeoff" : "transit", k, p2 };
+  }
+  const b = 230 + THREE.MathUtils.radToDeg((t - T_ORBIT) * ORBIT_W);
+  const p = bearingPos(b);
+  p.y += Math.sin(t * .9) * .25;
+  const toB = new THREE.Vector3(-p.x, 0, -p.z).normalize();
+  return { p, fwd: toB, speed: ORBIT_V, phase: "orbit", bearing: b };
+}
+
+/* ───────── cámaras ───────── */
+const cam = new THREE.PerspectiveCamera(42, W / H, .5, 3000);
+const povCam = new THREE.PerspectiveCamera(50, W / H, .5, 3000);
+const TARGET = new THREE.Vector3(-1.5, 6.5, 0);
+const tmp = new THREE.Vector3();
+function lookCam(c, pos, at, fov) { c.position.copy(pos); c.fov = fov; c.lookAt(at); c.updateProjectionMatrix(); c.updateMatrixWorld(); }
+function shake(t, amp) { return new THREE.Vector3(Math.sin(t * 2.3) * amp + Math.sin(t * 5.1) * amp * .4, Math.sin(t * 1.9 + 1) * amp, Math.sin(t * 2.7 + 2) * amp); }
+
+/* Guion de planos */
+const SHOTS = {
+  A: [0, 5.2], B: [5.2, 9.4], B2: [9.4, 13], C: [13, 15.6], D: [15.6, 24.4], E: [24.4, 33.2], F: [33.2, 38],
+};
+function povPose(t, st) {
+  const p = st.p.clone().add(new THREE.Vector3(0, -.6, 0)).add(shake(t, .06));
+  const at = TARGET.clone().add(new THREE.Vector3(0, 0, 0));
+  return { p, at };
+}
+function placeCamera(t, st, aspect) {
+  cam.aspect = aspect;
+  if (t < SHOTS.A[1]) {           // A: plano general del incidente, de noche, acercándose
+    const k = ease(t / SHOTS.A[1]);
+    lookCam(cam, new THREE.Vector3(lerp(-112, -74, k), lerp(50, 32, k), lerp(78, 50, k)).add(shake(t, .15)), new THREE.Vector3(-8, lerp(11, 9, k), 3), 40);
+    return cam;
+  }
+  if (t < SHOTS.B[1]) {           // B: despegue desde el puesto de mando
+    const k = (t - SHOTS.B[0]) / (SHOTS.B[1] - SHOTS.B[0]);
+    const pos = new THREE.Vector3(lerp(-182, -176, k), lerp(9, 12, k), lerp(138, 133, k));
+    const look = st.p.clone().add(new THREE.Vector3(0, .6, 0)).lerp(TARGET.clone().setY(18), .22);
+    lookCam(cam, pos.add(shake(t, .05)), look, lerp(30, 40, ease(k)));
+    return cam;
+  }
+  if (t < SHOTS.B2[1]) {          // B2: persecución detrás del dron, con la columna de humo al frente
+    const back = st.fwd.clone().multiplyScalar(-11);
+    const pos = st.p.clone().add(back).add(new THREE.Vector3(0, 3.2, 0)).add(shake(t, .12));
+    const look = st.p.clone().lerp(TARGET.clone().setY(14), .35).add(st.fwd.clone().multiplyScalar(10));
+    lookCam(cam, pos, look, 52);
+    return cam;
+  }
+  if (t < SHOTS.C[1]) {           // C: el dron entra en la órbita
+    const k = ease((t - SHOTS.C[0]) / (SHOTS.C[1] - SHOTS.C[0]));
+    const a = THREE.MathUtils.degToRad(lerp(205, 222, k));
+    lookCam(cam, new THREE.Vector3(Math.sin(a) * 105, lerp(58, 66, k), -Math.cos(a) * 105), new THREE.Vector3(-8, 20, 6), 46);
+    return cam;
+  }
+  if (t < SHOTS.E[1]) {           // D y E: cámara del dron
+    const { p, at } = povPose(t, st);
+    povCam.aspect = aspect;
+    lookCam(povCam, p, at, 50);
+    return povCam;
+  }
+  // F: plano amplio final, alejándose y subiendo
+  const k = ease((t - SHOTS.F[0]) / (SHOTS.F[1] - SHOTS.F[0]));
+  const a = THREE.MathUtils.degToRad(lerp(238, 222, k));
+  const r = lerp(100, 150, k);
+  lookCam(cam, new THREE.Vector3(Math.sin(a) * r - 10, lerp(46, 84, k), -Math.cos(a) * r), new THREE.Vector3(-8, 16, 0), 44);
+  return cam;
+}
+
+/* ───────── superposiciones DOM ───────── */
+const pinsEl = $("pins");
+const PINS = [
+  { id: "m1", p: [-30, 1.6, -3], t0: .9, stem: 120, color: "#1d9bf0", tag: "M1 · Vecino", chip: ["VIDEO", "#1d9bf0"], d: "Humo negro a presión por el 3er piso, sector central" },
+  { id: "m2", p: [-26, 1.6, 22], t0: 1.6, stem: 30, color: "#1d9bf0", tag: "M2 · Vecina", chip: ["VIDEO", "#1d9bf0"], d: "Persona en el balcón sur del 3er piso pidiendo ayuda" },
+  { id: "pv", p: [-8.2, 8.0, 10.4], t0: 2.4, stem: 70, color: "#dc1f2c", tag: "Persona en balcón", chip: ["CRÍTICO", "#dc1f2c"], d: "3er piso, costado sur · rescate con la mecánica de Q-8" },
+];
+for (const p of PINS) {
+  const el = document.createElement("div"); el.className = "pin"; el.id = "pin-" + p.id;
+  el.innerHTML = `<div class="card"><div class="h"><span class="chip" style="background:${p.chip[1]}33;color:${p.chip[1] === "#dc1f2c" ? "#ff8a8f" : "#8fd0ff"}">${p.chip[0]}</span>${p.tag}</div><div class="d">${p.d}</div></div><div class="stem" style="height:${p.stem}px"></div><div class="dot" style="background:${p.color}"></div>`;
+  pinsEl.appendChild(el); p.el = el;
+}
+const DETS = [
+  { p: [-7.4, 10.5, -2], r: 2.0, t0: 16.4, color: "#ff5a5f", txt: "Llamas · ventana del 4º piso", sub: "extensión vertical", major: true },
+  { p: [0.5, 13, -1], r: 4.4, t0: 17.6, color: "#ff8a3d", txt: "Techumbre: planchas deformadas", sub: "humo a presión · riesgo de colapso", major: true },
+  { p: [-9.6, 6.8, 10.4], r: 1.8, t0: 18.9, color: "#5cc8ff", txt: "2 bomberos en la escala", sub: "balcón sur, 3er piso" },
+  { p: [3, 12, -22], r: 5.5, t0: 20.0, color: "#ffc04d", txt: "Humo sobre el edificio vecino", sub: "costado norte", major: true },
+  { p: [-7.5, 7.4, 2], r: 1.4, t0: 21.0, color: "#d8dee4", txt: "Vapor en el 3er piso", sub: "agua aplicada adentro" },
+  { p: [-13.5, 7.8, 1], r: 1.6, t0: 21.8, color: "#ffc04d", txt: "Tendido eléctrico", sub: "cerca de la escala" },
+  { p: [-12.6, .6, 6], r: 1.0, t0: 22.6, color: "#5cc8ff", txt: "Grifo con manguera", sub: "vereda oriente" },
+];
+const detsEl = $("dets");
+for (const d of DETS) {
+  const el = document.createElement("div"); el.className = "det"; el.style.color = d.color;
+  el.innerHTML = `<div class="box"><b></b><b></b><b></b><b></b></div>`;
+  const lab = document.createElement("div"); lab.className = "dlab"; lab.style.color = d.color;
+  lab.innerHTML = `<span>${d.txt}</span><small>${d.sub}</small>`;
+  const ln = document.createElement("div"); ln.className = "dln"; ln.style.background = d.color;
+  detsEl.append(el, ln, lab); Object.assign(d, { el, lab, ln, ly: null });
+}
+const CAPTURES = [14.0, 16.0, 18.0, 20.0, 22.0]; // 5 cuadros del lote M3
+const captured = new Map();
+const stripEl = $("strip");
+const RADIO = [
+  { a: 5.4, b: 9.2, who: "Segundo Comandante", ch: "Canal 2", txt: "Desplieguen el dron en órbita sobre el edificio; necesito ver la techumbre y el costado norte." },
+  { a: 9.4, b: 12.9, who: "Central", ch: "Canal 2", txt: "Central conforme, dron D1 despegando, órbita de 50 metros a 40 metros de altura." },
+  { a: 30.2, b: 33.4, who: "B-3 → B-5", ch: "Canal 1", txt: "Armen línea al cuarto piso y revisen el entretecho; el dron muestra llamas en el cuarto piso. Nadie sube al techo." },
+];
+const barsEl = $("bars"); for (let i = 0; i < 6; i++) barsEl.appendChild(document.createElement("i"));
+const ITEMS = [
+  { t0: -1, cls: "", color: "#dc1f2c", k: "Persona", kc: "#dc1f2c", tag: ["M2", "g"], tx: "Persona en el balcón sur del 3er piso", why: "Rescate con la mecánica de Q-8 en curso." },
+  { t0: 26.4, cls: "new", color: "#dc1f2c", k: "Fuego", kc: "#dc1f2c", tag: ["NUEVO · DRON", "d"], tx: "El fuego subió al 4º piso y al entretecho", why: "Llamas en la ventana del 4º piso; humo a presión entre las planchas." },
+  { t0: 27.4, cls: "new", color: "#dc1f2c", k: "Peligro alto", kc: "#dc1f2c", tag: ["NUEVO · DRON", "d"], tx: "Techumbre comprometida: riesgo de colapso", why: "Estructura liviana expuesta al fuego. Nadie sobre el techo." },
+  { t0: 28.4, cls: "new", color: "#b54708", k: "Exposición", kc: "#b54708", tag: ["NUEVO · DRON", "d"], tx: "La columna de humo cae sobre el vecino del norte", why: "Sin llamas visibles ahí; no descarta extensión por su techumbre." },
+  { t0: 29.3, cls: "new", color: "#536471", k: "Sin confirmar", kc: "#536471", tag: ["DRON", "d"], tx: "Desde el aire no se ve si la persona sigue en el balcón", why: "La losa del 4º piso y el humo la tapan. Esto no descarta víctimas." },
+];
+const itemsEl = $("items");
+for (const it of ITEMS) {
+  const el = document.createElement("div"); el.className = "it " + it.cls;
+  el.innerHTML = `<div class="bar" style="background:${it.color}"></div><div class="c"><div class="row"><span class="k" style="color:${it.kc}">${it.k}</span><span class="tag ${it.tag[1]}">${it.tag[0]}</span></div><div class="tx">${it.tx}</div><div class="why">${it.why}</div></div>`;
+  itemsEl.appendChild(el); it.el = el;
+}
+// Cinta de la brújula
+const tape = $("tape");
+const PX_PER_DEG = 4;
+for (let d = -360; d <= 720; d += 5) {
+  const x = d * PX_PER_DEG;
+  const tk = document.createElement("div"); tk.className = "tick"; tk.style.left = x + "px"; tk.style.height = d % 15 === 0 ? "16px" : "8px"; tape.appendChild(tk);
+  if (d % 15 === 0) {
+    const n = ((d % 360) + 360) % 360; const names = { 0: "N", 45: "NE", 90: "E", 135: "SE", 180: "S", 225: "SO", 270: "O", 315: "NO" };
+    const lb = document.createElement("div"); lb.className = "lab mono"; lb.style.left = x + "px"; lb.textContent = names[n] ?? String(n).padStart(3, "0"); tape.appendChild(lb);
+  }
+}
+
+const vec = new THREE.Vector3();
+function project(p, camera, vw, vh) { vec.set(p[0], p[1], p[2]).project(camera); return { x: (vec.x + 1) / 2 * vw, y: (1 - vec.y) / 2 * vh, behind: vec.z > 1 }; }
+function setOp(el, o) { el.style.opacity = o.toFixed(3); el.style.visibility = o < .002 ? "hidden" : "visible"; }
+
+/* ───────── render de un instante ───────── */
+function renderScene(t, st, vw) {
+  const aspect = vw / H;
+  const c = placeCamera(t, st, aspect);
+  updateSystems(t, c, H);
+  renderer.setScissorTest(true);
+  renderer.setViewport(0, 0, vw, H); renderer.setScissor(0, 0, vw, H);
+  renderer.render(scene, c);
+  return c;
+}
+function animateWorld(t, st, inPov) {
+  // Fuego: parpadeo
+  const fl = .78 + .14 * Math.sin(t * 13.1) + .08 * Math.sin(t * 29.3 + 1.2) + .05 * Math.sin(t * 47 + 3);
+  fireLight.intensity = 900 * fl; roofLight.intensity = 520 * (.85 + .15 * Math.sin(t * 17 + 2));
+  M.winFire.color.setRGB(1, .45 + .12 * fl, .12 * fl);
+  M.winFire2.color.setRGB(1, .38 + .15 * fl, .08);
+  for (const [i, g] of fireGlows.entries()) { g.sp.material.opacity = .45 + .2 * Math.sin(t * (11 + i * 3) + i); g.sp.scale.setScalar(g.s * (.92 + .1 * Math.sin(t * 7 + i))); }
+  M.roofBurnt.emissive.setRGB(.25 + .1 * fl, .07, .01);
+  // Balizas
+  for (const s of strobes) { const v = frac(t * s.hz + s.phase); s.s.material.opacity = v < .18 ? 1 : v > .35 && v < .45 ? .8 : .05; }
+  sirenR.intensity = frac(t * 2.4) < .2 ? 160 : 10; sirenB.intensity = frac(t * 2.4 + .5) < .2 ? 160 : 10;
+  victim.rotation.y = Math.sin(t * 3) * .4;
+  // Dron
+  drone.position.copy(st.p);
+  const yaw = Math.atan2(st.fwd.x, st.fwd.z) + Math.PI;
+  drone.rotation.set(0, yaw, 0);
+  const tilt = st.phase === "transit" ? -.18 : st.phase === "orbit" ? -.06 : 0;
+  droneBody.rotation.set(tilt, 0, st.phase === "orbit" ? .08 : 0);
+  for (const [i, b] of props.entries()) b.rotation.y = st.phase === "ground" && t < T_TAKEOFF - .6 ? i : t * 70 + i;
+  M.prop.opacity = t > T_TAKEOFF - .6 ? .3 : 0;
+  beacon.material.opacity = frac(t * 1.2) < .12 ? 1 : .35;
+  beacon.visible = !inPov; droneBody.visible = !inPov;
+  navR.material.opacity = navG.material.opacity = .9;
+  droneSpot.intensity = inPov ? 0 : 30;
+  // Órbita, plomada y cono de visión
+  const ringO = Math.max(smooth(11.5, 13.2, t) * (1 - smooth(15.2, 15.6, t)), smooth(33.2, 34.2, t));
+  ringMat.opacity = ringO * .9;
+  plumbMat.opacity = inPov ? 0 : Math.max(win(t, 13, 15.6, .4, .3), smooth(33.4, 34.4, t)) * .7;
+  const pa = plumb.geometry.attributes.position.array; pa[0] = st.p.x; pa[1] = st.p.y; pa[2] = st.p.z; pa[3] = st.p.x; pa[4] = 0; pa[5] = st.p.z; plumb.geometry.attributes.position.needsUpdate = true; plumb.computeLineDistances();
+  coneMat.opacity = inPov ? 0 : Math.max(win(t, 13.6, 15.6, .5, .3), smooth(33.6, 34.6, t)) * .16;
+  if (coneMat.opacity > 0) {
+    const ca = coneGeo.attributes.position.array, o = st.p, R = 13;
+    const toT = TARGET.clone().sub(o), dist = toT.length() * 1.04; toT.normalize();
+    const right = new THREE.Vector3().crossVectors(toT, new THREE.Vector3(0, 1, 0)).normalize(), up = new THREE.Vector3().crossVectors(right, toT);
+    const c0 = o.clone().add(toT.clone().multiplyScalar(dist));
+    const q = [[-1.5, -1], [1.5, -1], [1.5, 1], [-1.5, 1]].map(([a, b]) => c0.clone().add(right.clone().multiplyScalar(a * R)).add(up.clone().multiplyScalar(b * R)));
+    const tri = [[q[0], q[1]], [q[1], q[2]], [q[2], q[3]], [q[3], q[0]]];
+    for (let i = 0; i < 4; i++) { const [a, b] = tri[i]; ca.set([o.x, o.y, o.z, a.x, a.y, a.z, b.x, b.y, b.z], i * 9); }
+    coneGeo.attributes.position.needsUpdate = true;
+  }
+}
+
+function captureThumb(tc) {
+  const st = droneState(tc);
+  animateWorld(tc, st, true);
+  renderScene(tc, st, W);
+  const c = document.createElement("canvas"); c.width = 352; c.height = 198;
+  c.getContext("2d").drawImage(canvas, 0, 0, W, H, 0, 0, 352, 198);
+  return c.toDataURL("image/jpeg", .85);
+}
+
+let lastT = -1;
+function renderAt(t) {
+  t = clamp(t, 0, DURATION - 1e-4);
+  // Cuadros del lote M3 que ya debieron capturarse
+  for (const [i, tc] of CAPTURES.entries()) if (t >= tc && !captured.has(i)) {
+    const url = captureThumb(tc);
+    const fig = document.createElement("figure");
+    fig.innerHTML = `<img src="${url}"><figcaption class="mono"><span>${i + 1}/5 · ${fmtClock(CLOCK0 + tc)}</span><span style="color:#7fd4a8">✓</span></figcaption>`;
+    stripEl.appendChild(fig); captured.set(i, fig);
+  }
+  const st = droneState(t);
+  const inPov = t >= SHOTS.D[0] && t < SHOTS.E[1];
+  // Ancho del panel del informe (plano E)
+  const pw = 700 * (ease(smooth(SHOTS.E[0], SHOTS.E[0] + .8, t)) * (1 - ease(smooth(SHOTS.E[1] - .6, SHOTS.E[1], t))));
+  const vw = Math.round(W - pw);
+  animateWorld(t, st, inPov);
+  const c = renderScene(t, st, vw);
+
+  /* Superposiciones */
+  const clockS = CLOCK0 + t;
+  $("clock").textContent = fmtClock(clockS);
+  setOp($("clock"), 1 - (inPov ? 1 : 0));
+  setOp($("brand"), (1 - (inPov ? 1 : 0)) * (1 - smooth(34.6, 35.2, t)));
+  // Rótulo
+  setOp($("lower"), win(t, .3, 4.9, .6, .4));
+  // Pines del plano A
+  for (const p of PINS) {
+    const o = t < SHOTS.A[1] ? win(t, p.t0, 4.95, .4, .3) : 0;
+    setOp(p.el, o);
+    if (o > 0) { const s = project(p.p, c, vw, H); p.el.style.left = s.x + "px"; p.el.style.top = s.y + "px"; p.el.style.transform = `translate(-50%,-100%) translateY(${(1 - smooth(p.t0, p.t0 + .45, t)) * 18}px)`; }
+  }
+  // Radio
+  const rl = RADIO.find((r) => t >= r.a - .1 && t <= r.b + .1);
+  if (rl) {
+    setOp($("radio"), win(t, rl.a, rl.b, .3, .3));
+    $("r-who").innerHTML = `${rl.who} <span>${rl.ch}</span>`;
+    const n = Math.floor(clamp((t - rl.a) / (rl.b - rl.a - 1.1)) * rl.txt.length);
+    $("r-txt").textContent = rl.txt.slice(0, Math.max(1, n));
+    [...barsEl.children].forEach((b, i) => { b.style.height = (5 + 15 * Math.abs(Math.sin(t * 9 + i * 1.3) * Math.sin(t * 4.1 + i))) + "px"; });
+    const inPanel = t > SHOTS.E[0];
+    $("radio").style.width = (inPanel ? 1100 : 1180) + "px";
+    $("radio").style.left = (inPanel ? vw / 2 : W / 2) + "px";
+    $("radio").style.bottom = inPanel ? "60px" : "60px";
+  } else setOp($("radio"), 0);
+  // Telemetría (planos B, B2, C)
+  const teleO = win(t, 5.4, 15.6, .4, .3);
+  setOp($("tele"), teleO);
+  if (teleO > 0) {
+    const dist = Math.max(0, Math.hypot(st.p.x - P_ORBIT0.x, st.p.z - P_ORBIT0.z));
+    $("t-state").textContent = st.phase === "takeoff" || (st.phase === "ground") ? "DESPEGANDO" : st.phase === "transit" ? (dist < 40 ? "ENTRANDO EN ÓRBITA" : "EN RUTA") : "EN ÓRBITA · GRABANDO";
+    $("t-alt").textContent = Math.round(st.p.y) + " m";
+    $("t-vel").textContent = dec(t < T_TAKEOFF ? 0 : st.speed) + " m/s";
+    $("t-dist").textContent = st.phase === "orbit" ? "en órbita" : Math.round(dist + 50) + " m";
+    $("t-bat").textContent = Math.round(94 - t * .22) + " %";
+    $("t-bar").style.width = (clamp((t - T_TAKEOFF) / (T_ORBIT - T_TAKEOFF)) * 100).toFixed(1) + "%";
+  }
+  // HUD de la cámara del dron
+  setOp($("hud"), inPov ? 1 : 0);
+  setOp(document.querySelector("#hud .bottom"), 1 - win(t, 30.2, 33.4, .3, .3));
+  $("compass").style.width = Math.min(520, vw - 900) + "px";
+  $("hud").style.width = vw + "px";
+  if (inPov) {
+    $("hudclock").textContent = fmtClock(clockS);
+    $("recdot").style.opacity = frac(t) < .55 ? 1 : .25;
+    const hdg = ((st.bearing + 180) % 360 + 360) % 360;
+    $("hdg").textContent = String(Math.round(hdg)).padStart(3, "0") + "°";
+    tape.style.left = (Math.min(520, vw - 900) / 2 - hdg * PX_PER_DEG) + "px";
+    $("h-alt").textContent = dec(st.p.y, 0) + " m";
+    $("h-v").textContent = dec(ORBIT_V + Math.sin(t * 1.3) * .1) + " m/s";
+    $("h-g").textContent = "−" + Math.round(THREE.MathUtils.radToDeg(Math.atan2(st.p.y - TARGET.y, ORBIT_R))) + "°";
+    $("h-b").textContent = Math.round(94 - t * .22) + " %";
+    const lat = -33.4187 - st.p.z * 0.000009, lng = -70.6559 + st.p.x * 0.0000108;
+    $("h-pos").textContent = `${dec(lat, 5)} · ${dec(lng, 5)}`;
+    $("h-orb").textContent = Math.round(clamp((st.bearing - 230) / 100) * 100);
+    // Detecciones ancladas a la escena; las etiquetas se apilan hacia arriba si chocan
+    const placed = [];
+    for (const d of DETS) {
+      let o = smooth(d.t0, d.t0 + .3, t);
+      if (!d.major) o *= 1 - smooth(SHOTS.E[0], SHOTS.E[0] + .6, t);
+      const s = project(d.p, c, vw, H);
+      const pR = project([d.p[0], d.p[1] + d.r, d.p[2]], c, vw, H);
+      const rad = Math.max(24, Math.abs(pR.y - s.y));
+      const visible = !s.behind && s.x > 60 && s.x < vw - 60 && s.y > 150 && s.y < H - 120;
+      o = visible ? o : 0;
+      setOp(d.el, o); setOp(d.lab, o); setOp(d.ln, o * .8);
+      if (o <= 0) { d.ly = null; continue; }
+      const pop = 1 + (1 - smooth(d.t0, d.t0 + .3, t)) * .5;
+      const w = rad * 2.1 * pop, h = rad * 1.7 * pop;
+      const bx = s.x - w / 2, by = s.y - h / 2;
+      d.el.style.left = bx + "px"; d.el.style.top = by + "px"; d.el.style.width = w + "px"; d.el.style.height = h + "px";
+      const lw = d.lab.offsetWidth, lh = d.lab.offsetHeight;
+      const lx = clamp(bx - 2, 50, vw - lw - 50);
+      let ly = by - 10 - lh;
+      for (let guard = 0; guard < 12; guard++) {
+        const hit = placed.find((r) => lx < r.x + r.w + 8 && lx + lw + 8 > r.x && ly < r.y + r.h + 6 && ly + lh + 6 > r.y);
+        if (!hit) break; ly = hit.y - lh - 6;
+      }
+      d.ly = d.ly == null ? ly : lerp(d.ly, ly, .22);
+      placed.push({ x: lx, y: d.ly, w: lw, h: lh });
+      d.lab.style.transform = `translate(${lx}px, ${d.ly}px)`;
+      const x0 = Math.max(lx + 10, Math.min(bx + 10, lx + lw - 10));
+      d.ln.style.left = x0 + "px"; d.ln.style.top = (d.ly + lh) + "px"; d.ln.style.height = Math.max(0, by - (d.ly + lh)) + "px";
+    }
+    // Tira de cuadros enviados
+    setOp(stripEl, win(t, 14, SHOTS.E[0] + .6, .3, .5));
+    for (const [i, fig] of captured) { const k = smooth(CAPTURES[i], CAPTURES[i] + .4, t); fig.style.opacity = k; fig.style.transform = `translateY(${(1 - k) * 30}px) scale(${.9 + .1 * k})`; }
+    $("striplbl").textContent = `Lote M3 → Vigía · ${captured.size}/5 cuadros enviados`;
+  }
+  // Destello de captura
+  let fo = 0; for (const tc of CAPTURES) fo = Math.max(fo, inPov ? (1 - smooth(tc, tc + .22, t)) * (t >= tc ? .35 : 0) : 0);
+  setOp($("flash"), fo);
+  // Panel del informe
+  const panelOn = pw > 1;
+  setOp($("panel"), panelOn ? 1 : 0);
+  $("panel").style.transform = `translateX(${700 - pw}px)`;
+  if (panelOn) {
+    $("p-clock").textContent = fmtClock(clockS);
+    const analyzed = t >= 26.0;
+    $("p-dstate").textContent = analyzed ? "5 cuadros · incorporado" : "Analizando 5 cuadros…";
+    $("p-spin").style.transform = `rotate(${t * 540}deg)`;
+    setOp($("p-spin"), analyzed ? 0 : 1);
+    $("p-rev").textContent = analyzed ? "15" : "14";
+    for (const it of ITEMS) {
+      const k = it.t0 < 0 ? 1 : smooth(it.t0, it.t0 + .45, t);
+      it.el.style.display = k <= 0 ? "none" : "flex";
+      it.el.style.opacity = k; it.el.style.transform = `translateX(${(1 - k) * 40}px)`;
+    }
+  }
+  const toastO = win(t, 30.6, SHOTS.E[1] - .3, .4, .3);
+  setOp($("toast"), toastO); $("toast").style.transform = `translateY(${(1 - smooth(30.6, 31, t)) * 30}px)`;
+  // Cierre
+  setOp($("end"), smooth(35.0, 35.9, t));
+  // Fundidos a negro entre planos
+  let fade = 1 - smooth(0, .6, t);
+  for (const cut of [SHOTS.B[0], SHOTS.C[0], SHOTS.D[0], SHOTS.F[0]]) fade = Math.max(fade, 1 - smooth(0, .22, Math.abs(t - cut)));
+  fade = Math.max(fade, smooth(37.3, 38, t));
+  setOp($("fade"), fade);
+  setOp($("vignette"), 1);
+  lastT = t;
+}
+
+window.DURATION = DURATION;
+window.renderAt = renderAt;
+window.ready = document.fonts.ready.then(() => { renderAt(0); return true; });
+
+// Reproducción en tiempo real al abrir con ?play
+if (new URLSearchParams(location.search).has("play")) {
+  const t0 = performance.now();
+  const seek = parseFloat(new URLSearchParams(location.search).get("t") || "0");
+  const loop = () => { renderAt(((performance.now() - t0) / 1000 + seek) % DURATION); requestAnimationFrame(loop); };
+  window.ready.then(loop);
+}
+</script>
+</body>
+</html>
