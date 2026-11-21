@@ -58,6 +58,8 @@ NEXT_PUBLIC_MAP_STYLE_LIGHT="${NEXT_PUBLIC_MAP_STYLE_LIGHT:-}"
 # Opcionales del motor de IA (vacío = valor por defecto de src/lib/config.ts).
 # Job de GPU de 3D Gaussian Splatting (deploy/splat-job.sh). Vacío = reconstrucción real desactivada.
 SPLAT_JOB="${SPLAT_JOB:-projects/${PROJECT}/locations/europe-west1/jobs/vigia-splat}"
+# Iteraciones de entrenamiento 3DGS: 4000 ≈ 2,5 min en una L4 (7000 da algo más de detalle y tarda ~4 min).
+SPLAT_ITERATIONS="${SPLAT_ITERATIONS:-4000}"
 VIGIA_AI_MODEL="${VIGIA_AI_MODEL:-}"
 VIGIA_AI_EFFORT="${VIGIA_AI_EFFORT:-}"
 VIGIA_AI_FAST="${VIGIA_AI_FAST:-1}"
@@ -403,6 +405,7 @@ info "Desplegando $SERVICE en Cloud Run"
   [[ -n "$NEXT_PUBLIC_MAP_STYLE_DARK" ]] && printf 'NEXT_PUBLIC_MAP_STYLE_DARK: %s\n' "$(yaml_quote "$NEXT_PUBLIC_MAP_STYLE_DARK")"
   [[ -n "$NEXT_PUBLIC_MAP_STYLE_LIGHT" ]] && printf 'NEXT_PUBLIC_MAP_STYLE_LIGHT: %s\n' "$(yaml_quote "$NEXT_PUBLIC_MAP_STYLE_LIGHT")"
   [[ -n "$SPLAT_JOB" ]] && printf 'SPLAT_JOB: %s\n' "$(yaml_quote "$SPLAT_JOB")"
+  [[ -n "$SPLAT_ITERATIONS" ]] && printf 'SPLAT_ITERATIONS: %s\n' "$(yaml_quote "$SPLAT_ITERATIONS")"
   [[ -n "$VIGIA_AI_MODEL" ]] && printf 'VIGIA_AI_MODEL: %s\n' "$(yaml_quote "$VIGIA_AI_MODEL")"
   [[ -n "$VIGIA_AI_EFFORT" ]] && printf 'VIGIA_AI_EFFORT: %s\n' "$(yaml_quote "$VIGIA_AI_EFFORT")"
   [[ -n "$VIGIA_AI_FAST" ]] && printf 'VIGIA_AI_FAST: %s\n' "$(yaml_quote "$VIGIA_AI_FAST")"
