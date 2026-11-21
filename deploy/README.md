@@ -245,6 +245,15 @@ docker run --rm -p 8080:8080 --add-host=host.docker.internal:host-gateway \
 Sin `-e DATABASE_URL` el contenedor corre en modo local (datos efímeros dentro del contenedor).
 `next build` ocupa varios GB de memoria: no lo corras con la máquina cargada.
 
+## Planes B durante la demo
+
+| Falla | Qué hacer |
+|---|---|
+| Claude lento o caído | Automático: Vigía cae a plantillas en ~30 s y no vuelve a esperar a Claude por 2 min. Un clic: en la ficha, botón «V» → **«Vigía sin IA (plantillas)»** (la fusión y la radio de esa emergencia pasan a reglas; «Volver a usar IA» lo revierte). La barra de la ficha muestra «Vigía sin IA». |
+| Puente Zello cortado o expulsado | La barra de la ficha muestra «Zello desconectado / sin señal». Si la cuenta del bot está abierta en otro lado, ciérrala: tras 3 expulsiones en 5 min el puente deja de pelear la conexión. Sin voz, la demo sigue con «V» → **«Demo: dos radios a la vez»**. Reiniciar el puente de la nube: `INSTANCES=0 SKIP_BUILD=1 CONFIRM=1 bash deploy/zello-bridge.sh` y luego `INSTANCES=1 SKIP_BUILD=1 CONFIRM=1 bash deploy/zello-bridge.sh`. No corras `npm run zello` local con el de la nube encendido (el puente local se niega si lo detecta; `--force` lo salta). |
+| Cloud SQL no responde | Las consultas fallan en ~10–15 s en vez de colgarse. Pasar a modo local en memoria (sin login, datos efímeros): `gcloud run services update vigia --region southamerica-west1 --remove-secrets=DATABASE_URL --max-instances=1` y en el tablero «Demostración → Cargar incidentes de demostración». Volver: correr `deploy/cloudrun.sh` de nuevo. |
+| Se cae el Wi-Fi del evento | Hotspot del teléfono para el notebook de la mesa. Radio y Vigía siguen (corren en la nube). La ficha muestra «Sin conexión · hace N s» mientras no hay red. El público debe usar el QR con código (`/reportar/<código>`), abierto desde la URL pública, no desde localhost. |
+
 ## Notas
 
 - La clave del usuario de la base pasa como argumento a `gcloud sql users create/set-password`

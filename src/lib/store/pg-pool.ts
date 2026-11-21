@@ -13,6 +13,14 @@ import { config } from "../config";
 
 type GlobalWithPgPool = typeof globalThis & { __vigiaPgPool?: Pool };
 
+/**
+ * Una base que acepta la conexión pero no contesta no debe colgar las páginas hasta el límite
+ * de Cloud Run (900 s): Postgres corta la sentencia a los 10 s y el cliente deja de esperar a
+ * los 15 s aunque la red se trague la respuesta. Las migraciones esperan más (pg-migrate.ts).
+ */
+export const STATEMENT_TIMEOUT_MS = 10_000;
+export const QUERY_TIMEOUT_MS = 15_000;
+
 const NUMERIC_OID = 1700;
 const INT8_OID = 20;
 
@@ -35,6 +43,8 @@ function createPool(): Pool {
     max: config.databasePoolMax,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 15_000,
+    statement_timeout: STATEMENT_TIMEOUT_MS,
+    query_timeout: QUERY_TIMEOUT_MS,
     application_name: "vigia",
     types: buildTypes(),
   });
