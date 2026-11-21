@@ -111,7 +111,7 @@ export default function Home() {
       </header>
 
       <main className="flex-1">
-        {/* Portada sobre el timelapse real de Santiago (Costanera Center y cordillera). */}
+        {/* Portada sobre el timelapse real de Santiago desde el San Cristóbal (Costanera Center y cordillera). */}
         <section aria-labelledby="portada-titulo" className="relative isolate overflow-hidden">
           <picture
             className="pointer-events-none absolute inset-0 -z-10 bg-cover bg-bottom"
@@ -126,7 +126,7 @@ export default function Home() {
             className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-r from-[#151A21]/55 via-[#151A21]/20 to-transparent max-lg:bg-[#151A21]/40"
           />
 
-          <div className="mx-auto grid w-full max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 md:py-24 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-16">
+          <div className="mx-auto grid min-h-[min(88dvh,980px)] w-full max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 md:py-32 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:gap-16">
             <div className="flex min-w-0 flex-col gap-8">
               <h1
                 id="portada-titulo"
