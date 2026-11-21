@@ -192,7 +192,7 @@ export function CommsPanel({
     >
       {analysis && <MaydayBanner analysis={analysis} knownSeqs={knownSeqs} onSelectSeq={selectSeq} />}
 
-      <div className="max-h-[45%] shrink-0 overflow-y-auto">
+      <div className="max-h-[35%] shrink-0 overflow-y-auto">
         <AnalysisSummary
           analysis={analysis}
           engine={engine}
@@ -207,7 +207,8 @@ export function CommsPanel({
       </div>
 
       <CommsLog
-        className="flex-1"
+        // Sin un mínimo, el resumen y el redactor dejan la bitácora en 0 px en pantallas bajas.
+        className="min-h-28! flex-1"
         entries={entries}
         pending={visiblePending}
         tags={tags}

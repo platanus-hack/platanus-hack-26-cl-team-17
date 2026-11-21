@@ -57,7 +57,7 @@ NEXT_PUBLIC_MAP_STYLE_LIGHT="${NEXT_PUBLIC_MAP_STYLE_LIGHT:-}"
 
 # Opcionales del motor de IA (vacío = valor por defecto de src/lib/config.ts).
 # Job de GPU de 3D Gaussian Splatting (deploy/splat-job.sh). Vacío = reconstrucción real desactivada.
-SPLAT_JOB="${SPLAT_JOB:-projects/${PROJECT}/locations/us-central1/jobs/vigia-splat}"
+SPLAT_JOB="${SPLAT_JOB:-projects/${PROJECT}/locations/europe-west1/jobs/vigia-splat}"
 VIGIA_AI_MODEL="${VIGIA_AI_MODEL:-}"
 VIGIA_AI_EFFORT="${VIGIA_AI_EFFORT:-}"
 VIGIA_AI_FAST="${VIGIA_AI_FAST:-}"

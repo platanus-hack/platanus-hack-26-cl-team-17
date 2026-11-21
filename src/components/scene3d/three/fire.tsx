@@ -72,7 +72,7 @@ export function Flames({ position, radius, strong, light, seed }: { position: Ve
     <group position={position}>
       <group ref={group}>
         {tongues.map((tg, i) => (
-          <mesh key={i} geometry={flameGeometry()} position={[tg.x, 0, tg.z]} scale={[tg.r, tg.h, tg.r]}>
+          <mesh key={i} geometry={flameGeometry()} position={[tg.x, 0, tg.z]} scale={[tg.r, tg.h, tg.r]} renderOrder={8}>
             <meshBasicMaterial
               color={i === 0 ? palette.warning : i % 2 ? palette.accent : palette.critical}
               transparent
@@ -83,8 +83,9 @@ export function Flames({ position, radius, strong, light, seed }: { position: Ve
           </mesh>
         ))}
       </group>
-      <sprite ref={glowRef} position-y={radius * 0.7} scale={[glow, glow, 1]} raycast={() => undefined}>
-        <spriteMaterial map={glowTexture()} color={palette.accent} blending={THREE.AdditiveBlending} transparent depthWrite={false} opacity={0.8} />
+      {/* El resplandor se ve a través de muros y humo: marca dónde está el foco. */}
+      <sprite ref={glowRef} position-y={radius * 0.7} scale={[glow, glow, 1]} renderOrder={9} raycast={() => undefined}>
+        <spriteMaterial map={glowTexture()} color={palette.accent} blending={THREE.AdditiveBlending} transparent depthWrite={false} depthTest={false} opacity={0.9} />
       </sprite>
       {light && <pointLight position-y={radius * 0.8} color={palette.warning} intensity={strong ? 60 : 30} distance={radius * 9} decay={1.6} />}
     </group>
@@ -135,6 +136,8 @@ function FireZone({ f, lightIndex }: { f: NFire; lightIndex: number }) {
       {labels && (
         <Label
           position={[f.x, f.z + f.radius * (smokeOnly ? 1.5 : 1.9), -f.y]}
+          priority={f.intensity === "heavy" ? 72 : smokeOnly ? 48 : 62}
+          pinned={selected}
           onActivate={() => select({ kind: "fire", id: f.id })}
           ariaLabel={`${fireCaption(f)}, confianza ${CONFIDENCE_LABEL[f.confidence]}`}
         >
@@ -279,7 +282,7 @@ function SmokePlume({ s }: { s: NSmoke }) {
         </mesh>
       </group>
       {selected && labels && (
-        <Label position={top} align="center" onActivate={() => select({ kind: "smoke", id: s.id })} ariaLabel="Columna de humo">
+        <Label position={top} align="center" priority={50} pinned onActivate={() => select({ kind: "smoke", id: s.id })} ariaLabel="Columna de humo">
           <Chip tone="muted" selected>
             Columna de humo
           </Chip>

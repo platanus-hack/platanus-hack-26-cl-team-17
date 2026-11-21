@@ -16,7 +16,7 @@ import { INCIDENT_STATUS_LABEL, INCIDENT_TYPE_LABEL, SEVERITY_LABEL, TRAPPED_LAB
 import { BaseMapNotice, LoadingVeil, MapButton, MapFatalError, TONE_SOLID, ZoomControls, type Tone } from "./map-chrome";
 import { MapMarker } from "./map-marker";
 import type { OverviewMapProps } from "./types";
-import { useMapLibre } from "./use-maplibre";
+import { useMapLibre, type MapView } from "./use-maplibre";
 
 const SINGLE_ZOOM = 15;
 const MAX_FIT_ZOOM = 15;
@@ -38,6 +38,36 @@ export function incidentTone(i: Pick<IncidentSummary, "status" | "severity" | "t
   return { tone: "neutral", pulse: false };
 }
 
+const LABEL_MAX = 22;
+const NO_HIDDEN: ReadonlySet<string> = new Set();
+
+/** Prioridad para conservar la etiqueta cuando dos chocan: seleccionado > crítico > activo > resto. */
+function labelPriority(i: IncidentSummary, selectedId: string | null | undefined): number {
+  if (i.id === selectedId) return 4;
+  if (i.status === "closed") return 0;
+  if (incidentTone(i).tone === "critical") return 3;
+  return i.status === "active" ? 2 : 1;
+}
+
+/**
+ * Etiquetas que se ocultan porque chocarían con otra de mayor prioridad (el marcador sigue
+ * visible y su texto completo está en aria-label). Caja aproximada bajo el marcador.
+ */
+export function labelsToHide(view: MapView, incidents: readonly IncidentSummary[], selectedId: string | null | undefined) {
+  const order = [...incidents].sort((a, b) => labelPriority(b, selectedId) - labelPriority(a, selectedId));
+  const kept: { x1: number; x2: number; y1: number; y2: number }[] = [];
+  const hidden = new Set<string>();
+  for (const i of order) {
+    const p = view.project({ lat: i.lat, lng: i.lng });
+    const half = Math.min(160, shortText(i.title || i.code, LABEL_MAX).length * 6.2 + 14) / 2;
+    const box = { x1: p.x - half, x2: p.x + half, y1: p.y + 20, y2: p.y + 40 };
+    const collides = kept.some((k) => box.x1 < k.x2 && box.x2 > k.x1 && box.y1 < k.y2 && box.y2 > k.y1);
+    if (collides) hidden.add(i.id);
+    else kept.push(box);
+  }
+  return hidden.size ? hidden : NO_HIDDEN;
+}
+
 function incidentAriaLabel(i: IncidentSummary): string {
   return [
     `${INCIDENT_TYPE_LABEL[i.type]}: ${i.title || i.code}`,
@@ -55,10 +85,12 @@ function incidentAriaLabel(i: IncidentSummary): string {
 function OverviewMarker({
   incident: i,
   selected,
+  showLabel,
   onSelect,
 }: {
   incident: IncidentSummary;
   selected: boolean;
+  showLabel: boolean;
   onSelect?: (id: string) => void;
 }) {
   const { tone, pulse } = incidentTone(i);
@@ -87,15 +119,17 @@ function OverviewMarker({
           !
         </span>
       )}
-      <span
-        aria-hidden
-        className={cn(
-          "absolute left-1/2 top-full mt-1 max-w-[10rem] -translate-x-1/2 truncate whitespace-nowrap rounded bg-surface/90 px-1.5 py-px text-[11px] font-semibold text-text shadow",
-          selected && "ring-1 ring-info",
-        )}
-      >
-        {shortText(i.title || i.code, 22)}
-      </span>
+      {showLabel && (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute left-1/2 top-full mt-1 max-w-[10rem] -translate-x-1/2 truncate whitespace-nowrap rounded bg-surface/90 px-1.5 py-px text-[11px] font-semibold text-text shadow",
+            selected && "ring-1 ring-info",
+          )}
+        >
+          {shortText(i.title || i.code, LABEL_MAX)}
+        </span>
+      )}
     </>
   );
   if (!onSelect) {
@@ -131,8 +165,10 @@ export default function OverviewMapCanvas({ incidents, selectedId, onSelect, the
     bounds: points.length > 1 ? boundsOf(points) : null,
     boundsMaxZoom: MAX_FIT_ZOOM,
     boundsPadding: FIT_PADDING,
+    trackView: true,
   });
-  const { map, containerRef, controller, base, error, loaded } = handle;
+  const { map, containerRef, controller, base, error, loaded, view } = handle;
+  const hiddenLabels = useMemo(() => (view ? labelsToHide(view, valid, selectedId) : NO_HIDDEN), [view, valid, selectedId]);
 
   const frameAll = (animate: boolean) => {
     if (points.length === 0) controller.flyTo(publicConfig.defaultCenter, EMPTY_ZOOM, animate);
@@ -176,7 +212,12 @@ export default function OverviewMapCanvas({ incidents, selectedId, onSelect, the
 
       {valid.map((i) => (
         <MapMarker key={i.id} map={map} position={{ lat: i.lat, lng: i.lng }} zIndex={zIndexOf(i)}>
-          <OverviewMarker incident={i} selected={i.id === selectedId} onSelect={onSelect} />
+          <OverviewMarker
+            incident={i}
+            selected={i.id === selectedId}
+            showLabel={!hiddenLabels.has(i.id)}
+            onSelect={onSelect}
+          />
         </MapMarker>
       ))}
 

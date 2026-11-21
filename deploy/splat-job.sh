@@ -18,14 +18,14 @@
 set -euo pipefail
 
 PROJECT="${PROJECT:-platanus-515411}"
-REGION="${REGION:-us-central1}"
+REGION="${REGION:-europe-west1}"
 JOB="${JOB:-vigia-splat}"
 AR_REPO="${AR_REPO:-vigia}"
 IMAGE_NAME="${IMAGE_NAME:-vigia-splat}"
 SA_NAME="${SA_NAME:-vigia-splat}"
 APP_SA="${APP_SA:-vigia-run@${PROJECT}.iam.gserviceaccount.com}"
 BUCKET="${BUCKET:-platanus-515411-vigia-evidencia}"
-GPU_TYPE="${GPU_TYPE:-nvidia-rtx-pro-6000}"
+GPU_TYPE="${GPU_TYPE:-nvidia-l4}"
 # Mínimos que exige cada GPU en Cloud Run (RTX PRO 6000: 20 vCPU / 80 GiB; L4: 4 / 16 GiB,
 # aquí 8 / 32 GiB para tener RAM al decodificar videos).
 case "$GPU_TYPE" in
@@ -181,6 +181,7 @@ else
 fi
 
 info "Desplegando el job $JOB"
+DEPLOY_OK=1
 if ! gc run jobs deploy "$JOB" \
   --region="$REGION" \
   --image="$IMAGE" \
@@ -190,9 +191,15 @@ if ! gc run jobs deploy "$JOB" \
   --tasks=1 --parallelism=1 --max-retries=0 --task-timeout="$TASK_TIMEOUT" \
   --set-env-vars="SPLAT_GPU_TYPE=${GPU_TYPE}" \
   --labels="app=vigia,component=splat"; then
-  die "No se pudo desplegar el job. Si el error habla de cuota de GPU, pide cuota de $GPU_TYPE en $REGION (IAM y administración → Cuotas, servicio Cloud Run) o vuelve a correr con GPU_TYPE=nvidia-l4."
+  # Cloud Run guarda la especificación aunque el job quede sin "Ready": si el recurso existe,
+  # se siguen aplicando los permisos para que funcione apenas se resuelva la cuota.
+  gc run jobs describe "$JOB" --region="$REGION" >/dev/null 2>&1 \
+    || die "No se pudo crear el job. Revisa el error de arriba."
+  DEPLOY_OK=0
+  warn "El job quedó guardado pero sin \"Ready\". \"Project failed to initialize in this region due to quota exceeded\" es la cuota MaxRegionsPerProject de Cloud Run (regiones usadas por el proyecto), no la de GPU: pide más en IAM y administración → Cuotas (servicio Cloud Run, \"Number of regions\") y vuelve a correr este script con SKIP_BUILD=1. Si el error es de cuota de GPU, pide cuota de $GPU_TYPE en $REGION o usa GPU_TYPE=nvidia-l4."
+else
+  ok "Job $JOB_RESOURCE"
 fi
-ok "Job $JOB_RESOURCE"
 
 info "Permisos de $APP_SA sobre el job"
 # jobsExecutorWithOverrides: run + runWithOverrides (+ cancelar ejecuciones). run.viewer a nivel
@@ -203,6 +210,10 @@ ok "roles/run.jobsExecutorWithOverrides en $JOB"
 gc run jobs add-iam-policy-binding "$JOB" --region="$REGION" \
   --member="serviceAccount:${APP_SA}" --role=roles/run.viewer >/dev/null
 ok "roles/run.viewer en $JOB"
+
+if [[ "$DEPLOY_OK" != "1" ]]; then
+  die "Permisos aplicados, pero el job no se puede ejecutar hasta resolver la cuota (ver aviso arriba)."
+fi
 
 info "Listo"
 cat <<EOF

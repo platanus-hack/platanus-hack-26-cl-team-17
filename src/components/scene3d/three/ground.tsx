@@ -47,7 +47,7 @@ export function Ground({ size, center, focus }: { size: number; center: XY; focu
         <group key={r}>
           <Line points={pts} color={palette.lineStrong} lineWidth={1.2} dashed dashSize={2.2} gapSize={2.2} transparent opacity={0.9} />
           {labels && (
-            <Label position={[focus.x, Y_RING, -(focus.y + r)]} align="center">
+            <Label position={[focus.x, Y_RING, -(focus.y + r)]} align="center" priority={8}>
               <span className="font-mono text-[10px] text-faint" style={HALO}>
                 {r} m
               </span>
@@ -92,12 +92,12 @@ function RoadMesh({ road, focus }: { road: NRoad; focus: XY }) {
         {hatch && (
           <mesh rotation-x={-Math.PI / 2} position-y={Y_HATCH}>
             <planeGeometry args={[road.length, road.width]} />
-            <meshBasicMaterial map={hatch} transparent opacity={0.75} depthWrite={false} />
+            <meshBasicMaterial map={hatch} transparent opacity={0.42} depthWrite={false} />
           </mesh>
         )}
       </group>
       {name && (labels || road.blocked) && (
-        <Label position={[lp.x, 0.2, -lp.y]} align="center" layer={road.blocked ? "high" : "base"}>
+        <Label position={[lp.x, 0.2, -lp.y]} align="center" layer={road.blocked ? "high" : "base"} priority={road.blocked ? 58 : 24} pinned={selected}>
           {road.blocked ? (
             <Chip tone="warning">{name} · bloqueada</Chip>
           ) : (

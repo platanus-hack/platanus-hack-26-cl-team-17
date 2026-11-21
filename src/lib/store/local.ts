@@ -67,6 +67,7 @@ const INCIDENT_PATCH_KEYS = [
   "comms_analysis",
   "comms_engine",
   "comms_analysis_updated_at",
+  "reconstruction",
 ] as const satisfies readonly Exclude<keyof IncidentPatch, "pipeline">[];
 const PIPELINE_KEYS = Object.keys(EMPTY_PIPELINE) as (keyof PipelineState)[];
 const MEDIA_PATCH_KEYS = [

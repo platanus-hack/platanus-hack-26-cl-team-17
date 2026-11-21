@@ -81,6 +81,8 @@ function Person({ p }: { p: NPerson }) {
         <Label
           position={[0, beacon > 0 ? pinY + (critical ? 1.5 : 1.1) : 2, 0]}
           layer={critical ? "critical" : injured ? "high" : "base"}
+          priority={critical ? 100 : injured ? 62 : 36}
+          pinned={critical || selected}
           onActivate={() => select({ kind: "person", id: p.id })}
           ariaLabel={`${caption}, confianza ${CONFIDENCE_LABEL[p.confidence]}`}
         >

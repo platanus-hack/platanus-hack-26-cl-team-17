@@ -8,8 +8,8 @@ import { useCallback, useEffect, useRef, type ComponentRef, type RefObject } fro
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { clamp, fitView, niceScaleLength, type Bounds, type Vec3, type ViewPreset } from "../geometry";
-import { clampTarget, easeInOut, metersPerPixel, viewHeadingDeg } from "./pose";
+import { clamp, niceScaleLength, type Bounds, type Vec3, type ViewPreset } from "../geometry";
+import { clampTarget, easeInOut, fitBox, metersPerPixel, viewHeadingDeg } from "./pose";
 
 type Controls = ComponentRef<typeof OrbitControls>;
 
@@ -31,7 +31,10 @@ export interface RigApi {
 const tuple = (v: THREE.Vector3): Vec3 => [v.x, v.y, v.z];
 
 export interface CameraRigProps {
+  /** Caja de todo el contenido (vista Planta). */
   frame: Bounds;
+  /** Núcleo táctico (primer encuadre y vistas Isométrica, Frente y Posterior). */
+  core: Bounds;
   extent: Bounds;
   frontHeadingDeg: number;
   groundSize: number;
@@ -51,7 +54,7 @@ interface Anim {
   dur: number;
 }
 
-export function CameraRig({ frame, extent, frontHeadingDeg, groundSize, request, poseRef, apiRef, reducedMotion }: CameraRigProps) {
+export function CameraRig({ frame, core, extent, frontHeadingDeg, groundSize, request, poseRef, apiRef, reducedMotion }: CameraRigProps) {
   const get = useThree((s) => s.get);
   const controls = useRef<Controls>(null);
   const anim = useRef<Anim | null>(null);
@@ -94,10 +97,9 @@ export function CameraRig({ frame, extent, frontHeadingDeg, groundSize, request,
     (preset: ViewPreset): CameraPose => {
       const { size, camera } = get();
       const fov = camera instanceof THREE.PerspectiveCamera ? camera.fov : 45;
-      const f = fitView(frame, preset, frontHeadingDeg, size.width / Math.max(1, size.height), fov);
-      return { position: f.position, target: f.target };
+      return fitBox(preset === "top" ? frame : core, preset, frontHeadingDeg, size.width / Math.max(1, size.height), fov);
     },
-    [get, frame, frontHeadingDeg],
+    [get, frame, core, frontHeadingDeg],
   );
 
   // Primer encuadre: la pose previa del usuario (si vuelve desde la planta) o isométrica al contenido.

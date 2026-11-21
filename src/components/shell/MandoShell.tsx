@@ -70,7 +70,8 @@ export function MandoShell({
   const nav = staffAuth && staff?.role === "admin" ? [NAV_INCIDENTS, NAV_PERSONAL] : [NAV_INCIDENTS];
 
   return (
-    <div className={cn("flex h-dvh flex-col overflow-hidden bg-bg text-text", className)}>
+    // relative: los elementos absolutos (p. ej. sr-only) quedan recortados aquí y no alargan el documento.
+    <div className={cn("relative flex h-dvh flex-col overflow-hidden bg-bg text-text", className)}>
       <a
         href={`#${contentId}`}
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:border focus:border-line-strong focus:bg-surface-2 focus:px-3 focus:py-2 focus:text-sm focus:text-text"
@@ -85,7 +86,7 @@ export function MandoShell({
           className="flex h-9 shrink-0 items-center gap-2 rounded-md px-1 text-text"
         >
           <Logo size={24} title="" />
-          <span className="hidden font-display text-lg leading-none font-bold tracking-[0.12em] uppercase xl:inline">
+          <span className="hidden font-display text-lg leading-none font-semibold xl:inline">
             Vigía
           </span>
         </Link>
@@ -130,7 +131,7 @@ export function MandoShell({
 
         <div className="min-w-0 flex-1">
           {title ? (
-            <h1 className="truncate font-display text-base leading-tight font-semibold tracking-wide">{title}</h1>
+            <h1 className="truncate font-display text-base leading-tight font-semibold">{title}</h1>
           ) : null}
           {subtitle ? <div className="truncate text-xs leading-tight text-muted">{subtitle}</div> : null}
         </div>
@@ -155,7 +156,7 @@ export function MandoShell({
         {staffAuth && staff ? <UserMenu staff={staff} /> : null}
       </header>
 
-      <main id={contentId} tabIndex={-1} className={cn("min-h-0 flex-1 outline-none", contentClassName)}>
+      <main id={contentId} tabIndex={-1} className={cn("relative min-h-0 flex-1 outline-none", contentClassName)}>
         {children}
       </main>
     </div>

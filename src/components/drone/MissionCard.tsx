@@ -143,7 +143,7 @@ export function MissionCard({ mission: m, center, media, onChanged, onOpenMedia,
           <span className="text-xs text-muted">{planText(m)}</span>
         </div>
         <div className="flex items-end justify-between gap-3">
-          <p className={cn("flex items-center gap-2 font-display text-3xl leading-none font-semibold uppercase", toneText[sTone === "neutral" ? "drone" : sTone])}>
+          <p className={cn("flex items-center gap-2 font-display text-3xl leading-none font-semibold", toneText[sTone === "neutral" ? "drone" : sTone])}>
             <StatusIcon aria-hidden="true" className="size-7 shrink-0" />
             {missionStatusLabel[m.status]}
           </p>
@@ -205,7 +205,7 @@ export function MissionCard({ mission: m, center, media, onChanged, onOpenMedia,
             icon={Gauge}
             value={last?.speed_ms != null ? `${formatNumber(last.speed_ms, 1)} m/s` : "—"}
           />
-          <Stat size="sm" label="Al incidente" icon={MapPin} value={formatDistance(distance)} />
+          <Stat size="sm" label="Distancia" icon={MapPin} value={formatDistance(distance)} title="Distancia del dron al incidente" />
         </div>
       </div>
       <div className="flex flex-col gap-1.5 px-3 pb-3">

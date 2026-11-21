@@ -16,6 +16,7 @@ import {
   type CommsAnalysis,
   type EvidenceRef,
   type MediaAnalysis,
+  type PersonStatus,
   type SceneModel,
   type SituationReport,
 } from "@/lib/domain";
@@ -31,6 +32,13 @@ import {
 } from "./prompts";
 import type { CommsAnalysisInput, Engine, FusionInput, MediaAnalysisInput } from "./types";
 
+/**
+ * Los esquemas de medio, informe y escena superan el límite del compilador de
+ * gramáticas de la salida estructurada (400 medido con claude-opus-5-5): van
+ * directo en modo prompt (esquema en el sistema + validación Zod + una corrección).
+ */
+const LARGE_SCHEMA_MODE = "prompt" as const;
+
 export function createClaudeEngine(): Engine {
   return {
     kind: "claude",
@@ -42,6 +50,7 @@ export function createClaudeEngine(): Engine {
         system: MEDIA_SYSTEM_PROMPT,
         content: buildMediaUserContent(input),
         schema: MediaAnalysisAISchema,
+        mode: LARGE_SCHEMA_MODE,
       });
       return postMediaAnalysis(raw, input);
     },
@@ -62,6 +71,7 @@ export function createClaudeEngine(): Engine {
         system: SITUATION_SYSTEM_PROMPT,
         content: buildFusionUserContent(input, "situation"),
         schema: SituationReportAISchema,
+        mode: LARGE_SCHEMA_MODE,
       });
       return postSituation(raw, input);
     },
@@ -72,6 +82,7 @@ export function createClaudeEngine(): Engine {
         system: SCENE_SYSTEM_PROMPT,
         content: buildFusionUserContent(input, "scene"),
         schema: SceneModelAISchema,
+        mode: LARGE_SCHEMA_MODE,
       });
       return postScene(raw, input);
     },
@@ -219,10 +230,91 @@ export function postSituation(report: SituationReport, input: FusionInput): Situ
 }
 
 /** Solo limpia evidencias de personas; la geometría la sanea sanitizeScene en el pipeline. */
+const AT_RISK_STATUSES: ReadonlySet<PersonStatus> = new Set<PersonStatus>([
+  "trapped",
+  "at_window_or_balcony",
+  "on_roof",
+  "injured",
+]);
+const STATUS_RANK: Record<PersonStatus, number> = {
+  trapped: 0,
+  at_window_or_balcony: 1,
+  on_roof: 2,
+  injured: 3,
+  unknown: 4,
+  evacuating: 5,
+  bystander: 6,
+  responder: 7,
+};
+const REPORTED_PERSON_NOTE =
+  "Marcador agregado por el sistema: una fuente informa a esta persona y la reconstrucción no la ubicó. Ubicación aproximada, no informada con precisión.";
+
+function isAtRisk(status: PersonStatus, count: number): boolean {
+  return AT_RISK_STATUSES.has(status) || (status === "unknown" && count > 0);
+}
+
+/**
+ * Si un análisis o la radio informan personas en riesgo y la escena no trae
+ * ninguna, agrega UN marcador (sin duplicar conteos) en la estructura afectada
+ * con confianza baja. La escena nunca debe "perder" a una persona reportada.
+ */
+export function ensureReportedPeople(scene: SceneModel, input: FusionInput): SceneModel["people"] {
+  if (scene.people.some((p) => isAtRisk(p.status, p.count))) return scene.people;
+
+  let status: PersonStatus | null = null;
+  let count = 0;
+  let floor = 0;
+  const evidence: EvidenceRef[] = [];
+  const locations: string[] = [];
+  for (const fm of input.media) {
+    for (const p of fm.analysis?.people ?? []) {
+      if (!isAtRisk(p.status, p.count)) continue;
+      if (status === null || STATUS_RANK[p.status] < STATUS_RANK[status]) status = p.status;
+      count = Math.max(count, nonNegativeCount(p.count), 1);
+      if (floor === 0 && p.floor > 0) floor = Math.round(p.floor);
+      if (p.location) locations.push(`${fm.media.label}: ${p.location}`);
+      evidence.push({ ref: fm.media.label, frame: p.frame_refs[0] ?? -1, note: p.description || p.location });
+    }
+  }
+  const victims = input.commsAnalysis?.victims;
+  if (victims?.status === "reported") {
+    status ??= "unknown";
+    count = Math.max(count, 1);
+    if (victims.detail) locations.push(`Radio: ${victims.detail}`);
+    for (const seq of victims.entry_seqs.slice(0, 3)) {
+      evidence.push({ ref: `C${seq}`, frame: -1, note: victims.detail });
+    }
+  }
+  if (status === null) return scene.people;
+
+  const structure = scene.structures.find((st) => st.role === "involved") ?? scene.structures[0] ?? null;
+  const floorHeight = structure && structure.floor_height_m > 0 ? structure.floor_height_m : 2.7;
+  const usedIds = new Set(scene.people.map((p) => p.id));
+  let n = scene.people.length + 1;
+  while (usedIds.has(`P${n}`)) n++;
+  return [
+    ...scene.people,
+    {
+      id: `P${n}`,
+      status,
+      count,
+      structure_id: structure?.id ?? "",
+      floor,
+      x: structure?.x ?? 0,
+      y: structure?.y ?? 0,
+      z: floor > 0 ? (floor - 1) * floorHeight + 1.5 : 0,
+      confidence: "low",
+      note: [REPORTED_PERSON_NOTE, ...locations].join(" ").slice(0, 600),
+      evidence: evidence.slice(0, 6),
+    },
+  ];
+}
+
 export function postScene(scene: SceneModel, input: FusionInput): SceneModel {
   const idx = fusionRefIndex(input);
-  return {
+  const cleaned: SceneModel = {
     ...scene,
     people: scene.people.map((p) => ({ ...p, evidence: cleanEvidence(p.evidence, idx) })),
   };
+  return { ...cleaned, people: ensureReportedPeople(cleaned, input) };
 }

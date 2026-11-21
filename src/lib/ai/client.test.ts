@@ -29,7 +29,10 @@ import {
   callStructuredWith,
   extractFinalText,
   mapSdkError,
+  normalizeToJsonSchema,
+  outputFormatFor,
   readStructuredOutput,
+  resetOutputModeMemo,
   toSdkContent,
   type MessagesTransport,
   type ModelSettings,
@@ -366,4 +369,80 @@ test("modo rápido: si su límite se agota, reintenta una vez a velocidad normal
   );
   assert.deepEqual(result, { ok: true, note: "normal" });
   assert.equal(t.calls.length, 2);
+});
+
+/* ─────────────── modo prompt (esquemas que superan el límite de gramática) ─────────────── */
+
+test("400 con salida estructurada → reintenta en modo prompt y lo recuerda para el esquema", async () => {
+  resetOutputModeMemo();
+  const Big = z.object({ ok: z.boolean(), note: z.string(), level: z.enum(["low", "unknown"]) });
+  const t = transport((p, n) => {
+    if (n === 1) {
+      assert.ok(p.output_config?.format, "primer intento con salida estructurada");
+      throw new BadRequestError(400, undefined, "compiled grammar is too large", headers());
+    }
+    assert.equal(p.output_config?.format, undefined, "modo prompt sin output_config.format");
+    assert.equal(p.output_config?.effort, "medium");
+    assert.equal(p.betas?.includes(FALLBACK_BETA), true);
+    const system = (p.system as { text: string }[])[0].text;
+    assert.match(system, /FORMATO DE SALIDA/);
+    assert.match(system, /"level"/);
+    return fakeMessage("end_turn", [text('Listo:\n```json\n{"ok":true,"note":"x","level":"LOW"}\n```')]);
+  });
+  const run = () =>
+    captureConsole(() =>
+      callStructuredWith(t, SETTINGS, { task: "media", system: "S", content: [{ type: "text", text: "x" }], schema: Big }),
+    );
+  const first = await run();
+  assert.deepEqual(first.result, { ok: true, note: "x", level: "low" });
+  assert.equal(t.calls.length, 2);
+  const second = await run();
+  assert.deepEqual(second.result, { ok: true, note: "x", level: "low" });
+  assert.equal(t.calls.length, 3, "la segunda vez va directo en modo prompt");
+  resetOutputModeMemo();
+});
+
+test("modo prompt: salida fuera de esquema → una sola corrección con los problemas", async () => {
+  const t = transport((p, n) => {
+    if (n === 1) return fakeMessage("end_turn", [text('{"note":"sin ok"}')]);
+    assert.equal(p.messages.length, 3);
+    assert.equal(p.messages[1].role, "assistant");
+    const last = p.messages[2].content;
+    assert.equal(typeof last, "string");
+    assert.match(String(last), /ok/);
+    return fakeMessage("end_turn", [text('{"ok":false,"note":"corregido"}')]);
+  });
+  const { result, logs } = await captureConsole(() =>
+    callStructuredWith(t, SETTINGS, {
+      task: "scene",
+      system: "S",
+      content: [{ type: "text", text: SECRET_NOTE }],
+      schema: Small,
+      mode: "prompt",
+    }),
+  );
+  assert.deepEqual(result, { ok: false, note: "corregido" });
+  assert.equal(t.calls.length, 2);
+  assert.doesNotMatch(logs.join("\n"), new RegExp(SECRET_NOTE));
+});
+
+test("normalizeToJsonSchema rellena solo lo seguro: nunca inventa booleanos, números ni estados", () => {
+  const S = z.object({
+    flag: z.boolean(),
+    count: z.number(),
+    status: z.enum(["confirmed", "possible"]),
+    kind: z.enum(["car", "unknown"]),
+    list: z.array(z.string()),
+    label: z.string(),
+  });
+  const filled: string[] = [];
+  const out = normalizeToJsonSchema({ count: "3", kind: "Bus" }, outputFormatFor(S).schema, filled) as Record<string, unknown>;
+  assert.equal(out.count, 3);
+  assert.equal(out.kind, "unknown");
+  assert.deepEqual(out.list, []);
+  assert.equal(out.label, "");
+  assert.equal("flag" in out, false);
+  assert.equal(out.status, undefined);
+  assert.equal(S.safeParse(out).success, false, "sin flag ni status debe fallar y pedir corrección");
+  assert.deepEqual(filled.sort(), ["flag", "label", "list", "status"]);
 });

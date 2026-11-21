@@ -24,8 +24,9 @@ function Intro({ aiReal }: { aiReal: boolean }) {
         <h3 className="font-display text-lg leading-tight font-semibold text-text">Sin dron en este incidente</h3>
         <p className="text-sm text-muted">
           Despliega un dron para ver la escena desde arriba: techumbre, patio posterior y exposiciones. Su posición
-          aparece aquí y en el mapa, y sus cuadros llegan en lotes de {LIMITS.DRONE_BATCH_FRAMES} que la IA{" "}
-          {aiReal ? "analiza" : "(SIMULADA en esta instancia) analiza"} junto con los videos de los vecinos.
+          aparece aquí y en el mapa, y sus cuadros llegan en lotes de {LIMITS.DRONE_BATCH_FRAMES} que la IA analiza junto
+          con los videos de los vecinos.
+          {!aiReal && <strong className="font-semibold text-warning"> En esta instancia el análisis es SIMULADO.</strong>}
         </p>
       </div>
     </div>

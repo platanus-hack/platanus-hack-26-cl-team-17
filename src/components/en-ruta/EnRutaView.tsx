@@ -16,11 +16,11 @@ import { MapSection, SceneSection } from "./PlaceSection";
 import { TrappedPanel, TrappedPending } from "./TrappedPanel";
 import { UpdateBanner } from "./UpdateBanner";
 
-/** Alto contraste para leer a un metro en movimiento: texto secundario y líneas más claros que en el mando. */
+/** Alto contraste para leer a un metro en movimiento: texto secundario y líneas más oscuros que en el mando. */
 const HIGH_CONTRAST = {
-  "--v-muted": "#c3cfdb",
-  "--v-line": "#2d3f53",
-  "--v-line-strong": "#4a6079",
+  "--v-muted": "#3f4754",
+  "--v-line": "#d3d7de",
+  "--v-line-strong": "#a9b0bb",
 } as CSSProperties;
 
 const STALE_AFTER_MS = 20_000;
@@ -77,7 +77,7 @@ export function EnRutaView({ id, shareKey }: EnRutaViewProps) {
       <Screen>
         <div role="status" className="flex min-h-dvh flex-col items-center justify-center gap-4 px-6 text-center">
           <Spinner size="lg" label="Cargando briefing" />
-          <p className="font-display text-3xl font-bold tracking-wide text-text">Cargando briefing…</p>
+          <p className="font-display text-3xl font-bold text-text">Cargando briefing…</p>
         </div>
       </Screen>
     );
@@ -226,7 +226,7 @@ function Problem({
     <Screen>
       <div role="alert" className="mx-auto flex min-h-dvh max-w-xl flex-col items-center justify-center px-6 text-center">
         <Icon aria-hidden className="size-16 text-warning" strokeWidth={2} />
-        <h1 className="mt-4 font-display text-4xl leading-tight font-bold tracking-wide text-text">{title}</h1>
+        <h1 className="mt-4 font-display text-4xl leading-tight font-bold text-text">{title}</h1>
         <p className="mt-3 text-xl leading-snug text-muted">{children}</p>
         {action}
       </div>

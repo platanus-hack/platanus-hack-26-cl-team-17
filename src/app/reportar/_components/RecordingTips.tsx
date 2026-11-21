@@ -12,7 +12,7 @@ const TIPS: readonly { icon: LucideIcon; text: string }[] = [
 export function RecordingTips({ className }: { className?: string }) {
   return (
     <section aria-labelledby="consejos-grabar" className={cn("rounded-lg border border-line bg-surface p-4", className)}>
-      <h2 id="consejos-grabar" className="font-display text-xl font-semibold tracking-wide text-text">
+      <h2 id="consejos-grabar" className="font-display text-xl font-semibold text-text">
         Cómo grabar
       </h2>
       <ul className="mt-3 flex flex-col gap-3">

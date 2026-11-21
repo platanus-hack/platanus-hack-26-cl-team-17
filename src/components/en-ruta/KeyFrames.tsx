@@ -80,6 +80,15 @@ export function KeyFrameViewer({
       size="full"
       title={k ? keyFrameLabel(k) : "Imagen"}
       bodyClassName="flex flex-col gap-3 p-2 sm:p-3"
+      footer={
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex min-h-14 w-full items-center justify-center rounded-md border border-line-strong bg-surface-2 px-6 text-lg font-bold text-text sm:w-auto"
+        >
+          Cerrar
+        </button>
+      }
     >
       {k && index !== null && (
         <>

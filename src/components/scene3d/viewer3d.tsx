@@ -21,7 +21,8 @@ import { Vehicles } from "./three/vehicles";
 import { AccessPoints, Annotations, Hazards } from "./three/markers";
 import { Drones, MediaCameras } from "./three/cameras";
 import { CameraRig, HudUpdater, type CameraPose, type RigApi, type ViewRequest } from "./three/rig";
-import { shouldAnimate } from "./three/pose";
+import { LabelLayout, LabelRegistry } from "./three/label";
+import { coreBounds, shouldAnimate } from "./three/pose";
 
 export interface Viewer3DProps {
   view: SceneView;
@@ -65,12 +66,25 @@ export default function Viewer3D(props: Viewer3DProps) {
   }, []);
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
+  const [labelRegistry] = useState(() => new LabelRegistry());
   const ctx = useMemo<SceneCtxValue>(
-    () => ({ palette, labels: layers.labels, compact, animate, selection, select: onSelect, openMedia: onOpenMedia, setHover, overlayRef }),
-    [palette, layers.labels, compact, animate, selection, onSelect, onOpenMedia, setHover],
+    () => ({
+      palette,
+      labels: layers.labels,
+      compact,
+      animate,
+      selection,
+      select: onSelect,
+      openMedia: onOpenMedia,
+      setHover,
+      overlayRef,
+      labelRegistry,
+    }),
+    [palette, layers.labels, compact, animate, selection, onSelect, onOpenMedia, setHover, labelRegistry],
   );
 
   const s = view.scene;
+  const core = useMemo(() => coreBounds(view.scene, view.frame), [view.scene, view.frame]);
   const gSize = groundSize(view.extent, s.focus);
   const gCenter = useMemo(() => ({ x: Math.round(s.focus.x / 10) * 10, y: Math.round(s.focus.y / 10) * 10 }), [s.focus.x, s.focus.y]);
 
@@ -98,6 +112,7 @@ export default function Viewer3D(props: Viewer3DProps) {
           <ambientLight intensity={0.4} />
           <CameraRig
             frame={view.frame}
+            core={core}
             extent={view.extent}
             frontHeadingDeg={s.frontHeadingDeg}
             groundSize={gSize}
@@ -110,7 +125,7 @@ export default function Viewer3D(props: Viewer3DProps) {
           <Ground size={gSize} center={gCenter} focus={s.focus} />
           <Roads roads={s.roads} focus={s.focus} />
           {layers.hazards && <Hazards items={s.hazards} />}
-          {layers.structures && <Structures items={s.structures} />}
+          {layers.structures && <Structures items={s.structures} fires={s.fires} />}
           {layers.fire && <Fires items={s.fires} />}
           {layers.fire && <Smokes items={s.smokes} />}
           {layers.vehicles && <Vehicles items={s.vehicles} />}
@@ -119,6 +134,7 @@ export default function Viewer3D(props: Viewer3DProps) {
           {layers.drone && <Drones items={view.drones} />}
           {layers.labels && <Annotations items={s.annotations} />}
           {layers.people && <People items={s.people} />}
+          <LabelLayout registry={labelRegistry} />
         </SceneCtx.Provider>
       </Canvas>
 

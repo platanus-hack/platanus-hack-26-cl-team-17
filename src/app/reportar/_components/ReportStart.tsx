@@ -80,7 +80,7 @@ export function ReportStart({ invalidCode }: ReportStartProps) {
       <div className="flex flex-col gap-5">
         <SafetyNotice />
         <header className="flex flex-col gap-3">
-          <h1 className="font-display text-3xl leading-none font-bold tracking-wide text-text">Envía tu video</h1>
+          <h1 className="font-display text-3xl leading-none font-bold text-text">Envía tu video</h1>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-line bg-surface px-4 py-3">
             <span className="flex size-10 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent">
               <TypeIcon aria-hidden className="size-5" strokeWidth={2.25} />
@@ -117,7 +117,7 @@ export function ReportStart({ invalidCode }: ReportStartProps) {
   return (
     <div className="flex flex-col gap-6">
       <header className="flex flex-col gap-2">
-        <h1 className="font-display text-3xl leading-none font-bold tracking-wide text-text sm:text-4xl">
+        <h1 className="font-display text-3xl leading-none font-bold text-text sm:text-4xl">
           Envía un video a Bomberos
         </h1>
         <p className="text-lg leading-snug text-muted">
@@ -224,7 +224,7 @@ export function ReportStart({ invalidCode }: ReportStartProps) {
       {showNearby && (
         <section aria-labelledby="cercanas-titulo" className="flex flex-col gap-3">
           <div>
-            <h2 id="cercanas-titulo" className="font-display text-2xl leading-tight font-bold tracking-wide text-text">
+            <h2 id="cercanas-titulo" className="font-display text-2xl leading-tight font-bold text-text">
               ¿Es esta emergencia?
             </h2>
             <p className="mt-1 text-base leading-snug text-muted">
@@ -242,7 +242,7 @@ export function ReportStart({ invalidCode }: ReportStartProps) {
       {showTypePicker && (
         <section aria-labelledby="tipo-titulo" className="flex flex-col gap-3">
           <div>
-            <h2 id="tipo-titulo" className="font-display text-2xl leading-tight font-bold tracking-wide text-text">
+            <h2 id="tipo-titulo" className="font-display text-2xl leading-tight font-bold text-text">
               ¿Qué está pasando?
             </h2>
             {geoStatus === "ready" && incidents.length === 0 && !nearby.error && (

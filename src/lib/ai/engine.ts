@@ -19,24 +19,23 @@ export type {
   MediaAnalysisInput,
 } from "./types";
 
-type GlobalWithEngine = typeof globalThis & {
-  __vigiaEngine?: Engine;
-  __vigiaSimulatedEngine?: Engine;
-};
+// Caché a nivel de módulo (no en globalThis): al editar el código en desarrollo el
+// módulo se recarga y el motor se vuelve a crear con las funciones nuevas. Los
+// motores no guardan estado; el cliente de Anthropic sí se comparte en client.ts.
+let engine: Engine | null = null;
+let simulatedEngine: Engine | null = null;
 
 export function getEngine(): Engine {
-  const g = globalThis as GlobalWithEngine;
   const kind = aiEngineKind();
   // Se revisa el modo en cada llamada: si cambia la configuración no queda un motor viejo pegado.
-  if (!g.__vigiaEngine || g.__vigiaEngine.kind !== kind) {
-    g.__vigiaEngine = kind === "claude" ? createClaudeEngine() : getSimulatedEngine();
+  if (!engine || engine.kind !== kind) {
+    engine = kind === "claude" ? createClaudeEngine() : getSimulatedEngine();
   }
-  return g.__vigiaEngine;
+  return engine;
 }
 
 /** Motor de reglas; el pipeline lo usa también como respaldo si Claude falla en la fusión. */
 export function getSimulatedEngine(): Engine {
-  const g = globalThis as GlobalWithEngine;
-  g.__vigiaSimulatedEngine ??= createSimulatedEngine();
-  return g.__vigiaSimulatedEngine;
+  simulatedEngine ??= createSimulatedEngine();
+  return simulatedEngine;
 }

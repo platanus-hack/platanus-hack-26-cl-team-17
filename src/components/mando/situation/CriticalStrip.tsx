@@ -123,43 +123,43 @@ function ReportStrip({ incident, situation, onEvidence, mode, className }: Repor
         className,
       )}
     >
-      <div className="flex flex-col gap-3 p-3 lg:flex-row lg:gap-4">
+      <div className="flex flex-col gap-2 p-3 lg:flex-row lg:gap-4">
         {/* Izquierda: atrapados */}
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex min-w-0 items-start gap-3">
             <span
               className={cn(
-                "flex size-14 shrink-0 items-center justify-center rounded-md",
+                "flex size-12 shrink-0 items-center justify-center rounded-md",
                 tone === "neutral" ? "border border-line bg-surface-2 text-muted" : cn(toneSolidBg[tone], "text-on-solid"),
                 alarm && "animate-pulse-critical",
               )}
             >
-              <Icon aria-hidden="true" className="size-8" />
+              <Icon aria-hidden="true" className="size-7" />
             </span>
             <div className="min-w-0">
               <p className="label-caps text-xs text-muted">Personas atrapadas</p>
               <p
                 aria-live="polite"
                 className={cn(
-                  "font-display text-4xl leading-none font-bold tracking-wide sm:text-5xl",
+                  "font-display text-3xl leading-none font-bold xl:text-4xl",
                   tone === "neutral" ? "text-text" : toneText[tone],
                 )}
               >
                 {display.primary}
                 {display.qualifier ? " " : null}
                 {display.qualifier ? (
-                  <span className="ml-2 align-middle text-xl font-semibold tracking-normal text-text sm:text-2xl">
+                  <span className="ml-2 align-middle text-lg font-semibold tracking-normal text-text xl:text-xl">
                     — {display.qualifier}
                   </span>
                 ) : null}
               </p>
               {count || locations.length > 0 ? (
-                <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-semibold text-text">
+                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-base font-semibold text-text">
                   {count ? <span className="tabular">{count}</span> : null}
                   {locations.length > 0 ? (
                     <span className="inline-flex min-w-0 items-center gap-1 font-medium">
                       <MapPin aria-hidden="true" className="size-4 shrink-0 text-muted" />
-                      <span className="min-w-0">{locations.join(" · ")}</span>
+                      <span className="line-clamp-2 min-w-0">{locations.join(" · ")}</span>
                     </span>
                   ) : null}
                 </p>
@@ -187,7 +187,7 @@ function ReportStrip({ incident, situation, onEvidence, mode, className }: Repor
             </Badge>
           </div>
           {situation.headline.trim() ? (
-            <p className="text-lg leading-snug font-semibold text-text">{situation.headline}</p>
+            <p className="text-base leading-snug font-semibold text-text xl:text-lg">{situation.headline}</p>
           ) : null}
           {seenType ? (
             <p className="inline-flex items-center gap-1.5 text-sm text-warning">

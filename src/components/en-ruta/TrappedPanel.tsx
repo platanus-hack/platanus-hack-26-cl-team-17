@@ -74,7 +74,9 @@ export function TrappedPanel({
         Personas atrapadas
       </h2>
       <p className={cn("mt-1 flex items-center gap-3 font-display text-5xl leading-none font-bold lg:text-6xl", TEXT_TONE[tone])}>
-        <Icon aria-hidden className={cn("size-11 shrink-0 lg:size-14", alarm && "animate-pulse-critical")} strokeWidth={2.5} />
+        <span aria-hidden className={cn("shrink-0 rounded-full p-1", alarm && "animate-pulse-critical")}>
+          <Icon className="size-10 lg:size-12" strokeWidth={2.5} />
+        </span>
         <span className="min-w-0 break-words">{labelOr(trappedStatusShort, trapped.status, "SIN DATO")}</span>
       </p>
       {count && <p className="mt-2 font-display text-3xl leading-tight font-bold text-text lg:text-4xl">{count}</p>}

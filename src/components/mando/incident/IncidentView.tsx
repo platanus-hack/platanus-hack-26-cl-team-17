@@ -13,6 +13,7 @@ import {
   Map as MapIcon,
   Radio,
   RotateCw,
+  ScanEye,
   SearchX,
   ShieldAlert,
   WifiOff,
@@ -34,6 +35,7 @@ import { Scene3D, type SceneSelection } from "@/components/scene3d";
 import { TacticalMap } from "@/components/map";
 import { CommsPanel } from "@/components/comms";
 import { DronePanel, useSimulatedMissionTicker } from "@/components/drone";
+import { ReconstructionPanel } from "@/components/splat";
 import { CriticalStrip, SituationPanel } from "@/components/mando/situation";
 import { TimelinePanel } from "@/components/mando/timeline";
 import { ScenarioChip, scenarioVisible, useScenario } from "@/components/mando/scenario";
@@ -141,6 +143,7 @@ function IncidentScreen({ id }: IncidentViewProps) {
   /* Estado de la interfaz */
   const [centerView, setCenterView] = useState<CenterView>("scene");
   const [mapMounted, setMapMounted] = useState(false);
+  const [splatMounted, setSplatMounted] = useState(false);
   const [activityTab, setActivityTab] = useState<ActivityTab>("timeline");
   const [mobileZone, setMobileZone] = useState<MobileZone>("situacion");
   const [viewer, setViewer] = useState<MediaViewerTarget | null>(null);
@@ -231,6 +234,7 @@ function IncidentScreen({ id }: IncidentViewProps) {
   const onCenterView = useCallback((v: CenterView) => {
     setCenterView(v);
     if (v === "map") setMapMounted(true);
+    if (v === "reconstruction") setSplatMounted(true);
   }, []);
 
   /* Avisos de alertas críticas nuevas */
@@ -354,7 +358,7 @@ function IncidentScreen({ id }: IncidentViewProps) {
       mode={mode}
       staff={staff}
     >
-      <div className="flex h-full min-h-0 flex-col overflow-y-auto md:overflow-hidden">
+      <div className="relative flex h-full min-h-0 flex-col overflow-y-auto md:overflow-hidden">
         {stale && <StaleBanner lastUpdatedAt={lastUpdatedAt} />}
         {scenario.incidentId === incident.id && scenarioVisible(scenario) && (
           <ScenarioChip scenario={scenario} onDismiss={scenario.dismiss} variant="inline" className="shrink-0" />
@@ -391,7 +395,8 @@ function IncidentScreen({ id }: IncidentViewProps) {
 
         <div
           className={cn(
-            "grid gap-2 p-2",
+            // minmax(0,1fr): sin esto, en teléfono la columna crece al ancho mínimo de su contenido y se sale.
+            "grid grid-cols-[minmax(0,1fr)] gap-2 p-2",
             "md:min-h-0 md:flex-1 md:grid-cols-[minmax(0,1fr)_340px] md:grid-rows-[minmax(0,1.3fr)_minmax(0,1fr)]",
             "xl:grid-cols-[360px_minmax(0,1fr)_380px] xl:grid-rows-1",
           )}
@@ -434,10 +439,13 @@ function IncidentScreen({ id }: IncidentViewProps) {
                 ariaLabel="Vista central"
                 value={centerView}
                 onChange={onCenterView}
+                className="max-sm:w-full"
+                fullWidth={!isDesktop}
                 options={[
-                  { value: "scene", label: "Reconstrucción 3D", icon: Box },
+                  { value: "scene", label: <ResponsiveLabel short="IA" long="Esquema IA" />, icon: Box },
+                  { value: "reconstruction", label: <ResponsiveLabel short="3DGS" long="Reconstrucción 3DGS" />, icon: ScanEye },
                   { value: "map", label: "Mapa", icon: MapIcon },
-                  { value: "media", label: `Medios (${snapshot.media.length})`, icon: Images },
+                  { value: "media", label: <ResponsiveLabel short={String(snapshot.media.length)} long={`Medios (${snapshot.media.length})`} />, icon: Images },
                 ]}
               />
               <PipelineHint status={fusion.fusion_status} error={fusion.fusion_error} />
@@ -458,6 +466,17 @@ function IncidentScreen({ id }: IncidentViewProps) {
                   onOpenMedia={onOpenMediaLabel}
                   className="h-full w-full"
                 />
+              </CenterLayer>
+              <CenterLayer active={centerView === "reconstruction"} scroll>
+                {splatMounted && (
+                  <ReconstructionPanel
+                    incident={incident}
+                    media={snapshot.media}
+                    mode={snapshot.mode}
+                    onChanged={refreshNow}
+                    className="m-2 border-0 shadow-none"
+                  />
+                )}
               </CenterLayer>
               <CenterLayer active={centerView === "map"}>
                 {mapMounted && (
@@ -559,6 +578,18 @@ function IncidentScreen({ id }: IncidentViewProps) {
 }
 
 /* ───────────── Piezas ───────────── */
+
+/** Etiqueta corta en teléfono (la completa queda para lectores de pantalla) y completa desde `sm`. */
+function ResponsiveLabel({ short, long }: { short: string; long: string }) {
+  return (
+    <>
+      <span aria-hidden="true" className="sm:hidden">
+        {short}
+      </span>
+      <span className="max-sm:sr-only">{long}</span>
+    </>
+  );
+}
 
 /** Capa de la vista central: todas quedan montadas; la inactiva se oculta sin perder su tamaño. */
 function CenterLayer({ active, scroll = false, children }: { active: boolean; scroll?: boolean; children: ReactNode }) {

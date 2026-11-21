@@ -497,6 +497,15 @@ function normalizeEvidence(raw: unknown): EvidenceRef[] {
   return out;
 }
 
+/**
+ * Sin estructura afectada, la vista "Frente" mira perpendicular a la calle, desde el lado
+ * sur (o desde el oriente si la calle corre Norte–Sur).
+ */
+function frontFromStreet(axisDeg: number): number {
+  const perp = normalizeDeg(axisDeg + 90);
+  return perp < 90 || perp >= 270 ? normalizeDeg(perp + 180) : perp;
+}
+
 /** Normaliza un SceneModel (o algo con su forma) a valores seguros para dibujar. */
 export function normalizeScene(input: SceneModel | null | undefined): NormScene {
   const root = obj(input);
@@ -696,18 +705,24 @@ export function normalizeScene(input: SceneModel | null | undefined): NormScene 
   });
 
   const uncertaintyNotes = arr(root.uncertainty_notes).map(str).filter(Boolean);
-  const axis = num(ground.street_axis_deg, -1);
 
-  const primary = structures.find((s) => s.role === "involved") ?? structures[0] ?? null;
+  const involved = structures.find((s) => s.role === "involved") ?? null;
+  const primary = involved ?? structures[0] ?? null;
+  // Centro táctico: lo que está ardiendo o donde hay víctimas, antes que un edificio de referencia.
+  const flame = fires.find((f) => f.intensity !== "smoke_only") ?? fires[0];
+  const trappedVehicle = vehicles.find((v) => v.entrapment);
+  const atRisk = people.find((p) => p.risk === "critical");
+  const anchor = involved ?? flame ?? trappedVehicle ?? atRisk ?? primary;
   let focus: XY;
-  if (primary) focus = { x: primary.x, y: primary.y };
-  else if (fires[0]) focus = { x: fires[0].x, y: fires[0].y };
+  if (anchor) focus = { x: anchor.x, y: anchor.y };
   else {
     const pts = [...people, ...vehicles, ...hazards, ...access];
     focus = pts.length
       ? { x: pts.reduce((a, p) => a + p.x, 0) / pts.length, y: pts.reduce((a, p) => a + p.y, 0) / pts.length }
       : { x: 0, y: 0 };
   }
+  const axis = num(ground.street_axis_deg, -1);
+  const frontHeadingDeg = involved ? involved.rotationDeg : axis >= 0 ? frontFromStreet(axis) : primary ? primary.rotationDeg : 180;
 
   return {
     description: str(root.description),
@@ -726,8 +741,7 @@ export function normalizeScene(input: SceneModel | null | undefined): NormScene 
     uncertaintyNotes,
     confidence: oneOf(root.confidence, CONFIDENCES, "low"),
     primaryId: primary ? primary.id : null,
-    // Sin estructura: vista "Frente" desde el sur mirando al norte.
-    frontHeadingDeg: primary ? primary.rotationDeg : 180,
+    frontHeadingDeg,
     focus,
   };
 }

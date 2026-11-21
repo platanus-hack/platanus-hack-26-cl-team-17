@@ -173,14 +173,15 @@ function SplatViewerInner({ url, transform, scaleKnown, className }: SplatViewer
       renderer.domElement.setAttribute("aria-hidden", "true");
       host.appendChild(renderer.domElement);
       cleanups.push(() => {
-        renderer.setAnimationLoop(null);
         renderer.dispose();
         renderer.domElement.remove();
       });
 
       const scene = new THREE.Scene();
       const camera = new THREE.PerspectiveCamera(50, size().w / size().h, 0.1, 10_000);
-      const sparkRenderer = new spark.SparkRenderer({ renderer });
+      // Spark avisa cuando terminó de ordenar los splats y hay que volver a dibujar.
+      let requestRender: () => void = () => undefined;
+      const sparkRenderer = new spark.SparkRenderer({ renderer, onDirty: () => requestRender() });
       scene.add(sparkRenderer);
       cleanups.push(() => sparkRenderer.dispose());
 
@@ -206,24 +207,36 @@ function SplatViewerInner({ url, transform, scaleKnown, className }: SplatViewer
       // Límites robustos (percentiles 2–98): los "flotadores" de 3DGS no deben alejar la cámara.
       const total = mesh.packedSplats?.numSplats ?? mesh.numSplats;
       const stride = Math.max(1, Math.floor(total / 20_000));
-      const xs: number[] = [];
-      const ys: number[] = [];
-      const zs: number[] = [];
+      const all: [number[], number[], number[]] = [[], [], []];
+      // Con alineación, lo que sobresale del suelo (estructuras, vehículos, humo) define el encuadre.
+      const raised: [number[], number[], number[]] = [[], [], []];
       const p = new THREE.Vector3();
       let count = 0;
       mesh.forEachSplat((i, center, _s, _q, opacity) => {
         count++;
         if (i % stride !== 0 || opacity < 0.1) return;
         p.copy(center).applyMatrix4(mesh.matrixWorld);
-        xs.push(p.x);
-        ys.push(p.y);
-        zs.push(p.z);
+        all[0].push(p.x);
+        all[1].push(p.y);
+        all[2].push(p.z);
+        if (aligned && p.y > 0.5) {
+          raised[0].push(p.x);
+          raised[1].push(p.y);
+          raised[2].push(p.z);
+        }
       });
-      for (const arr of [xs, ys, zs]) arr.sort((a, b) => a - b);
-      const lo = new THREE.Vector3(pct(xs, 0.02), pct(ys, 0.02), pct(zs, 0.02));
-      const hi = new THREE.Vector3(pct(xs, 0.98), pct(ys, 0.98), pct(zs, 0.98));
-      const center = lo.clone().add(hi).multiplyScalar(0.5);
+      const bounds = (axes: [number[], number[], number[]]) => {
+        for (const arr of axes) arr.sort((a, b) => a - b);
+        return {
+          lo: new THREE.Vector3(pct(axes[0], 0.02), pct(axes[1], 0.02), pct(axes[2], 0.02)),
+          hi: new THREE.Vector3(pct(axes[0], 0.98), pct(axes[1], 0.98), pct(axes[2], 0.98)),
+        };
+      };
+      const { lo, hi } = bounds(all);
+      const focus = raised[0].length >= Math.max(50, all[0].length * 0.03) ? bounds(raised) : { lo, hi };
+      const center = focus.lo.clone().add(focus.hi).multiplyScalar(0.5);
       const span = Math.max(4, hi.x - lo.x, hi.z - lo.z);
+      const focusSpan = Math.max(4, focus.hi.x - focus.lo.x, focus.hi.z - focus.lo.z);
       const groundY = aligned ? 0 : lo.y;
 
       const disposables: { dispose(): void }[] = [];
@@ -276,30 +289,28 @@ function SplatViewerInner({ url, transform, scaleKnown, className }: SplatViewer
         scene.add(label);
         disposables.push(tex, spriteMat);
 
-        // Origen del incidente: anillo en el suelo y un poste con esfera.
-        const ringR = Math.max(0.8, span * 0.015);
+        // Origen del incidente: anillo y cruz de ejes sobre el suelo (la cruz asoma bajo las estructuras).
+        const ringR = Math.max(0.8, focusSpan * 0.02);
         const ringGeo = new THREE.RingGeometry(ringR, ringR * 1.5, 48);
         const accentMat = new THREE.MeshBasicMaterial({ color: colors.accent, side: THREE.DoubleSide });
         const ring = new THREE.Mesh(ringGeo, accentMat);
         ring.rotation.x = -Math.PI / 2;
         ring.position.set(0, groundY + 0.12, 0);
         scene.add(ring);
-        const poleH = Math.min(30, Math.max(6, span * 0.12));
-        const poleGeo = new THREE.CylinderGeometry(ringR * 0.08, ringR * 0.08, poleH, 8);
-        const pole = new THREE.Mesh(poleGeo, accentMat);
-        pole.position.set(0, groundY + poleH / 2, 0);
-        scene.add(pole);
-        const knobGeo = new THREE.SphereGeometry(ringR * 0.45, 16, 12);
-        const knob = new THREE.Mesh(knobGeo, accentMat);
-        knob.position.set(0, groundY + poleH, 0);
-        scene.add(knob);
-        disposables.push(ringGeo, accentMat, poleGeo, knobGeo);
+        const armGeo = new THREE.PlaneGeometry(Math.max(0.12, ringR * 0.12), Math.max(12, focusSpan * 0.7));
+        for (const yaw of [0, Math.PI / 2]) {
+          const arm = new THREE.Mesh(armGeo, accentMat);
+          arm.rotation.set(-Math.PI / 2, 0, yaw);
+          arm.position.set(0, groundY + 0.11, 0);
+          scene.add(arm);
+        }
+        disposables.push(ringGeo, accentMat, armGeo);
       }
 
       // Cámara inicial: desde el sureste, elevada (en three: +X Este, +Y arriba, +Z Sur).
-      const target = new THREE.Vector3(center.x, groundY + Math.min(4, (hi.y - groundY) * 0.25), center.z);
+      const target = new THREE.Vector3(center.x, groundY + Math.min(4, (focus.hi.y - groundY) * 0.25), center.z);
       const { w, h } = size();
-      const fit = Math.max(20, span * 1.05) / Math.pow(Math.min(1, w / h), 0.7);
+      const fit = Math.max(18, focusSpan * 1.25) / Math.pow(Math.min(1, w / h), 0.7);
       const startPos = target.clone().add(new THREE.Vector3(0.5, 0.62, 0.8).normalize().multiplyScalar(fit));
       camera.position.copy(startPos);
       camera.far = Math.max(1000, fit * 20);
@@ -311,7 +322,7 @@ function SplatViewerInner({ url, transform, scaleKnown, className }: SplatViewer
       controls.dampingFactor = 0.08;
       controls.screenSpacePanning = true;
       controls.minDistance = 1;
-      controls.maxDistance = fit * 5;
+      controls.maxDistance = Math.max(fit * 5, span * 2);
       if (aligned) controls.maxPolarAngle = Math.PI / 2 - 0.03;
       controls.update();
       cleanups.push(() => controls.dispose());
@@ -324,35 +335,51 @@ function SplatViewerInner({ url, transform, scaleKnown, className }: SplatViewer
         resetRef.current = null;
       });
 
+      // Se dibuja a pedido (al mover la cámara, al redimensionar o cuando Spark termina de
+      // ordenar), no en un ciclo continuo: en teléfonos y GPUs modestas ahorra batería y CPU.
       let lastAzimuth = Number.NaN;
       let visible = true;
-      const frame = () => {
-        if (!visible) return;
+      let frameId: number | null = null;
+      const draw = () => {
+        frameId = null;
+        if (disposed || !visible) return;
         controls.update();
         renderer.render(scene, camera);
         const az = (controls.getAzimuthalAngle() * 180) / Math.PI;
-        if (compassRef.current && Math.abs(az - lastAzimuth) > 0.3) {
+        // lastAzimuth parte en NaN: la primera comparación debe dejar pasar.
+        if (compassRef.current && !(Math.abs(az - lastAzimuth) <= 0.3)) {
           lastAzimuth = az;
           compassRef.current.style.transform = `rotate(${az.toFixed(1)}deg)`;
         }
       };
-      renderer.setAnimationLoop(frame);
+      requestRender = () => {
+        if (frameId === null && !disposed) frameId = requestAnimationFrame(draw);
+      };
+      controls.addEventListener("change", requestRender);
+      cleanups.push(() => {
+        if (frameId !== null) cancelAnimationFrame(frameId);
+        requestRender = () => undefined;
+      });
 
       const ro = new ResizeObserver(() => {
         const s = size();
         renderer.setSize(s.w, s.h);
         camera.aspect = s.w / s.h;
         camera.updateProjectionMatrix();
+        requestRender();
       });
       ro.observe(host);
       cleanups.push(() => ro.disconnect());
 
-      // Sin dibujar mientras no se ve (pestaña oculta o fuera de pantalla): ahorra batería.
+      // Sin dibujar mientras no se ve (pestaña oculta o fuera de pantalla).
       const io = new IntersectionObserver((entries) => {
+        const was = visible;
         visible = entries.some((e) => e.isIntersecting);
+        if (visible && !was) requestRender();
       });
       io.observe(host);
       cleanups.push(() => io.disconnect());
+      requestRender();
 
       if (!disposed) setState({ phase: "ready", splats: count });
     })().catch((err: unknown) => {

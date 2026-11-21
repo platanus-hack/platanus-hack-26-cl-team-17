@@ -58,11 +58,12 @@ function planText(m: SensorViewProps["mission"]): string {
 }
 
 type ChipTone = "ok" | "warning" | "critical" | "neutral";
+// Van sobre la imagen de la cámara: relleno sólido para que se lean con cualquier escena y tema.
 const CHIP: Record<ChipTone, string> = {
-  ok: "bg-black/60 text-ok border-ok/50",
-  warning: "bg-black/60 text-warning border-warning/50",
-  critical: "bg-black/70 text-critical border-critical/60",
-  neutral: "bg-black/60 text-white/80 border-white/20",
+  ok: "bg-ok/90 text-on-solid border-white/20",
+  warning: "bg-warning/90 text-on-solid border-white/20",
+  critical: "bg-critical/90 text-on-solid border-white/20",
+  neutral: "bg-black/60 text-white border-white/20",
 };
 
 function OverlayChip({ icon: Icon, tone, children }: { icon: LucideIcon; tone: ChipTone; children: ReactNode }) {
@@ -226,14 +227,11 @@ export function SensorView({ token, mission, incident }: SensorViewProps) {
       <main className="flex flex-1 flex-col gap-3 px-4 pb-[calc(6rem+env(safe-area-inset-bottom))]">
         {/* Misión */}
         <div className="flex flex-col gap-0.5">
-          <h1 className="font-display text-2xl leading-tight font-bold">
+          <h1 className="flex items-baseline gap-2 font-display text-3xl leading-none font-bold">
             <span className="text-drone">Dron {mission.label}</span>
-            {incident && <span className="text-text"> · {incident.title}</span>}
+            <span className="text-sm font-medium text-muted">{planText(mission)}</span>
           </h1>
-          <p className="text-sm text-muted">
-            {planText(mission)}
-            {incident?.address ? ` · ${incident.address}` : ""}
-          </p>
+          {incident && <p className="line-clamp-2 font-display text-lg leading-tight font-semibold text-text">{incident.title}</p>}
         </div>
 
         {!secure && (
@@ -252,7 +250,7 @@ export function SensorView({ token, mission, incident }: SensorViewProps) {
               cmd.tone === "critical" ? "animate-pulse-critical bg-critical" : "bg-warning",
             )}
           >
-            <p className="flex items-center gap-3 font-display text-5xl leading-none font-bold tracking-wide">
+            <p className="flex items-center gap-3 font-display text-5xl leading-none font-bold">
               {cmd.tone === "critical" ? <Ban aria-hidden="true" className="size-10" /> : <Undo2 aria-hidden="true" className="size-10" />}
               {cmd.word}
             </p>
@@ -292,14 +290,16 @@ export function SensorView({ token, mission, incident }: SensorViewProps) {
               )}
             </div>
           )}
-          <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap justify-between gap-1">
-            <OverlayChip icon={gpsChip.icon} tone={gpsChip.tone}>
-              {gpsChip.text}
-            </OverlayChip>
-            <OverlayChip icon={Compass} tone={compassChip.tone}>
-              {compassChip.text}
-            </OverlayChip>
-          </div>
+          {!stopped && (
+            <div className="pointer-events-none absolute inset-x-2 top-2 flex flex-wrap justify-between gap-1">
+              <OverlayChip icon={gpsChip.icon} tone={gpsChip.tone}>
+                {gpsChip.text}
+              </OverlayChip>
+              <OverlayChip icon={Compass} tone={compassChip.tone}>
+                {compassChip.text}
+              </OverlayChip>
+            </div>
+          )}
           {active && (
             <div className="pointer-events-none absolute inset-x-2 bottom-2 flex items-center justify-between gap-1">
               <OverlayChip icon={Camera} tone={sending ? "ok" : "neutral"}>

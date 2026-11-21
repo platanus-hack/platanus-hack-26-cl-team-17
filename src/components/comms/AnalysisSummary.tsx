@@ -197,7 +197,7 @@ export function MaydayBanner({
     <div role="alert" className="flex items-start gap-2.5 border-b border-critical/40 bg-critical px-3 py-2.5 text-on-solid">
       <Siren aria-hidden className="mt-0.5 size-5 shrink-0 animate-pulse-critical" />
       <div className="min-w-0 flex-1">
-        <p className="font-display text-lg leading-tight font-bold tracking-wide uppercase">
+        <p className="font-display text-lg leading-tight font-bold">
           MAYDAY activo — bombero en peligro
         </p>
         {analysis.mayday.detail.trim() && <p className="mt-0.5 text-sm">{analysis.mayday.detail}</p>}

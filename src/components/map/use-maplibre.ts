@@ -20,6 +20,7 @@ import {
   type GeoJSONSource,
   type LayerSpecification,
   type MapSourceDataEvent,
+  type MapStyleImageMissingEvent,
   type StyleSpecification,
 } from "maplibre-gl";
 import type { FeatureCollection } from "geojson";
@@ -47,6 +48,14 @@ export interface MapSnapshot {
   /** Error fatal: el mapa no se pudo crear (p. ej. sin WebGL). */
   error: string | null;
   palette: MapPalette;
+  /** Solo con `trackView`: proyección de la vista actual; cambia de identidad al terminar cada movimiento. */
+  view: MapView | null;
+}
+
+/** Vista quieta del mapa (para decisiones en pantalla, como ocultar etiquetas que chocan). */
+export interface MapView {
+  zoom: number;
+  project(p: LatLng): { x: number; y: number };
 }
 
 export interface MapInit {
@@ -60,6 +69,10 @@ export interface MapInit {
   interactive?: boolean;
   /** true = siempre plegable; false = siempre expandida; sin valor = responsiva. */
   compactAttribution?: boolean;
+  /** Pliega la atribución desde el inicio (mapas chicos de solo lectura, que nunca se arrastran). */
+  collapseAttribution?: boolean;
+  /** Publica `view` en cada fin de movimiento (vuelve a renderizar el componente). */
+  trackView?: boolean;
   minZoom?: number;
   maxZoom?: number;
 }
@@ -123,7 +136,14 @@ export class MapController {
     this.init = init;
     this.theme = init.theme;
     this.interactive = init.interactive ?? true;
-    this.snapshot = { map: null, styleRevision: 0, base: "loading", error: null, palette: FALLBACK_PALETTE[init.theme] };
+    this.snapshot = {
+      map: null,
+      styleRevision: 0,
+      base: "loading",
+      error: null,
+      palette: FALLBACK_PALETTE[init.theme],
+      view: null,
+    };
   }
 
   subscribe = (listener: () => void) => {
@@ -170,7 +190,7 @@ export class MapController {
       });
     } catch (err) {
       console.warn("[mapa] no se pudo crear el mapa", err);
-      this.set({ map: null, styleRevision: 0, base: "unavailable", error: WEBGL_ERROR, palette });
+      this.set({ map: null, styleRevision: 0, base: "unavailable", error: WEBGL_ERROR, palette, view: null });
       return;
     }
     map.getContainer().classList.add("vg-map");
@@ -179,6 +199,9 @@ export class MapController {
     map.on("error", this.onError);
     map.on("sourcedata", this.onSourceData);
     map.on("movestart", this.onMoveStart);
+    map.on("styleimagemissing", this.onImageMissing);
+    if (this.init.trackView) map.on("moveend", this.onMoveEnd);
+    if (this.init.collapseAttribution) map.on("idle", this.onIdleCollapse);
     this.userMoved = false;
     this.lastFit = null;
     this.resizeObserver = new ResizeObserver(() => {
@@ -197,7 +220,7 @@ export class MapController {
     // Encuadre inicial después de crear: si el contenedor está oculto se aplica al hacerse visible.
     if (this.init.bounds) this.fit(this.init.bounds, { maxZoom: this.init.boundsMaxZoom, padding: this.init.boundsPadding });
     this.armStyleTimer();
-    this.set({ map, styleRevision: 0, base: "loading", error: null, palette });
+    this.set({ map, styleRevision: 0, base: "loading", error: null, palette, view: this.viewOf(map) });
   }
 
   /**
@@ -256,9 +279,12 @@ export class MapController {
       map.off("error", this.onError);
       map.off("sourcedata", this.onSourceData);
       map.off("movestart", this.onMoveStart);
+      map.off("styleimagemissing", this.onImageMissing);
+      map.off("moveend", this.onMoveEnd);
+      map.off("idle", this.onIdleCollapse);
       map.remove();
     }
-    this.set({ map: null, styleRevision: 0, base: "loading", error: null });
+    this.set({ map: null, styleRevision: 0, base: "loading", error: null, view: null });
   }
 
   setTheme(theme: MapTheme) {
@@ -380,6 +406,38 @@ export class MapController {
 
   private onMoveStart = () => {
     if (!this.applying) this.userMoved = true;
+  };
+
+  /** Algunos estilos públicos piden íconos que su sprite no trae: uno transparente evita el aviso repetido. */
+  private onImageMissing = (e: MapStyleImageMissingEvent) => {
+    const map = this.map;
+    if (map && !map.hasImage(e.id)) map.addImage(e.id, { width: 1, height: 1, data: new Uint8Array(4) });
+  };
+
+  private viewOf(map: MapLibreMap): MapView | null {
+    if (!this.init.trackView) return null;
+    const zoom = map.getZoom();
+    return {
+      zoom,
+      project: (p) => {
+        const pt = map.project([p.lng, p.lat]);
+        return { x: pt.x, y: pt.y };
+      },
+    };
+  }
+
+  private onMoveEnd = () => {
+    if (this.map) this.set({ view: this.viewOf(this.map) });
+  };
+
+  /** MapLibre muestra la atribución plegable abierta hasta el primer arrastre: aquí se pliega de entrada. */
+  private onIdleCollapse = () => {
+    const map = this.map;
+    const attrib = map?.getContainer().querySelector(".maplibregl-ctrl-attrib.maplibregl-compact");
+    if (!map || !attrib) return;
+    attrib.classList.remove("maplibregl-compact-show");
+    attrib.removeAttribute("open");
+    map.off("idle", this.onIdleCollapse);
   };
 
   private onSourceData = (e: MapSourceDataEvent) => {

@@ -301,6 +301,29 @@ export function videoOutcomeText(input: {
 
 export type MandoItemStatus = "staged" | "queued" | "running" | "done" | "error";
 
+/**
+ * Agrupa lo que el mando suelta o elige: cada video es un medio; las fotos de una misma tanda
+ * forman un medio (de a `max`). Cuenta los archivos que no son video ni foto.
+ */
+export function groupMandoFiles<F extends FileLike>(
+  files: readonly F[],
+  max: number = LIMITS.MAX_FRAMES_PER_MEDIA,
+): { groups: { kind: MediaKind; files: F[] }[]; ignored: number } {
+  const videos: F[] = [];
+  const photos: F[] = [];
+  let ignored = 0;
+  for (const f of files) {
+    const kind = classifyFile(f);
+    if (kind === "video") videos.push(f);
+    else if (kind === "photo") photos.push(f);
+    else ignored++;
+  }
+  const groups: { kind: MediaKind; files: F[] }[] = videos.map((f) => ({ kind: "video", files: [f] }));
+  const size = Math.max(1, Math.floor(max));
+  for (let i = 0; i < photos.length; i += size) groups.push({ kind: "photo", files: photos.slice(i, i + size) });
+  return { groups, ignored };
+}
+
 /** Estado corto de una fila del cargador del puesto de mando. */
 export function mandoStatusLabel(status: MandoItemStatus): string {
   switch (status) {

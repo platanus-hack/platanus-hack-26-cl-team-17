@@ -4,8 +4,21 @@
  * Coordenadas three.js: x Este, y altura, z = −Norte.
  */
 import type { SmokeVolume, VehicleState } from "@/lib/domain";
-import { clamp, headingOf, type Bounds, type Vec3, type XY } from "../geometry";
-import type { NRoad } from "../model";
+import {
+  boundsCenter,
+  boundsOf,
+  clamp,
+  footprintCorners,
+  headingOf,
+  padBounds,
+  toThree,
+  viewAngles,
+  type Bounds,
+  type Vec3,
+  type ViewPreset,
+  type XY,
+} from "../geometry";
+import { footprintOf, type NormScene, type NRoad } from "../model";
 import type { SceneEntityKind, SceneSelection } from "../types";
 
 const RAD = Math.PI / 180;
@@ -261,4 +274,133 @@ export function threeDBlockedReason(o: { webgl: boolean | null; failed: boolean 
   if (o.webgl === false) return "Este navegador o equipo no permite gráficos 3D (WebGL).";
   if (o.failed) return "La vista 3D falló en este equipo.";
   return null;
+}
+
+/* ───────────────────────────── Encuadre 3D ───────────────────────────── */
+
+/** Radio alrededor del foco que define el "núcleo táctico" del primer encuadre 3D. */
+export const CORE_RADIUS = 45;
+
+/**
+ * Caja del núcleo táctico: estructuras afectadas o expuestas, focos, personas en riesgo o lesionadas y vehículos
+ * con atrapamiento o en llamas cerca del foco. Cámaras lejanas, accesos y la traza del dron
+ * quedan fuera (se ven al alejar). Sin núcleo, usa `fallback`.
+ */
+export function coreBounds(scene: NormScene, fallback: Bounds): Bounds {
+  const f = scene.focus;
+  const near = (x: number, y: number) => Math.hypot(x - f.x, y - f.y) <= CORE_RADIUS;
+  const pts: { x: number; y: number; z: number }[] = [];
+  for (const s of scene.structures) {
+    // Los edificios de referencia no definen el encuadre (se ven al alejar).
+    if (s.role === "reference" || !near(s.x, s.y)) continue;
+    for (const c of footprintCorners(footprintOf(s))) pts.push({ ...c, z: s.height + s.roofHeight });
+  }
+  for (const fi of scene.fires) if (near(fi.x, fi.y)) pts.push({ x: fi.x, y: fi.y, z: fi.z + fi.radius });
+  for (const p of scene.people) if (p.risk !== "other" && near(p.x, p.y)) pts.push({ x: p.x, y: p.y, z: p.z + 7 });
+  for (const v of scene.vehicles) {
+    if (!(v.entrapment || v.burning) || !near(v.x, v.y)) continue;
+    const r = Math.max(v.length, v.width) / 2 + 2;
+    pts.push({ x: v.x - r, y: v.y - r, z: v.height + 4 }, { x: v.x + r, y: v.y + r, z: 0 });
+  }
+  const b = boundsOf(pts);
+  return b ? padBounds(b, 5, 14) : fallback;
+}
+
+/**
+ * Pose que encuadra exactamente las 8 esquinas de `b` desde la vista pedida (más ajustado
+ * que la esfera envolvente). `aspect` = ancho / alto; `fovDeg` = campo vertical.
+ */
+export function fitBox(b: Bounds, preset: ViewPreset, frontHeadingDeg: number, aspect: number, fovDeg = 45, margin = 1.08): { position: Vec3; target: Vec3 } {
+  const c = boundsCenter(b);
+  if (![c.x, c.y, c.z].every(Number.isFinite)) return { position: [60, 50, 60], target: [0, 0, 0] };
+  const { azimuthDeg, elevationDeg } = viewAngles(preset, Number.isFinite(frontHeadingDeg) ? frontHeadingDeg : 180);
+  const az = azimuthDeg * RAD;
+  const el = elevationDeg * RAD;
+  // Base de la cámara en ENU: w apunta del objetivo a la cámara.
+  const w = { x: Math.cos(el) * Math.sin(az), y: Math.cos(el) * Math.cos(az), z: Math.sin(el) };
+  const fw = { x: -w.x, y: -w.y, z: -w.z };
+  let r = { x: fw.y, y: -fw.x, z: 0 }; // fw × Z
+  const rl = Math.hypot(r.x, r.y) || 1;
+  r = { x: r.x / rl, y: r.y / rl, z: 0 };
+  const u = { x: r.y * fw.z - r.z * fw.y, y: r.z * fw.x - r.x * fw.z, z: r.x * fw.y - r.y * fw.x };
+  const safeAspect = Number.isFinite(aspect) && aspect > 0.1 ? Math.min(aspect, 10) : 1.5;
+  const tanV = Math.tan((clamp(fovDeg, 10, 120) * RAD) / 2);
+  const tanH = tanV * safeAspect;
+  const tz = clamp(c.z, 0, 10);
+  let d = 0;
+  for (const x of [b.minX, b.maxX]) {
+    for (const y of [b.minY, b.maxY]) {
+      for (const z of [b.minZ, b.maxZ]) {
+        const p = { x: x - c.x, y: y - c.y, z: z - tz };
+        const depth = p.x * w.x + p.y * w.y + p.z * w.z;
+        const a = Math.abs(p.x * r.x + p.y * r.y);
+        const v = Math.abs(p.x * u.x + p.y * u.y + p.z * u.z);
+        d = Math.max(d, depth + a / tanH, depth + v / tanV);
+      }
+    }
+  }
+  const dist = clamp(d * margin, 12, 4000);
+  return {
+    target: toThree(c.x, c.y, tz),
+    position: toThree(c.x + w.x * dist, c.y + w.y * dist, tz + w.z * dist),
+  };
+}
+
+/* ───────────────────────────── Etiquetas ───────────────────────────── */
+
+export interface LabelBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  priority: number;
+  /** Siempre visible (personas en riesgo, atrapamiento, entidad seleccionada). */
+  pinned: boolean;
+}
+
+export interface LabelPlacement {
+  visible: boolean;
+  /** Corrimiento aplicado (px) respecto de la posición natural. */
+  dx: number;
+  dy: number;
+}
+
+/**
+ * Despeje de etiquetas en pantalla: de mayor a menor prioridad (las fijas primero), cada
+ * etiqueta prueba su lugar natural y, si `shift`, a la derecha, a la izquierda, arriba y abajo
+ * de su ancla; si todo choca con una ya colocada, se oculta. Las fijas nunca se mueven ni se
+ * ocultan. Las cajas vacías (etiqueta detrás de la cámara) no ocupan lugar.
+ */
+export function declutter(boxes: readonly LabelBox[], options: { pad?: number; shift?: boolean } = {}): LabelPlacement[] {
+  const pad = options.pad ?? 2;
+  const shift = options.shift ?? true;
+  const order = boxes
+    .map((_, i) => i)
+    .sort((i, j) => Number(boxes[j].pinned) - Number(boxes[i].pinned) || boxes[j].priority - boxes[i].priority || i - j);
+  const out: LabelPlacement[] = boxes.map(() => ({ visible: true, dx: 0, dy: 0 }));
+  const placed: { x: number; y: number; w: number; h: number }[] = [];
+  const free = (x: number, y: number, w: number, h: number) =>
+    !placed.some((p) => x < p.x + p.w + pad && x + w + pad > p.x && y < p.y + p.h + pad && y + h + pad > p.y);
+  for (const i of order) {
+    const b = boxes[i];
+    if (!(b.w > 0 && b.h > 0)) continue;
+    const candidates: [number, number][] =
+      b.pinned || !shift
+        ? [[0, 0]]
+        : [
+            [0, 0],
+            [b.w / 2 + 6, 0],
+            [-(b.w / 2 + 6), 0],
+            [0, -(b.h + 4)],
+            [0, b.h + 12],
+          ];
+    const hit = candidates.find(([dx, dy]) => b.pinned || free(b.x + dx, b.y + dy, b.w, b.h));
+    if (hit) {
+      placed.push({ x: b.x + hit[0], y: b.y + hit[1], w: b.w, h: b.h });
+      out[i] = { visible: true, dx: hit[0], dy: hit[1] };
+    } else {
+      out[i] = { visible: false, dx: 0, dy: 0 };
+    }
+  }
+  return out;
 }

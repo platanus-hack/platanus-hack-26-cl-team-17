@@ -5,8 +5,8 @@
  */
 import { useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { yawForHeading } from "../geometry";
-import type { NStructure } from "../model";
+import { localToWorld, yawForHeading } from "../geometry";
+import { footprintOf, type NFire, type NStructure } from "../model";
 import { structureCaption, structureTitle } from "../labels";
 import type { Palette } from "../palette";
 import { useIsSelected, usePick, useSceneCtx } from "./context";
@@ -58,6 +58,27 @@ function BoxEdges({ w, h, d, y, color, opacity, dashed }: { w: number; h: number
   );
 }
 
+/** Contornos horizontales en cada entrepiso (se lee la cantidad de pisos sin tapar el interior). */
+function FloorLines({ w, d, levels, color, opacity }: { w: number; d: number; levels: number[]; color: string; opacity: number }) {
+  const geo = useMemo(() => {
+    const x = w / 2;
+    const z = d / 2;
+    const pts: number[] = [];
+    for (const y of levels) {
+      pts.push(-x, y, z, x, y, z, x, y, z, x, y, -z, x, y, -z, -x, y, -z, -x, y, -z, -x, y, z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pts), 3));
+    return g;
+  }, [w, d, levels]);
+  useEffect(() => () => geo.dispose(), [geo]);
+  return (
+    <lineSegments geometry={geo}>
+      <lineBasicMaterial color={color} transparent opacity={opacity} />
+    </lineSegments>
+  );
+}
+
 function GableRoof({ w, d, h, y, color, edge, opacity, edgeOpacity }: { w: number; d: number; h: number; y: number; color: string; edge: string; opacity: number; edgeOpacity: number }) {
   const [geo, edges] = useMemo(() => {
     const g = new THREE.BufferGeometry();
@@ -104,7 +125,7 @@ function FacadeArrow({ d, color }: { d: number; color: string }) {
   );
 }
 
-function Structure({ s }: { s: NStructure }) {
+function Structure({ s, fireFloors }: { s: NStructure; fireFloors: readonly number[] }) {
   const { palette, labels, select } = useSceneCtx();
   const pick = usePick("structure", s.id);
   const selected = useIsSelected("structure", s.id);
@@ -112,9 +133,13 @@ function Structure({ s }: { s: NStructure }) {
   const edge = selected ? palette.info : st.edge;
   const H = s.height;
   const slabs = useMemo(() => Array.from({ length: s.floors + 1 }, (_, i) => i * s.floorHeight), [s.floors, s.floorHeight]);
+  const between = useMemo(() => slabs.slice(1, -1), [slabs]);
+  // Losas rellenas solo en estructuras afectadas o expuestas; en las de referencia bastan los contornos.
+  const solidSlabs = s.role !== "reference";
   const dashed = s.confidence === "low";
   const top = H + s.roofHeight;
   const yaw = yawForHeading(s.rotationDeg);
+  const labelAt = localToWorld(footprintOf(s), 0, -s.depth / 2);
   return (
     <group>
       <group position={[s.x, 0, -s.y]} rotation-y={yaw}>
@@ -129,20 +154,26 @@ function Structure({ s }: { s: NStructure }) {
             <planeGeometry args={[s.width, H]} />
             <meshLambertMaterial color={st.wall} transparent opacity={st.facadeOpacity} depthWrite={false} side={THREE.DoubleSide} />
           </mesh>
-          {/* Losas por piso (la última es el cielo del último piso) */}
-          {slabs.map((y, i) => (
-            <mesh key={i} position-y={Math.max(0.06, y)}>
-              <boxGeometry args={[s.width - 0.04, i === 0 ? 0.12 : 0.16, s.depth - 0.04]} />
-              <meshLambertMaterial
-                color={i === slabs.length - 1 && s.roof !== "gable" ? st.wall : palette.surface2}
-                transparent
-                opacity={i === 0 ? 0.9 : i === slabs.length - 1 && s.roof !== "gable" ? 0.4 : 0.55}
-                depthWrite={false}
-              />
-            </mesh>
-          ))}
+          {/* Losas por piso (la última es el cielo del último piso); el piso con fuego va teñido */}
+          {slabs.map((y, i) => {
+            const last = i === slabs.length - 1;
+            if (!solidSlabs && i !== 0 && !(last && s.roof !== "gable")) return null;
+            const burning = fireFloors.includes(i + 1) && !last;
+            return (
+              <mesh key={i} position-y={Math.max(0.06, y)}>
+                <boxGeometry args={[s.width - 0.04, i === 0 ? 0.12 : 0.16, s.depth - 0.04]} />
+                <meshLambertMaterial
+                  color={burning ? palette.accent : last && s.roof !== "gable" ? st.wall : palette.surface2}
+                  transparent
+                  opacity={i === 0 ? 0.9 : burning ? 0.45 : last && s.roof !== "gable" ? 0.35 : 0.3}
+                  depthWrite={false}
+                />
+              </mesh>
+            );
+          })}
         </group>
         <BoxEdges w={s.width} h={H} d={s.depth} y={H / 2} color={edge} opacity={st.edgeOpacity} dashed={dashed} />
+        {between.length > 0 && <FloorLines w={s.width} d={s.depth} levels={between} color={edge} opacity={st.edgeOpacity * 0.55} />}
         {s.roof === "gable" && s.roofHeight > 0 && (
           <GableRoof w={s.width + 0.4} d={s.depth + 0.4} h={s.roofHeight} y={H} color={st.wall} edge={edge} opacity={st.wallOpacity + 0.14} edgeOpacity={st.edgeOpacity} />
         )}
@@ -153,7 +184,7 @@ function Structure({ s }: { s: NStructure }) {
         </mesh>
         <FacadeArrow d={s.depth} color={palette.text} />
         {labels && (
-          <Label position={[0, 0.2, s.depth / 2 + 3.4]} align="center">
+          <Label position={[0, 0.2, s.depth / 2 + 3.4]} align="center" priority={12}>
             <span className="font-display text-[12px] font-bold text-muted" style={HALO}>
               A
             </span>
@@ -162,7 +193,9 @@ function Structure({ s }: { s: NStructure }) {
       </group>
       {labels && (
         <Label
-          position={[s.x, top + 1.2, -s.y]}
+          position={[labelAt.x, top + 1, -labelAt.y]}
+          priority={s.role === "involved" ? 68 : s.role === "exposure" ? 50 : 38}
+          pinned={selected}
           onActivate={() => select({ kind: "structure", id: s.id })}
           ariaLabel={`Estructura: ${structureTitle(s)}, ${structureCaption(s)}`}
         >
@@ -183,11 +216,23 @@ function StructureTag({ s, selected }: { s: NStructure; selected: boolean }) {
   );
 }
 
-export function Structures({ items }: { items: NStructure[] }) {
+const NO_FLOORS: readonly number[] = [];
+
+export function Structures({ items, fires }: { items: NStructure[]; fires: NFire[] }) {
+  const byStructure = useMemo(() => {
+    const m = new Map<string, number[]>();
+    for (const f of fires) {
+      if (!f.structureId || f.floor < 1 || f.intensity === "smoke_only") continue;
+      const list = m.get(f.structureId) ?? [];
+      if (!list.includes(f.floor)) list.push(f.floor);
+      m.set(f.structureId, list);
+    }
+    return m;
+  }, [fires]);
   return (
     <group>
       {items.map((s) => (
-        <Structure key={s.id} s={s} />
+        <Structure key={s.id} s={s} fireFloors={byStructure.get(s.id) ?? NO_FLOORS} />
       ))}
     </group>
   );

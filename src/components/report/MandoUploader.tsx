@@ -9,7 +9,7 @@ import { LIMITS } from "@/lib/domain";
 import { isSubmitReportError, submitReport } from "@/lib/client/upload";
 import type { MediaUploaderProps } from "./types";
 import {
-  classifyFile,
+  groupMandoFiles,
   mandoResultText,
   mandoStatusLabel,
   videoSizeNotice,
@@ -34,25 +34,19 @@ interface Item {
 let itemSeq = 0;
 const nextItemId = () => `item-${++itemSeq}`;
 
-/**
- * Agrupa lo soltado o elegido: cada video es un medio; las fotos de una misma tanda forman
- * un medio (de a `LIMITS.MAX_FRAMES_PER_MEDIA`). Devuelve también los archivos ignorados.
- */
 function toItems(list: File[]): { items: Item[]; ignored: number } {
-  const videos: File[] = [];
-  const photos: File[] = [];
-  let ignored = 0;
-  for (const f of list) {
-    const kind = classifyFile(f);
-    if (kind === "video") videos.push(f);
-    else if (kind === "photo") photos.push(f);
-    else ignored++;
-  }
-  const base = { status: "staged" as const, fraction: 0, message: "", result: null, error: null, retryable: true };
-  const items: Item[] = videos.map((f) => ({ ...base, id: nextItemId(), kind: "video", files: [f] }));
-  for (let i = 0; i < photos.length; i += LIMITS.MAX_FRAMES_PER_MEDIA) {
-    items.push({ ...base, id: nextItemId(), kind: "photo", files: photos.slice(i, i + LIMITS.MAX_FRAMES_PER_MEDIA) });
-  }
+  const { groups, ignored } = groupMandoFiles(list);
+  const items = groups.map((g) => ({
+    id: nextItemId(),
+    kind: g.kind,
+    files: g.files,
+    status: "staged" as const,
+    fraction: 0,
+    message: "",
+    result: null,
+    error: null,
+    retryable: true,
+  }));
   return { items, ignored };
 }
 
@@ -145,6 +139,7 @@ export function MandoUploader({ incidentCode, typeHint, asResponder, onSubmitted
     const pending = itemsRef.current.filter((it) => it.status === "staged" || (it.status === "error" && it.retryable));
     if (pending.length === 0) return;
     stopRef.current = false;
+    setNotice(null);
     setRunning(true);
     commit(
       itemsRef.current.map((it) =>
@@ -229,7 +224,9 @@ export function MandoUploader({ incidentCode, typeHint, asResponder, onSubmitted
   const remove = (id: string) => commit(itemsRef.current.filter((it) => it.id !== id));
   const clearFinished = () => commit(itemsRef.current.filter((it) => it.status !== "done"));
 
-  const sendable = items.filter((it) => it.status === "staged" || (it.status === "error" && it.retryable)).length;
+  const sendableItems = items.filter((it) => it.status === "staged" || (it.status === "error" && it.retryable));
+  const sendable = sendableItems.length;
+  const sendableFiles = sendableItems.reduce((acc, it) => acc + it.files.length, 0);
   const finished = items.filter((it) => it.status === "done").length;
   const missingCode = !incidentCode;
 
@@ -297,8 +294,12 @@ export function MandoUploader({ incidentCode, typeHint, asResponder, onSubmitted
                     {itemTitle(item)}
                   </span>
                   <span className="shrink-0 font-mono text-xs text-muted tabular">{formatBytes(size)}</span>
-                  <Badge tone={STATUS_TONE[item.status]} size="sm" className="shrink-0">
-                    {item.status === "done" ? <CircleCheck aria-hidden className="size-3" /> : null}
+                  <Badge
+                    tone={STATUS_TONE[item.status]}
+                    size="sm"
+                    icon={item.status === "done" ? CircleCheck : undefined}
+                    className="shrink-0"
+                  >
                     {mandoStatusLabel(item.status)}
                   </Badge>
                   {(item.status === "staged" || item.status === "error") && !running && (
@@ -371,7 +372,7 @@ export function MandoUploader({ incidentCode, typeHint, asResponder, onSubmitted
               ? "Enviar"
               : items.some((it) => it.status === "error") && !items.some((it) => it.status === "staged")
                 ? "Reintentar"
-                : `Enviar ${sendable === 1 ? "1 archivo" : `${sendable} archivos`}`}
+                : `Enviar ${sendableFiles === 1 ? "1 archivo" : `${sendableFiles} archivos`}`}
           </Button>
         )}
       </div>

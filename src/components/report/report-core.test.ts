@@ -9,6 +9,7 @@ import {
   classifyFile,
   composeNote,
   freeTextBudget,
+  groupMandoFiles,
   headingApplies,
   isPoorAccuracy,
   mandoResultText,
@@ -196,4 +197,22 @@ test("mandoResultText muestra código y estado", () => {
     mandoResultText({ kind: "video", incidentCode: "VG-2", framesSent: 0, video: "uploaded", framesUnsupported: true }),
     /el servidor los extraerá/,
   );
+});
+
+test("groupMandoFiles: un medio por video; fotos juntas de a MAX; ignora lo demás", () => {
+  const f = (name: string, type: string) => ({ name, type, size: 10 });
+  const photos = Array.from({ length: LIMITS.MAX_FRAMES_PER_MEDIA + 2 }, (_, i) => f(`p${i}.jpg`, "image/jpeg"));
+  const { groups, ignored } = groupMandoFiles([f("a.mp4", "video/mp4"), ...photos, f("doc.pdf", "application/pdf"), f("b.mov", "")]);
+  assert.equal(ignored, 1);
+  assert.deepEqual(
+    groups.map((g) => [g.kind, g.files.length]),
+    [
+      ["video", 1],
+      ["video", 1],
+      ["photo", LIMITS.MAX_FRAMES_PER_MEDIA],
+      ["photo", 2],
+    ],
+  );
+  assert.equal(groups[1].files[0].name, "b.mov");
+  assert.deepEqual(groupMandoFiles([]), { groups: [], ignored: 0 });
 });

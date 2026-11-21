@@ -87,16 +87,26 @@ export interface GpsState {
 
 const finiteOrNull = (v: number | null | undefined) => (v === null || v === undefined || !Number.isFinite(v) ? null : v);
 
+/** Con el teléfono quieto, algunos navegadores no vuelven a llamar a watchPosition: se refresca cada tanto. */
+const GPS_REFRESH_MS = 5000;
+
 export function useGpsWatch() {
   const [state, setState] = useState<GpsState>({ fix: null, error: null, denied: false, watching: false });
   const fixRef = useRef<GpsFix | null>(null);
   const watchRef = useRef<number | null>(null);
+  const pollRef = useRef<number | null>(null);
+
+  const clear = useCallback(() => {
+    if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
+    if (pollRef.current !== null) window.clearInterval(pollRef.current);
+    watchRef.current = null;
+    pollRef.current = null;
+  }, []);
 
   const stop = useCallback(() => {
-    if (watchRef.current !== null && typeof navigator !== "undefined") navigator.geolocation.clearWatch(watchRef.current);
-    watchRef.current = null;
+    if (typeof navigator !== "undefined") clear();
     setState((s) => ({ ...s, watching: false }));
-  }, []);
+  }, [clear]);
 
   const start = useCallback(() => {
     if (watchRef.current !== null) return;
@@ -109,42 +119,45 @@ export function useGpsWatch() {
       return;
     }
     setState((s) => ({ ...s, error: null, denied: false, watching: true }));
-    watchRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        const c = pos.coords;
-        if (!Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)) return;
-        const fix: GpsFix = {
-          lat: c.latitude,
-          lng: c.longitude,
-          accuracy_m: Number.isFinite(c.accuracy) ? c.accuracy : 0,
-          alt_m: finiteOrNull(c.altitude),
-          speed_ms: finiteOrNull(c.speed),
-          course_deg: finiteOrNull(c.heading),
-          at: Date.now(),
-        };
-        fixRef.current = fix;
-        setState({ fix, error: null, denied: false, watching: true });
-      },
-      (err) => {
-        if (err.code === 1) {
-          if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
-          watchRef.current = null;
-          setState((s) => ({ ...s, error: GEO_ERROR_MESSAGES.denied, denied: true, watching: false }));
-          return;
-        }
-        // Señal débil o demora: se conserva la última posición y el navegador sigue intentando.
-        setState((s) => ({ ...s, error: err.code === 3 ? GEO_ERROR_MESSAGES.timeout : GEO_ERROR_MESSAGES.unavailable }));
-      },
-      { enableHighAccuracy: true, maximumAge: 0, timeout: 20_000 },
-    );
-  }, []);
+    const onPosition = (pos: GeolocationPosition) => {
+      const c = pos.coords;
+      if (!Number.isFinite(c.latitude) || !Number.isFinite(c.longitude)) return;
+      const fix: GpsFix = {
+        lat: c.latitude,
+        lng: c.longitude,
+        accuracy_m: Number.isFinite(c.accuracy) ? c.accuracy : 0,
+        alt_m: finiteOrNull(c.altitude),
+        speed_ms: finiteOrNull(c.speed),
+        course_deg: finiteOrNull(c.heading),
+        at: Date.now(),
+      };
+      fixRef.current = fix;
+      setState({ fix, error: null, denied: false, watching: true });
+    };
+    const onError = (err: GeolocationPositionError) => {
+      if (err.code === 1) {
+        clear();
+        setState((s) => ({ ...s, error: GEO_ERROR_MESSAGES.denied, denied: true, watching: false }));
+        return;
+      }
+      // Señal débil o demora: se conserva la última posición y el navegador sigue intentando.
+      setState((s) => ({ ...s, error: err.code === 3 ? GEO_ERROR_MESSAGES.timeout : GEO_ERROR_MESSAGES.unavailable }));
+    };
+    const watch = () =>
+      navigator.geolocation.watchPosition(onPosition, onError, { enableHighAccuracy: true, maximumAge: 0, timeout: 20_000 });
+    watchRef.current = watch();
+    pollRef.current = window.setInterval(() => {
+      // Una lectura reciente del watch basta. Si no llegó ninguna, se reinicia el watch: un watch nuevo
+      // entrega la posición actual de inmediato (getCurrentPosition, en cambio, no responde en Chromium
+      // mientras hay un watch activo).
+      if (watchRef.current === null) return;
+      if (fixRef.current && Date.now() - fixRef.current.at < GPS_REFRESH_MS) return;
+      navigator.geolocation.clearWatch(watchRef.current);
+      watchRef.current = watch();
+    }, GPS_REFRESH_MS);
+  }, [clear]);
 
-  useEffect(
-    () => () => {
-      if (watchRef.current !== null) navigator.geolocation.clearWatch(watchRef.current);
-    },
-    [],
-  );
+  useEffect(() => () => clear(), [clear]);
 
   return { state, start, stop, fixRef };
 }

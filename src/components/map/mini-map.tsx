@@ -47,7 +47,15 @@ function MiniMarkerDot({ marker }: { marker: MiniMarker }) {
 export default function MiniMapCanvas({ center, zoom = DEFAULT_ZOOM, markers, theme = "dark", interactive = false }: MiniMapProps) {
   const ok = isValidLatLng(center.lat, center.lng);
   const c = ok ? center : publicConfig.defaultCenter;
-  const handle = useMapLibre({ theme, center: c, zoom, interactive, compactAttribution: true, minZoom: 2 });
+  const handle = useMapLibre({
+    theme,
+    center: c,
+    zoom,
+    interactive,
+    compactAttribution: true,
+    collapseAttribution: !interactive,
+    minZoom: 2,
+  });
   const { map, containerRef, controller, base, error, loaded } = handle;
 
   const { lat, lng } = c;

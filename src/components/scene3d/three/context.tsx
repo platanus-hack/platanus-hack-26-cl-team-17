@@ -9,6 +9,7 @@ import type { ThreeEvent } from "@react-three/fiber";
 import type { Palette } from "../palette";
 import type { SceneEntityKind, SceneSelection } from "../types";
 import { choosePick } from "./pose";
+import type { LabelRegistry } from "./label";
 
 export interface SceneCtxValue {
   palette: Palette;
@@ -23,6 +24,8 @@ export interface SceneCtxValue {
   setHover: (on: boolean) => void;
   /** Capa HTML fija donde se montan las etiquetas (destino estable para drei <Html>). */
   overlayRef: RefObject<HTMLDivElement | null>;
+  /** Registro de etiquetas para el despeje en pantalla. */
+  labelRegistry: LabelRegistry;
 }
 
 export const SceneCtx = createContext<SceneCtxValue | null>(null);

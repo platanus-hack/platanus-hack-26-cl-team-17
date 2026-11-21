@@ -505,7 +505,7 @@ function ViewerBody({
       {/* ── Derecha: estado, acciones, análisis y metadatos ── */}
       <div className="flex min-h-0 min-w-0 flex-col gap-4 lg:overflow-y-auto lg:pr-1">
         <div className="flex flex-col gap-2">
-          {m.status === "failed" && (
+          {m.status === "failed" && m.source !== "demo" && (
             <div role="alert" className="flex items-start gap-2 rounded-md border border-critical/40 bg-critical-soft px-3 py-2 text-sm">
               <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-critical" />
               <div className="min-w-0 flex-1">
@@ -519,16 +519,20 @@ function ViewerBody({
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            <Button
-              size="sm"
-              icon={RefreshCw}
-              loading={reanalyzing}
-              disabled={reanalyzeDisabled}
-              title={reanalyzeDisabled ? "Espera a que termine el proceso en curso" : undefined}
-              onClick={() => void reanalyze()}
-            >
-              Reanalizar este medio
-            </Button>
+            {m.source === "demo" ? (
+              <span className="text-xs text-muted">Medio de demostración: su análisis es fijo y no se reanaliza.</span>
+            ) : (
+              <Button
+                size="sm"
+                icon={RefreshCw}
+                loading={reanalyzing}
+                disabled={reanalyzeDisabled}
+                title={reanalyzeDisabled ? "Espera a que termine el proceso en curso" : undefined}
+                onClick={() => void reanalyze()}
+              >
+                Reanalizar este medio
+              </Button>
+            )}
             {canExtractFramesInBrowser(m) && extraction === null && (
               <Button
                 size="sm"

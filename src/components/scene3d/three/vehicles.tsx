@@ -116,6 +116,8 @@ function Vehicle({ v }: { v: NVehicle }) {
         <Label
           position={[0, topY + (v.burning ? 3.5 : 1), 0]}
           layer={v.entrapment ? "critical" : "base"}
+          priority={v.entrapment ? 95 : v.burning ? 52 : 40}
+          pinned={v.entrapment || selected}
           onActivate={() => select({ kind: "vehicle", id: v.id })}
           ariaLabel={`Vehículo: ${caption}${v.entrapment ? ", posible atrapamiento" : ""}`}
         >

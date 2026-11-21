@@ -68,7 +68,7 @@ function Ready({ incident }: { incident: PublicIncident }) {
             <Icon aria-hidden className="size-7" strokeWidth={2.25} />
           </span>
           <div className="min-w-0 flex-1">
-            <h1 className="font-display text-2xl leading-tight font-bold tracking-wide break-words text-text">
+            <h1 className="font-display text-2xl leading-tight font-bold break-words text-text">
               {incident.title || reportTypeLabel(incident.type)}
             </h1>
             <p className="mt-0.5 text-base text-muted">{reportTypeLabel(incident.type)}</p>
@@ -155,7 +155,7 @@ function Problem({
             )}
           />
           <div className="min-w-0">
-            <h1 className="font-display text-2xl leading-tight font-bold tracking-wide text-text">{title}</h1>
+            <h1 className="font-display text-2xl leading-tight font-bold text-text">{title}</h1>
             {children && <div className="mt-1.5 text-base leading-snug text-text">{children}</div>}
           </div>
         </div>

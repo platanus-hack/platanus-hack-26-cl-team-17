@@ -288,7 +288,8 @@ function structures(ctx: Ctx, scene: SceneModel) {
       if (kind === "front" && floorIdx === 0 && Math.abs(a - lenU / 2) < 0.6 && b < 2.1) c = DOOR;
       else if (inWindowBand && col) c = h.glow > 0.15 ? mix(GLASS, GLOW, Math.min(1, h.glow * 1.6)) : GLASS;
       else c = mix(jitter(base, ctx.rand, 7), SOOT, h.soot);
-      return [c, 0.96];
+      // Corte esquemático: junto al foco el muro se vuelve translúcido para que se vea el fuego interior.
+      return [c, 0.96 * (1 - 0.75 * h.glow)];
     };
 
     const halfW = scale(t, W / 2);
@@ -302,7 +303,7 @@ function structures(ctx: Ctx, scene: SceneModel) {
 
     const roofColor = (a: number, b: number, p: V3): [RGB, number] => {
       const h = heat(p);
-      return [mix(jitter(gable ? ROOF_GABLE : ROOF_FLAT, ctx.rand, 6), SOOT, h.soot), 0.97];
+      return [mix(jitter(gable ? ROOF_GABLE : ROOF_FLAT, ctx.rand, 6), SOOT, h.soot), 0.97 * (1 - 0.6 * h.glow)];
     };
     if (gable) {
       const eave = 0.3;
@@ -387,7 +388,7 @@ function flames(ctx: Ctx, f: FireZone) {
     const t = clamp(Math.hypot(g[0], g[1], g[2] * 0.7), 0, 1);
     const p = add(c, scale(g, r));
     const rgb = t < 0.5 ? mix([255, 242, 176], [255, 140, 40], t * 2) : mix([255, 140, 40], [212, 48, 14], (t - 0.5) * 2);
-    blob(ctx, p, r * (0.08 + 0.1 * ctx.rand()) * (1 - 0.4 * t), rgb, 0.8 - 0.4 * t);
+    blob(ctx, p, r * (0.1 + 0.12 * ctx.rand()) * (1 - 0.4 * t), rgb, 0.85 - 0.4 * t);
   }
   // Resplandor tenue alrededor del foco.
   for (let i = 0; i < 40; i++) {

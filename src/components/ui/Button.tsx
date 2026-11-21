@@ -20,9 +20,9 @@ export const buttonVariantClasses: Record<ButtonVariant, string> = {
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "h-7 gap-1.5 px-2.5 font-display text-[13px] font-semibold uppercase tracking-wide",
-  md: "h-9 gap-2 px-3.5 font-display text-[15px] font-semibold uppercase tracking-wide",
-  lg: "h-11 gap-2 px-4 font-display text-[17px] font-semibold uppercase tracking-wide",
+  sm: "h-7 gap-1.5 px-2.5 font-display text-[13px] font-medium",
+  md: "h-9 gap-2 px-3.5 font-display text-[15px] font-medium",
+  lg: "h-11 gap-2 px-4 font-display text-[17px] font-medium",
   // Vecinos: texto normal (sin mayúsculas condensadas), legible al sol; puede ocupar dos líneas.
   xl: "min-h-14 gap-2.5 px-6 py-3 font-sans text-lg font-bold leading-tight whitespace-normal text-center",
 };

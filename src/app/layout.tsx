@@ -1,20 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Barlow, Barlow_Condensed, JetBrains_Mono } from "next/font/google";
+import { JetBrains_Mono, Outfit } from "next/font/google";
 import { ToastProvider } from "@/components/ui/Toast";
 import { cn } from "@/lib/cn";
 import "./globals.css";
 
-const barlowCondensed = Barlow_Condensed({
-  subsets: ["latin"],
-  weight: ["500", "600", "700"],
-  variable: "--font-barlow-condensed",
-  display: "swap",
-});
-
-const barlow = Barlow({
+const outfit = Outfit({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  variable: "--font-barlow",
+  variable: "--font-outfit",
   display: "swap",
 });
 
@@ -35,16 +28,13 @@ export const metadata: Metadata = {
   applicationName: "Vigía",
 };
 
-/** Viewport: tema oscuro de consola y área segura completa en teléfonos con muesca. */
+/** Viewport: tema claro y área segura completa en teléfonos con muesca. */
 export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: dark)", color: "#0a0e13" },
-    { media: "(prefers-color-scheme: light)", color: "#0a0e13" },
-  ],
+  themeColor: "#ffffff",
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  colorScheme: "dark",
+  colorScheme: "light",
 };
 
 /** Layout raíz: fuentes, tema "mando" por defecto y proveedor de avisos (toasts). */
@@ -53,7 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="es-CL"
       data-theme="mando"
-      className={cn(barlowCondensed.variable, barlow.variable, jetbrainsMono.variable)}
+      className={cn(outfit.variable, jetbrainsMono.variable)}
     >
       <body className="min-h-dvh bg-bg font-sans text-text antialiased">
         <ToastProvider>{children}</ToastProvider>

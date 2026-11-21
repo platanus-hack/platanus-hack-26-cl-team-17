@@ -34,8 +34,6 @@ function resolveFrame(media: Media, frame: number): MediaFrame | null {
   return (key === undefined ? undefined : frames.find((f) => f.idx === key)) ?? frames[0];
 }
 
-const PRIORITY_RANK = { critical: 0, high: 1, medium: 2, low: 3 } as const;
-
 /**
  * Hasta 6 fotogramas clave para el carro, en orden de importancia:
  *  1. evidencia de personas atrapadas;
@@ -79,12 +77,9 @@ export function selectKeyFrames(
 
   if (situation) {
     pushRefs(situation.trapped.evidence, situation.trapped.basis.trim() || "Evidencia sobre personas atrapadas");
-    const insights = [...situation.insights].sort(
-      (a, b) => PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority],
-    );
-    for (const i of insights.filter((x) => x.priority === "critical")) pushRefs(i.evidence, i.title);
+    for (const i of situation.insights.filter((x) => x.priority === "critical")) pushRefs(i.evidence, i.title);
     for (const h of situation.hazards.filter((x) => x.severity === "high")) pushRefs(h.evidence, h.description);
-    for (const i of insights.filter((x) => x.priority === "high")) pushRefs(i.evidence, i.title);
+    for (const i of situation.insights.filter((x) => x.priority === "high")) pushRefs(i.evidence, i.title);
   }
   // Primero el fotograma clave principal de cada medio, después los demás.
   const sorted = [...usable].sort((a, b) => labelNumber(a.label) - labelNumber(b.label));

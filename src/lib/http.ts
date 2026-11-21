@@ -105,7 +105,8 @@ export function bearerToken(req: Request): string | null {
 /** IP del cliente para límites simples por origen. */
 export function clientIp(req: Request): string {
   const fwd = req.headers.get("x-forwarded-for");
-  if (fwd) return fwd.split(",")[0].trim();
+  // Cloud Run agrega la IP real al final; las primeras entradas las puede inventar el cliente.
+  if (fwd) return fwd.split(",").pop()!.trim();
   return req.headers.get("x-real-ip") ?? "local";
 }
 

@@ -49,17 +49,16 @@ export function VoiceControls({ voice, className }: { voice: BriefingVoice; clas
           <Square aria-hidden className="size-5" fill="currentColor" />
           Detener lectura
         </button>
-      ) : (
+      ) : voice.canRead ? (
         <button
           type="button"
           onClick={voice.read}
-          disabled={!voice.canRead}
-          className="inline-flex min-h-14 items-center gap-2.5 rounded-md border border-transparent bg-accent px-5 text-lg font-bold text-on-solid hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex min-h-14 items-center gap-2.5 rounded-md border border-transparent bg-accent px-5 text-lg font-bold text-on-solid hover:bg-accent/90"
         >
           <Volume2 aria-hidden className="size-6" />
           Leer briefing
         </button>
-      )}
+      ) : null}
       <button
         type="button"
         role="switch"

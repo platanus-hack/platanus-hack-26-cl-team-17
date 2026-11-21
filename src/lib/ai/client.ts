@@ -16,6 +16,13 @@
  *  - Sin `thinking` (en Opus 5.5 siempre es adaptativo; disabled da 400) ni
  *    temperature/top_p. La profundidad se controla con output_config.effort.
  *  - Prompt de sistema estable con cache_control; lo variable va en el usuario.
+ *  - Los esquemas grandes (medio, informe, escena) superan el límite del
+ *    compilador de gramáticas de la API (400 "compiled grammar is too large",
+ *    medido con claude-opus-5-5). Ante un 400 con salida estructurada se pasa a
+ *    "modo prompt": el JSON Schema va en el prompt de sistema (cacheado), la
+ *    respuesta se normaliza contra el esquema (solo rellenos seguros) y se
+ *    valida con Zod; si no cumple, se pide UNA corrección. El esquema que falló
+ *    queda recordado para no repetir el 400 en cada llamada.
  */
 import Anthropic, {
   AnthropicError,
@@ -294,21 +301,146 @@ export function outputFormatFor(schema: z.ZodType): BetaJSONOutputFormat {
   return format;
 }
 
+/**
+ * "structured": la API garantiza el JSON con output_config.format.
+ * "prompt": el esquema viaja en el prompt de sistema y validamos nosotros.
+ */
+export type OutputMode = "structured" | "prompt";
+
+const promptSystemCache = new Map<string, string>();
+
+/** Prompt de sistema del modo prompt: el original + el JSON Schema. Estable por esquema (cacheable). */
+export function promptModeSystem(system: string, schema: z.ZodType): string {
+  const schemaJson = JSON.stringify(outputFormatFor(schema).schema);
+  const key = `${system}\u0000${schemaJson}`;
+  let out = promptSystemCache.get(key);
+  if (!out) {
+    out = `${system}
+
+FORMATO DE SALIDA (obligatorio)
+Responde SOLO con un objeto JSON válido que cumpla exactamente este JSON Schema: sin texto antes ni después, sin markdown ni bloques de código. Incluye TODAS las propiedades (todas son obligatorias), en el mismo orden; usa solo los valores de enum listados; los números van como números. Las "description" del esquema explican cada campo.
+${schemaJson}`;
+    promptSystemCache.set(key, out);
+  }
+  return out;
+}
+
 export function buildRequestParams(
   opts: { system: string; content: UserContent; schema: z.ZodType; maxTokens?: number },
   settings: ModelSettings,
+  mode: OutputMode = "structured",
 ): MessageCreateParamsNonStreaming {
+  const structured = mode === "structured";
   const params: MessageCreateParamsNonStreaming = {
     model: settings.model,
     max_tokens: opts.maxTokens ?? DEFAULT_MAX_TOKENS,
-    system: [{ type: "text", text: opts.system, cache_control: { type: "ephemeral" } }],
+    system: [
+      {
+        type: "text",
+        text: structured ? opts.system : promptModeSystem(opts.system, opts.schema),
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: [{ role: "user", content: toSdkContent(opts.content) }],
-    output_config: { effort: settings.effort, format: outputFormatFor(opts.schema) },
-    betas: [FALLBACK_BETA, STRUCTURED_OUTPUTS_BETA],
+    output_config: structured
+      ? { effort: settings.effort, format: outputFormatFor(opts.schema) }
+      : { effort: settings.effort },
+    betas: structured ? [FALLBACK_BETA, STRUCTURED_OUTPUTS_BETA] : [FALLBACK_BETA],
     fallbacks: "default",
   };
   if (settings.fast) params.speed = "fast";
   return params;
+}
+
+/* ═══════════════════ Normalización del modo prompt (pura) ═══════════════════ */
+
+type JsonSchemaNode = {
+  $ref?: string;
+  type?: string;
+  enum?: unknown[];
+  properties?: Record<string, JsonSchemaNode>;
+  items?: JsonSchemaNode;
+  description?: string;
+};
+
+/** Extrae el objeto JSON de un texto que puede traer cercos de código o texto alrededor. */
+export function extractJsonObject(text: string): string {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start === -1 || end <= start) return text.trim();
+  return text.slice(start, end + 1);
+}
+
+/**
+ * Ajusta un valor al JSON Schema solo con rellenos que no cambian el sentido:
+ * texto faltante → "", lista faltante → [], número escrito como texto → número,
+ * enum con otra capitalización → el valor canónico y enum faltante o inválido →
+ * "unknown" solo si el enum lo tiene. Nunca inventa booleanos, conteos ni
+ * estados de víctimas: si faltan, la validación falla y se pide corrección.
+ */
+export function normalizeToJsonSchema(value: unknown, root: unknown, filled?: string[]): unknown {
+  const rootNode = root as JsonSchemaNode & { $defs?: Record<string, JsonSchemaNode> };
+  const defs = rootNode.$defs ?? {};
+  const resolve = (node: JsonSchemaNode): JsonSchemaNode => {
+    let n = node;
+    for (let guard = 0; n.$ref && guard < 8; guard++) {
+      const name = n.$ref.replace(/^#\/\$defs\//, "");
+      n = defs[name] ?? {};
+    }
+    return n;
+  };
+  const walk = (v: unknown, raw: JsonSchemaNode, path: string): unknown => {
+    const node = resolve(raw);
+    if (node.enum) {
+      const options = node.enum.filter((o): o is string => typeof o === "string");
+      if (typeof v === "string") {
+        if (options.includes(v)) return v;
+        const canon = v.trim().toLowerCase().replace(/[\s-]+/g, "_");
+        const match = options.find((o) => o.toLowerCase() === canon);
+        if (match) return match;
+      }
+      return options.includes("unknown") ? "unknown" : v;
+    }
+    switch (node.type) {
+      case "object": {
+        const src = v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+        const out: Record<string, unknown> = {};
+        for (const [key, child] of Object.entries(node.properties ?? {})) {
+          const childPath = path ? `${path}.${key}` : key;
+          if (src[key] === undefined || src[key] === null) filled?.push(childPath);
+          const next = walk(src[key], child, childPath);
+          if (next !== undefined) out[key] = next;
+        }
+        return out;
+      }
+      case "array":
+        if (!Array.isArray(v)) return v === undefined || v === null ? [] : v;
+        return node.items ? v.map((item, i) => walk(item, node.items as JsonSchemaNode, `${path}[${i}]`)) : v;
+      case "string":
+        if (typeof v === "string") return v;
+        if (typeof v === "number" || typeof v === "boolean") return String(v);
+        return v === undefined || v === null ? "" : v;
+      case "number":
+      case "integer":
+        if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
+        return v === null ? undefined : v;
+      case "boolean":
+        if (v === "true") return true;
+        if (v === "false") return false;
+        return v === null ? undefined : v;
+      default:
+        return v;
+    }
+  };
+  return walk(value, rootNode, "");
+}
+
+/** Resumen corto de los problemas de validación para pedir la corrección al modelo. */
+export function describeIssues(error: z.ZodError, max = 12): string {
+  return error.issues
+    .slice(0, max)
+    .map((issue) => `- ${issue.path.join(".") || "(raíz)"}: ${issue.message}`)
+    .join("\n");
 }
 
 /* ═══════════════════════════════ Respuesta ═══════════════════════════════ */
@@ -329,7 +461,11 @@ export function extractFinalText(content: readonly BetaContentBlock[]): string {
 }
 
 /** Revisa stop_reason ANTES de leer el contenido y valida el JSON con el esquema. */
-export function readStructuredOutput<S extends z.ZodType>(message: BetaMessage, schema: S): z.infer<S> {
+export function readStructuredOutput<S extends z.ZodType>(
+  message: BetaMessage,
+  schema: S,
+  mode: OutputMode = "structured",
+): z.infer<S> {
   switch (message.stop_reason) {
     case "end_turn":
       break;
@@ -360,9 +496,15 @@ export function readStructuredOutput<S extends z.ZodType>(message: BetaMessage, 
   }
   let json: unknown;
   try {
-    json = JSON.parse(text);
+    json = JSON.parse(mode === "prompt" ? extractJsonObject(text) : text);
   } catch (cause) {
     throw new AIError("invalid_output", "La respuesta de la IA no es JSON válido.", { cause });
+  }
+  if (mode === "prompt") {
+    const filled: string[] = [];
+    json = normalizeToJsonSchema(json, outputFormatFor(schema).schema, filled);
+    // Solo rutas (nunca contenido): sirve para detectar campos que el modelo omite.
+    if (filled.length > 0) console.warn("[vigia-ia] campos ausentes en la salida", { paths: filled.slice(0, 20) });
   }
   const parsed = schema.safeParse(json);
   if (!parsed.success) {
@@ -374,11 +516,18 @@ export function readStructuredOutput<S extends z.ZodType>(message: BetaMessage, 
 }
 
 /** Datos de uso para el registro. Nunca incluye contenido. */
-export function usageLog(task: AITask, requestedModel: string, message: BetaMessage, durationMs: number) {
+export function usageLog(
+  task: AITask,
+  requestedModel: string,
+  message: BetaMessage,
+  durationMs: number,
+  mode: OutputMode = "structured",
+) {
   const u = message.usage;
   const fallbackUsed = (u.iterations ?? []).some((entry) => entry.type === "fallback_message");
   return {
     task,
+    output_mode: mode,
     model: message.model,
     requested_model: requestedModel,
     fallback_used: fallbackUsed,
@@ -405,6 +554,12 @@ export interface CallStructuredOptions<S extends z.ZodType> {
   content: UserContent;
   schema: S;
   maxTokens?: number;
+  /**
+   * Modo inicial. "prompt" evita el intento con salida estructurada para
+   * esquemas que se sabe que superan el límite de gramática (ese 400 tarda
+   * 1 a 7 s). Por defecto "structured", con paso automático a "prompt" ante un 400.
+   */
+  mode?: OutputMode;
 }
 
 type GlobalWithAnthropic = typeof globalThis & { __vigiaAnthropic?: Anthropic };
@@ -420,50 +575,132 @@ const sdkTransport: MessagesTransport = {
   create: (params) => getClient().beta.messages.create(params),
 };
 
+type GlobalWithGrammarMemo = typeof globalThis & { __vigiaGrammarRejected?: Set<string> };
+
+/** Esquemas cuya gramática la API rechazó (clave = JSON Schema serializado; sobrevive a la recarga en desarrollo). */
+function grammarRejected(): Set<string> {
+  const g = globalThis as GlobalWithGrammarMemo;
+  g.__vigiaGrammarRejected ??= new Set<string>();
+  return g.__vigiaGrammarRejected;
+}
+
+function schemaKey(schema: z.ZodType): string {
+  return JSON.stringify(outputFormatFor(schema).schema);
+}
+
+/** Olvida los esquemas recordados como rechazados (para pruebas). */
+export function resetOutputModeMemo(): void {
+  grammarRejected().clear();
+}
+
+/** Una solicitud a la API, con el reintento a velocidad normal si se agota el modo rápido. */
+async function sendOnce(
+  transport: MessagesTransport,
+  params: MessageCreateParamsNonStreaming,
+  task: AITask,
+): Promise<BetaMessage> {
+  try {
+    return await transport.create(params);
+  } catch (error) {
+    // El modo rápido tiene su propio límite: si se agota, se sigue a velocidad normal.
+    if (params.speed === "fast" && error instanceof RateLimitError) {
+      console.warn("[vigia-ia] límite del modo rápido; reintento a velocidad normal", { task });
+      const standard: MessageCreateParamsNonStreaming = { ...params };
+      delete standard.speed;
+      return transport.create(standard);
+    }
+    throw error;
+  }
+}
+
+function logFailure(task: AITask, model: string, mode: OutputMode, error: unknown, mapped: AIError, started: number) {
+  console.warn("[vigia-ia] llamada fallida", {
+    task,
+    model,
+    output_mode: mode,
+    code: mapped.code,
+    status: error instanceof APIError ? error.status : undefined,
+    request_id: error instanceof APIError ? error.requestID : undefined,
+    duration_ms: Date.now() - started,
+  });
+}
+
 /** Igual que callStructured pero con transporte y ajustes explícitos (para pruebas). */
 export async function callStructuredWith<S extends z.ZodType>(
   transport: MessagesTransport,
   settings: ModelSettings,
   opts: CallStructuredOptions<S>,
 ): Promise<z.infer<S>> {
-  const params = buildRequestParams(opts, settings);
-  const started = Date.now();
+  const key = schemaKey(opts.schema);
+  let mode: OutputMode = opts.mode === "prompt" || grammarRejected().has(key) ? "prompt" : "structured";
+  let params = buildRequestParams(opts, settings, mode);
+  let started = Date.now();
   let message: BetaMessage;
   try {
-    try {
-      message = await transport.create(params);
-    } catch (error) {
-      // El modo rápido tiene su propio límite: si se agota, se sigue a velocidad normal.
-      if (params.speed === "fast" && error instanceof RateLimitError) {
-        console.warn("[vigia-ia] límite del modo rápido; reintento a velocidad normal", { task: opts.task });
-        const standard: MessageCreateParamsNonStreaming = { ...params };
-        delete standard.speed;
-        message = await transport.create(standard);
-      } else {
-        throw error;
-      }
-    }
+    message = await sendOnce(transport, params, opts.task);
   } catch (error) {
     const mapped = mapSdkError(error, { model: settings.model });
-    console.warn("[vigia-ia] llamada fallida", {
+    logFailure(opts.task, settings.model, mode, error, mapped, started);
+    // Un 400 con salida estructurada suele ser la gramática demasiado grande: se reintenta en modo prompt.
+    if (mode !== "structured" || !(error instanceof BadRequestError)) throw mapped;
+    mode = "prompt";
+    params = buildRequestParams(opts, settings, mode);
+    started = Date.now();
+    try {
+      message = await sendOnce(transport, params, opts.task);
+    } catch (retryError) {
+      const retryMapped = mapSdkError(retryError, { model: settings.model });
+      logFailure(opts.task, settings.model, mode, retryError, retryMapped, started);
+      throw retryMapped;
+    }
+    grammarRejected().add(key);
+    console.info("[vigia-ia] esquema demasiado grande para salida estructurada; se usa el modo prompt", {
       task: opts.task,
-      model: settings.model,
-      code: mapped.code,
-      status: error instanceof APIError ? error.status : undefined,
-      request_id: error instanceof APIError ? error.requestID : undefined,
-      duration_ms: Date.now() - started,
     });
-    throw mapped;
   }
 
-  console.info("[vigia-ia] uso", usageLog(opts.task, settings.model, message, Date.now() - started));
+  console.info("[vigia-ia] uso", usageLog(opts.task, settings.model, message, Date.now() - started, mode));
   if (message.stop_reason === "refusal") {
     console.warn("[vigia-ia] el modelo declinó", {
       task: opts.task,
       category: message.stop_details?.category ?? null,
     });
   }
-  return readStructuredOutput(message, opts.schema);
+  try {
+    return readStructuredOutput(message, opts.schema, mode);
+  } catch (error) {
+    // En modo prompt la salida no está garantizada: se pide una sola corrección con los problemas.
+    if (mode !== "prompt" || !(error instanceof AIError) || error.code !== "invalid_output") throw error;
+    const previous = extractFinalText(message.content).trim();
+    const cause = error.cause;
+    const issues =
+      cause !== null && typeof cause === "object" && "issues" in cause && Array.isArray(cause.issues)
+        ? describeIssues(cause as z.ZodError)
+        : "- La respuesta no es un objeto JSON válido.";
+    console.warn("[vigia-ia] salida fuera de esquema; se pide corrección", { task: opts.task });
+    const repair: MessageCreateParamsNonStreaming = {
+      ...params,
+      messages: [
+        ...params.messages,
+        { role: "assistant", content: previous === "" ? "{}" : previous },
+        {
+          role: "user",
+          content: `Tu respuesta no cumple el esquema:\n${issues}\nResponde de nuevo SOLO con el objeto JSON completo y corregido, sin texto adicional.`,
+        },
+      ],
+    };
+    const repairStarted = Date.now();
+    let fixed: BetaMessage;
+    try {
+      fixed = await sendOnce(transport, repair, opts.task);
+    } catch (repairError) {
+      const mapped = mapSdkError(repairError, { model: settings.model });
+      logFailure(opts.task, settings.model, mode, repairError, mapped, repairStarted);
+      throw mapped;
+    }
+    console.info("[vigia-ia] uso", usageLog(opts.task, settings.model, fixed, Date.now() - repairStarted, mode));
+    return readStructuredOutput(fixed, opts.schema, mode);
+  }
 }
 
 /**

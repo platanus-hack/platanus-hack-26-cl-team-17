@@ -90,6 +90,8 @@ export function toSummary(incident: Incident, counts?: IncidentCounts): Incident
     severity: s?.severity ?? null,
     // Sin informe queda null: la UI lo muestra como "sin evaluar", nunca como "sin víctimas".
     trapped_status: s?.trapped?.status ?? null,
+    situation_engine: s ? incident.situation_engine : null,
+    situation_confidence: s?.overall_confidence ?? null,
     media_count: counts?.media ?? 0,
     comms_count: counts?.comms ?? 0,
     active_missions: counts?.active_missions ?? 0,

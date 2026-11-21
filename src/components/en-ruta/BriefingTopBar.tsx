@@ -41,12 +41,13 @@ export function BriefingTopBar({ incident, simulated, stale, lastUpdatedAt, now,
           </p>
         </div>
 
-        <h1 className="mt-1 line-clamp-2 font-display text-2xl leading-tight font-bold tracking-wide text-text sm:text-3xl lg:text-4xl">
+        <h1 className="mt-1 line-clamp-2 font-display text-2xl leading-tight font-bold text-text sm:text-3xl lg:text-4xl">
           {address || incident.title || "Dirección por confirmar"}
         </h1>
-        {address && incident.title && (
-          <p className="mt-0.5 truncate text-base text-muted lg:text-lg">{incident.title}</p>
-        )}
+        <p className="mt-0.5 truncate text-base text-muted lg:text-lg">
+          <span className="font-mono text-text">{incident.code}</span>
+          {address && incident.title && <> · {incident.title}</>}
+        </p>
 
         <div className="mt-2 flex flex-wrap items-center gap-2" aria-live="polite">
           {stale ? (
@@ -66,7 +67,6 @@ export function BriefingTopBar({ incident, simulated, stale, lastUpdatedAt, now,
               SIMULADO · no proviene de videos reales
             </Pill>
           )}
-          <span className="font-mono text-sm text-muted">{incident.code}</span>
           {!incident.verified && <Pill tone="neutral">SIN VERIFICAR</Pill>}
           {incident.status !== "active" && (
             <Pill tone={incident.status === "closed" ? "critical" : "info"}>

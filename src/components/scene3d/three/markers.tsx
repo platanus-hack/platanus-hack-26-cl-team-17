@@ -73,11 +73,13 @@ function Hazard({ h }: { h: NHazard }) {
       <Label
         position={[h.x, iconY, -h.y]}
         layer={h.severity === "high" ? "high" : "base"}
+        priority={h.severity === "high" ? 70 : h.severity === "medium" ? 56 : 44}
+        pinned={selected}
         onActivate={() => select({ kind: "hazard", id: h.id })}
         ariaLabel={`Peligro: ${HAZARD_KIND_LABEL[h.kind]}, severidad ${HAZARD_SEVERITY_LABEL[h.severity]}`}
         title={HAZARD_KIND_LABEL[h.kind]}
       >
-        <Chip tone={tone} selected={selected} className="bg-surface/95">
+        <Chip tone={tone} selected={selected} className={tone === "critical" ? undefined : "bg-surface/95"}>
           <Icon className="size-3.5" strokeWidth={2.4} aria-hidden="true" />
           {labels && <span>{HAZARD_KIND_LABEL[h.kind]}</span>}
         </Chip>
@@ -127,11 +129,13 @@ function Access({ a }: { a: NAccess }) {
       </group>
       <Label
         position={[a.x, tall ? 3.4 : 1.8, -a.y]}
+        priority={a.kind === "command_post" ? 46 : a.kind === "hydrant" ? 45 : 34}
+        pinned={selected}
         onActivate={() => select({ kind: "access", id: a.id })}
         ariaLabel={`${ACCESS_KIND_LABEL[a.kind]}${a.label ? `: ${a.label}` : ""}`}
         title={text}
       >
-        <Chip tone={tone} selected={selected} className="bg-surface/95">
+        <Chip tone={tone} selected={selected} className={tone === "critical" ? undefined : "bg-surface/95"}>
           <Icon className="size-3.5" strokeWidth={2.4} aria-hidden="true" />
           {labels && <span>{text}</span>}
         </Chip>
@@ -162,7 +166,7 @@ export function Annotations({ items }: { items: NAnnotation[] }) {
             <sphereGeometry args={[0.22, 10, 8]} />
             <meshBasicMaterial color={palette.text} />
           </mesh>
-          <Label position={[0, 0.3, 0]} align="right">
+          <Label position={[0, 0.3, 0]} align="right" priority={20}>
             <span className="text-[11px] text-text italic" style={HALO}>
               {n.text}
             </span>

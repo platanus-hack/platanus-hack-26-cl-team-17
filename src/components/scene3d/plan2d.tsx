@@ -6,6 +6,8 @@
  */
 import {
   useId,
+  useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
@@ -47,6 +49,7 @@ import { ACCESS_ICON, ACCESS_TONE, HAZARD_ICON, HAZARD_TONE, type Tone } from ".
 import { TONE_FILL, TONE_STROKE, TONE_TEXT, cx } from "./tones";
 import { SMOKE_HEX } from "./palette";
 import { useElementSize, useSceneView, useSelection } from "./hooks";
+import { coreBounds, declutter } from "./three/pose";
 import { SceneEmpty, SceneFrame } from "./frame";
 
 /** Redondeo a centímetros (markup más liviano y estable). */
@@ -90,6 +93,8 @@ function Halo({
   anchor = "start",
   weight,
   lines,
+  priority,
+  pinned = false,
 }: {
   x: number;
   y: number;
@@ -99,9 +104,16 @@ function Halo({
   anchor?: "start" | "middle" | "end";
   weight?: number;
   lines: string[];
+  /** Prioridad para el despeje de etiquetas superpuestas (mayor = gana). */
+  priority: number;
+  /** Nunca se oculta. */
+  pinned?: boolean;
 }) {
   return (
     <text
+      data-vg-label=""
+      data-p={priority}
+      data-pin={pinned ? "1" : undefined}
       x={x}
       y={y}
       fontSize={size * k}
@@ -160,6 +172,8 @@ function RoadShape({ road, k, labels, hatchId, ctx }: { road: NRoad; k: number; 
             anchor="middle"
             className={road.blocked ? "fill-warning" : "fill-muted"}
             weight={road.blocked ? 600 : 500}
+            priority={road.blocked ? 58 : 24}
+            pinned={selected}
             lines={[road.blocked ? `${name} · bloqueada` : name]}
           />
         </g>
@@ -216,7 +230,7 @@ function StructureShape({ s, ctx }: { s: NStructure; ctx: Ctx }) {
         vectorEffect="non-scaling-stroke"
       />
       <polygon points={[bl, tip, br].map(sv).join(" ")} className={cx(TONE_FILL.text, "opacity-80")} />
-      <Halo x={aLabel.x} y={-aLabel.y + 3.5 * k} k={k} size={9} anchor="middle" className="fill-muted" weight={600} lines={["A"]} />
+      <Halo x={aLabel.x} y={-aLabel.y + 3.5 * k} k={k} size={9} anchor="middle" className="fill-muted" weight={600} lines={["A"]} priority={12} />
       {ctx.labels && (
         <Halo
           x={s.x}
@@ -226,6 +240,8 @@ function StructureShape({ s, ctx }: { s: NStructure; ctx: Ctx }) {
           className="fill-text"
           weight={600}
           lines={[title, structureCaption(s)]}
+          priority={s.role === "involved" ? 68 : s.role === "exposure" ? 50 : 38}
+          pinned={selected}
         />
       )}
     </g>
@@ -261,7 +277,7 @@ function FireShape({ f, fireGradId, ctx }: { f: NFire; fireGradId: string; ctx: 
       )}
       {selected && <SelRing r={r} k={k} />}
       {ctx.labels && (
-        <Halo x={r + 4 * k} y={-r * 0.4} k={k} size={10} className="fill-accent" weight={600} lines={[fireCaption(f)]} />
+        <Halo x={r + 4 * k} y={-r * 0.4} k={k} size={10} className="fill-accent" weight={600} lines={[fireCaption(f)]} priority={f.intensity === "heavy" ? 72 : f.intensity === "smoke_only" ? 48 : 62} pinned={selected} />
       )}
     </g>
   );
@@ -330,6 +346,8 @@ function VehicleShape({ v, ctx }: { v: NVehicle; ctx: Ctx }) {
           className={v.entrapment ? "fill-critical" : "fill-text"}
           weight={v.entrapment ? 700 : 500}
           lines={v.entrapment ? [caption, "Posible atrapamiento"] : [caption]}
+          priority={v.entrapment ? 95 : v.burning ? 52 : 40}
+          pinned={v.entrapment || selected}
         />
       )}
     </g>
@@ -354,7 +372,7 @@ function HazardShape({ h, ctx }: { h: NHazard; ctx: Ctx }) {
         <Icon x={-6 * k} y={-6 * k} size={12 * k} className={TONE_TEXT[tone]} strokeWidth={2.2} />
         {selected && <SelRing r={9 * k} k={k} />}
         {ctx.labels && (
-          <Halo x={12 * k} y={4 * k} k={k} size={10} className={TONE_FILL[tone]} weight={600} lines={[HAZARD_KIND_LABEL[h.kind]]} />
+          <Halo x={12 * k} y={4 * k} k={k} size={10} className={TONE_FILL[tone]} weight={600} lines={[HAZARD_KIND_LABEL[h.kind]]} priority={h.severity === "high" ? 70 : h.severity === "medium" ? 56 : 44} pinned={selected} />
         )}
       </g>
     </g>
@@ -380,7 +398,19 @@ function AccessShape({ a, ctx }: { a: NAccess; ctx: Ctx }) {
       />
       <Icon x={-5.5 * k} y={-5.5 * k} size={11 * k} className={TONE_TEXT[tone]} strokeWidth={2.2} />
       {selected && <SelRing r={9 * k} k={k} />}
-      {ctx.labels && <Halo x={11 * k} y={4 * k} k={k} size={10} className={TONE_FILL[tone]} weight={500} lines={[text]} />}
+      {ctx.labels && (
+        <Halo
+          x={11 * k}
+          y={4 * k}
+          k={k}
+          size={10}
+          className={TONE_FILL[tone]}
+          weight={500}
+          lines={[text]}
+          priority={a.kind === "command_post" ? 46 : a.kind === "hydrant" ? 45 : 34}
+          pinned={selected}
+        />
+      )}
     </g>
   );
 }
@@ -462,7 +492,7 @@ function DroneShape({ d, ctx }: { d: NDrone; ctx: Ctx }) {
       {selected && (
         <circle cx={d.x} cy={-d.y} r={s + 5 * k} className="fill-none stroke-info" strokeWidth={2 * k} />
       )}
-      <Halo x={d.x + s + 4 * k} y={-d.y + 3.5 * k} k={k} size={10} className="fill-drone" weight={600} lines={[droneCaption(d)]} />
+      <Halo x={d.x + s + 4 * k} y={-d.y + 3.5 * k} k={k} size={10} className="fill-drone" weight={600} lines={[droneCaption(d)]} priority={60} pinned={selected} />
     </g>
   );
 }
@@ -501,6 +531,8 @@ function PersonShape({ p, ctx }: { p: NPerson; ctx: Ctx }) {
           className={critical ? "fill-critical" : p.risk === "injured" ? "fill-warning" : "fill-muted"}
           weight={critical ? 700 : 500}
           lines={critical ? [caption, `confianza ${CONFIDENCE_LABEL[p.confidence]}`] : [caption]}
+          priority={critical ? 100 : p.risk === "injured" ? 62 : 36}
+          pinned={critical || selected}
         />
       )}
     </g>
@@ -522,9 +554,10 @@ const DEFAULT_SIZE = { width: 640, height: 420 };
 
 export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, className }: PlanSvgProps) {
   const hostRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const size = useElementSize(hostRef, DEFAULT_SIZE);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState<XY>({ x: 0, y: 0 });
+  // null = encuadre automático (núcleo táctico); el usuario lo cambia con zoom o arrastre.
+  const [user, setUser] = useState<{ zoom: number; pan: XY } | null>(null);
   const drag = useRef<{ id: number; x: number; y: number; moved: boolean; pan0: XY } | null>(null);
   const suppressClick = useRef(false);
   const rawId = useId();
@@ -540,6 +573,13 @@ export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, classN
   let h = f.maxY - f.minY;
   if (w / h < aspect) w = h * aspect;
   else h = w / aspect;
+  // Primer encuadre: el núcleo (estructura afectada, focos, víctimas) con algo de contexto.
+  const core = useMemo(() => coreBounds(view.scene, view.frame), [view.scene, view.frame]);
+  const coreW = Math.max(core.maxX - core.minX, (core.maxY - core.minY) * aspect) * 1.3;
+  const autoZoom = clamp(w / Math.max(1, coreW), 1, 6);
+  const autoPan = { x: (core.minX + core.maxX) / 2 - (f.minX + f.maxX) / 2, y: (core.minY + core.maxY) / 2 - (f.minY + f.maxY) / 2 };
+  const zoom = user?.zoom ?? autoZoom;
+  const pan = user?.pan ?? (autoZoom > 1 ? autoPan : { x: 0, y: 0 });
   w /= zoom;
   h /= zoom;
   const cx0 = (f.minX + f.maxX) / 2 + pan.x;
@@ -596,7 +636,7 @@ export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, classN
       d.moved = true;
       e.currentTarget.setPointerCapture(e.pointerId);
     }
-    setPan({ x: d.pan0.x - dx * k, y: d.pan0.y + dy * k });
+    setUser({ zoom, pan: { x: d.pan0.x - dx * k, y: d.pan0.y + dy * k } });
   };
   const onPointerUp = (e: ReactPointerEvent<SVGSVGElement>) => {
     const d = drag.current;
@@ -612,11 +652,24 @@ export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, classN
     onSelect(null);
   };
 
-  const zoomBy = (factor: number) => setZoom((z) => clamp(z * factor, 1, 10));
-  const reset = () => {
-    setZoom(1);
-    setPan({ x: 0, y: 0 });
-  };
+  const zoomBy = (factor: number) => setUser({ zoom: clamp(zoom * factor, 1, 10), pan });
+  const reset = () => setUser(null);
+
+  // Despeje: si dos rótulos se tapan, se oculta el de menor prioridad (las personas en riesgo nunca).
+  useLayoutEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const els = Array.from(svg.querySelectorAll<SVGTextElement>("[data-vg-label]"));
+    const boxes = els.map((el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.left, y: r.top, w: r.width, h: r.height, priority: Number(el.dataset.p) || 0, pinned: el.dataset.pin === "1" };
+    });
+    const placement = declutter(boxes, { shift: false });
+    els.forEach((el, i) => {
+      const v = placement[i].visible ? "" : "hidden";
+      if (el.style.visibility !== v) el.style.visibility = v;
+    });
+  });
 
   const scaleLen = niceScaleLength(k, 80);
   const scalePx = scaleLen / k;
@@ -625,11 +678,12 @@ export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, classN
   return (
     <div ref={hostRef} className={cx("relative h-full min-h-[220px] w-full overflow-hidden bg-bg select-none", className)}>
       <svg
+        ref={svgRef}
         viewBox={viewBox}
         width="100%"
         height="100%"
         className="absolute inset-0 block h-full w-full"
-        style={{ touchAction: zoom > 1 ? "none" : "manipulation" }}
+        style={{ touchAction: user && zoom > 1 ? "none" : "manipulation" }}
         role="group"
         aria-label="Planta de la reconstrucción, vista cenital con el Norte hacia arriba"
         onPointerDown={onPointerDown}
@@ -667,7 +721,7 @@ export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, classN
               vectorEffect="non-scaling-stroke"
             />
             {layers.labels && (
-              <Halo x={focus.x} y={-(focus.y + r) - 3 * k} k={k} size={9} anchor="middle" className="fill-faint" lines={[`${r} m`]} />
+              <Halo x={focus.x} y={-(focus.y + r) - 3 * k} k={k} size={9} anchor="middle" className="fill-faint" lines={[`${r} m`]} priority={8} />
             )}
           </g>
         ))}
@@ -690,7 +744,7 @@ export function PlanSvg({ view, layers, selection, onSelect, onOpenMedia, classN
           s.annotations.map((n) => (
             <g key={n.id} pointerEvents="none">
               <circle cx={n.x} cy={-n.y} r={2.5 * k} className="fill-text" />
-              <Halo x={n.x + 5 * k} y={-n.y + 3.5 * k} k={k} size={10} className="fill-text italic" lines={[n.text]} />
+              <Halo x={n.x + 5 * k} y={-n.y + 3.5 * k} k={k} size={10} className="fill-text italic" lines={[n.text]} priority={20} />
             </g>
           ))}
         {layers.people && s.people.map((p) => <PersonShape key={p.id} p={p} ctx={ctx} />)}

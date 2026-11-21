@@ -178,7 +178,8 @@ test("simulacro de punta a punta, con reintentos sin duplicar", async () => {
   assert.equal(missions[0].mode, "simulated");
   // Despega desde el puesto de mando cercano, no a 300 m.
   const { distanceM } = await import("@/lib/geo");
-  const homeM = distanceM({ lat: inc0(start).lat, lng: inc0(start).lng }, { lat: missions[0].home_lat, lng: missions[0].home_lng });
+  const drill = (await deps.store.getIncident(id))!;
+  const homeM = distanceM({ lat: drill.lat, lng: drill.lng }, { lat: missions[0].home_lat, lng: missions[0].home_lng });
   assert.ok(homeM > 100 && homeM < 140, `despegue a ${homeM} m`);
   const drone = media.find((m) => m.source === "drone");
   assert.ok(drone && drone.mission_id === missions[0].id);

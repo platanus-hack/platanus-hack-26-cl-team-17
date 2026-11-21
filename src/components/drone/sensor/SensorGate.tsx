@@ -26,7 +26,7 @@ export function SensorFrame({ children, className }: { children: ReactNode; clas
     <div className={cn("flex min-h-dvh flex-col bg-bg pt-[env(safe-area-inset-top)] text-text", className)}>
       <header className="flex items-center gap-2 px-4 pt-3 pb-2">
         <Logo size={24} title="Vigía" />
-        <span className="font-display text-lg leading-none font-bold tracking-wide">VIGÍA</span>
+        <span className="font-display text-lg leading-none font-semibold">Vigía</span>
         <span className="label-caps ml-1 flex items-center gap-1 rounded border border-drone/40 bg-drone-soft px-1.5 py-0.5 text-[11px] text-drone">
           <Smartphone aria-hidden="true" className="size-3" />
           Modo sensor

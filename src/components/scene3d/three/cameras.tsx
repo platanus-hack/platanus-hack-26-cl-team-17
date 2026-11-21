@@ -6,10 +6,12 @@
 import { useCallback, useEffect, useMemo } from "react";
 import * as THREE from "three";
 import { Line } from "@react-three/drei";
+import { Video } from "lucide-react";
 import { yawForHeading, type Vec3, type XY } from "../geometry";
 import type { NCamera, NDrone } from "../model";
 import { droneCaption } from "../labels";
 import { useIsSelected, usePick, useSceneCtx } from "./context";
+import { cx } from "../tones";
 import { Chip, Label } from "./label";
 import { cameraTiltDeg, frustumSegments } from "./pose";
 
@@ -89,6 +91,8 @@ function MediaCamera({ c, focus }: { c: NCamera; focus: XY }) {
       <Label
         position={[c.x, c.z + 1.1, -c.y]}
         layer="high"
+        priority={54}
+        pinned={selected}
         onActivate={() => {
           select({ kind: "camera", id: c.mediaRef });
           open();
@@ -96,14 +100,24 @@ function MediaCamera({ c, focus }: { c: NCamera; focus: XY }) {
         ariaLabel={`Cámara del medio ${c.mediaRef}${openMedia ? ". Abrir medio" : ""}`}
         title={openMedia ? `Abrir ${c.mediaRef}` : c.mediaRef}
       >
-        <Chip tone="info" selected={selected} className="gap-1.5 bg-surface/95 py-0.5 pl-0.5">
+        <span className="relative block">
           {c.posterUrl && !compact ? (
-            // Miniatura del medio (URL propia de /api/files; no pasa por el optimizador).
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={c.posterUrl} alt="" loading="lazy" draggable={false} className="h-7 w-12 rounded-sm bg-surface-2 object-cover" />
+            // Miniatura del medio al pasar el cursor, enfocar o seleccionar (URL propia de /api/files).
+            <span
+              className={cx(
+                "absolute bottom-full left-1/2 mb-1 -translate-x-1/2 overflow-hidden rounded border border-info/60 bg-surface shadow-[0_2px_8px_rgb(0_0_0/0.5)]",
+                selected ? "block" : "hidden group-hover:block group-focus-visible:block",
+              )}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={c.posterUrl} alt="" loading="lazy" draggable={false} className="block h-[54px] w-24 bg-surface-2 object-cover" />
+            </span>
           ) : null}
-          <span className="pr-0.5 font-mono text-[11.5px] font-bold">{c.mediaRef}</span>
-        </Chip>
+          <Chip tone="info" selected={selected} className="bg-surface/95">
+            <Video className="size-3.5" strokeWidth={2.4} aria-hidden="true" />
+            <span className="font-mono text-[11.5px] font-bold">{c.mediaRef}</span>
+          </Chip>
+        </span>
       </Label>
     </group>
   );
@@ -189,6 +203,8 @@ function Drone({ d }: { d: NDrone }) {
       <Label
         position={[d.x, d.z + 2.2, -d.y]}
         layer="high"
+        priority={60}
+        pinned={selected}
         onActivate={() => select({ kind: "drone", id: d.id })}
         ariaLabel={`Dron ${droneCaption(d)}`}
       >

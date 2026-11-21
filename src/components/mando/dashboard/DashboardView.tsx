@@ -273,8 +273,8 @@ export function DashboardView() {
         </>
       }
     >
-      <div className="flex h-full min-h-0 flex-col overflow-y-auto lg:grid lg:grid-cols-[1fr_420px] lg:overflow-hidden">
-        <div className="min-w-0 lg:h-full lg:min-h-0 lg:overflow-y-auto">
+      <div className="relative flex h-full min-h-0 flex-col overflow-y-auto lg:grid lg:grid-cols-[1fr_420px] lg:overflow-hidden">
+        <div className="relative min-w-0 lg:h-full lg:min-h-0 lg:overflow-y-auto">
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4">
             {(loaded || !list.error) && <DashboardHeader counts={counts} loading={!loaded} />}
 

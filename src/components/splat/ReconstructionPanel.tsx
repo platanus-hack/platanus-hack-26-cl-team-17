@@ -23,7 +23,7 @@ import type { MediaView, RuntimeMode } from "@/lib/contract";
 import type { Incident, Reconstruction } from "@/lib/domain";
 import { api, errorMessage } from "@/lib/client/api";
 import { cn } from "@/lib/cn";
-import { formatDateTime, formatDuration, formatNumber, pluralize } from "@/lib/format";
+import { formatClock, formatDate, formatDateTime, formatDuration, formatNumber, pluralize } from "@/lib/format";
 import { hasOriginalVideo, isReconstructionEligible, realFrames } from "@/lib/splat/manifest";
 import {
   ACTIVE_STAGES,
@@ -360,7 +360,11 @@ function Ready({ rec, incident, media }: { rec: Reconstruction; incident: Incide
             </Badge>
           </>
         )}
-        {rec.finished_at && <Badge tone="neutral">{`Generada ${formatDateTime(rec.finished_at)}`}</Badge>}
+        {rec.finished_at && (
+          <Badge tone="neutral" title={formatDateTime(rec.finished_at)}>
+            {`Generada ${formatDate(rec.finished_at)} · ${formatClock(rec.finished_at, { seconds: false })}`}
+          </Badge>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
@@ -439,8 +443,16 @@ export function ReconstructionPanel({ incident, media, mode, onChanged, classNam
       badge={<StatusBadge rec={rec} stale={stale} />}
       actions={
         rec?.status === "ready" ? (
-          <Button size="sm" variant="ghost" icon={RefreshCw} onClick={start} loading={busy} disabled={!canStart}>
-            {gpu ? "Reconstruir de nuevo" : "Regenerar"}
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={RefreshCw}
+            onClick={start}
+            loading={busy}
+            disabled={!canStart}
+            aria-label={gpu ? "Reconstruir de nuevo" : "Regenerar la vista sintética"}
+          >
+            <span className="hidden sm:inline">{gpu ? "Reconstruir de nuevo" : "Regenerar"}</span>
           </Button>
         ) : null
       }

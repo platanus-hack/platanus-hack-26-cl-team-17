@@ -29,8 +29,7 @@ export function Wordmark({ size = "md", tagline = false, href, className }: Word
     <>
       <Logo size={s.logo} title="" className="text-text" />
       <span className="flex min-w-0 flex-col">
-        {/* Se escribe "Vigía" y se pasa a mayúsculas por CSS para que los lectores de pantalla lo pronuncien bien. */}
-        <span className={cn("font-display leading-none font-bold tracking-[0.12em] text-text uppercase", s.name)}>
+        <span className={cn("font-display leading-none font-semibold text-text", s.name)}>
           Vigía
         </span>
         {tagline ? (

@@ -239,26 +239,25 @@ export default function LocationPickerCanvas({ value, onChange, initialCenter, t
             <ZoomControls map={map} large={large} />
           </div>
 
-          {geoError && (
-            <div
-              role="alert"
-              className="pointer-events-auto absolute left-2 right-14 top-2 flex items-start gap-1.5 rounded-control border border-warning bg-surface/95 px-2 py-1.5 text-xs text-text shadow-md pointer-coarse:right-16"
-            >
-              <CircleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
-              <span className="min-w-0 flex-1">{geoError}</span>
-              <button
-                type="button"
-                onClick={() => setGeoError(null)}
-                aria-label="Cerrar aviso"
-                className="-m-1 grid size-6 shrink-0 place-items-center rounded-sm text-muted hover:text-text pointer-coarse:size-8"
+          {/* Avisos arriba a la izquierda: abajo vive la atribución, que en teléfono ocupa casi todo el ancho. */}
+          <div className="pointer-events-none absolute left-2 right-14 top-2 flex flex-col items-start gap-1 pointer-coarse:right-16">
+            {geoError && (
+              <div
+                role="alert"
+                className="pointer-events-auto flex w-full items-start gap-1.5 rounded-control border border-warning bg-surface/95 px-2 py-1.5 text-xs text-text shadow-md"
               >
-                <X className="size-3.5" aria-hidden />
-              </button>
-            </div>
-          )}
-
-          <div className="pointer-events-none absolute bottom-2 left-2 right-12 flex flex-col items-start gap-1">
-            <BaseMapNotice base={base} />
+                <CircleAlert className="mt-px size-3.5 shrink-0 text-warning" aria-hidden />
+                <span className="min-w-0 flex-1">{geoError}</span>
+                <button
+                  type="button"
+                  onClick={() => setGeoError(null)}
+                  aria-label="Cerrar aviso"
+                  className="-m-1 grid size-6 shrink-0 place-items-center rounded-sm text-muted hover:text-text pointer-coarse:size-8"
+                >
+                  <X className="size-3.5" aria-hidden />
+                </button>
+              </div>
+            )}
             {shown ? (
               <span
                 aria-live="polite"
@@ -271,7 +270,7 @@ export default function LocationPickerCanvas({ value, onChange, initialCenter, t
                 )}
               </span>
             ) : (
-              <span className="pointer-events-auto inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-control border border-line bg-surface/90 px-2 py-1 text-xs text-text shadow-sm">
+              <span className="pointer-events-auto inline-flex max-w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-control border border-line bg-surface/90 px-2 py-1 text-xs text-text shadow-sm">
                 <span className="inline-flex items-center gap-1.5">
                   <MousePointerClick className="size-3.5 shrink-0 text-accent" aria-hidden />
                   Toca o haz clic en el mapa para marcar el lugar
@@ -286,6 +285,10 @@ export default function LocationPickerCanvas({ value, onChange, initialCenter, t
                 </button>
               </span>
             )}
+          </div>
+
+          <div className="pointer-events-none absolute bottom-2 left-2">
+            <BaseMapNotice base={base} />
           </div>
         </>
       )}

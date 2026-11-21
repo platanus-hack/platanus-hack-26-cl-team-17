@@ -42,7 +42,7 @@ export function EmptyState({ icon: Icon, title, description, action, compact = f
           <Icon aria-hidden="true" className="size-5 text-muted" />
         </div>
       )}
-      <p className="font-display text-lg font-semibold tracking-wide text-text">{title}</p>
+      <p className="font-display text-lg font-semibold text-text">{title}</p>
       {description != null && <div className="mt-1 max-w-sm text-sm text-muted">{description}</div>}
       {action != null && <div className="mt-4 flex flex-wrap items-center justify-center gap-2">{action}</div>}
     </div>

@@ -2,10 +2,11 @@
 
 /*
  * Vigía — tokens de diseño.
- * Los nombres de token son los mismos en ambos temas; cada tema solo cambia las variables.
- *   data-theme="mando"  (oscuro, por defecto en <html>): consola táctica nocturna.
- *   data-theme="vecino" (claro, en un contenedor): teléfono al sol, botones grandes.
- * Contraste (WCAG) medido contra bg/surface/surface-2: text ≥ 14:1, muted ≥ 6:1, semánticos ≥ 5:1.
+ * Blanco y minimalista: el acento es tinta casi negra y el color queda solo para lo que significa
+ * algo (crítico, advertencia, ok, info, dron). Fuente única: Outfit; mono solo para códigos y horas.
+ *   data-theme="mando"  (por defecto en <html>): puesto de mando.
+ *   data-theme="vecino" (en un contenedor): mismos colores, texto base más grande.
+ * Contraste (WCAG) medido contra bg/surface/surface-2: text ≥ 14:1, muted ≥ 6:1, semánticos ≥ 4.5:1.
  * `faint` (≈ 3.5–4.7:1) es solo para texto auxiliar no esencial o ≥ 18 px.
  * `on-solid` es el color del texto sobre rellenos sólidos de acento/semánticos.
  */
@@ -35,8 +36,8 @@
   --color-info-soft: color-mix(in oklab, var(--v-info) var(--v-soft), transparent);
   --color-drone-soft: color-mix(in oklab, var(--v-drone) var(--v-soft), transparent);
 
-  --font-display: var(--font-barlow-condensed), "Arial Narrow", ui-sans-serif, sans-serif;
-  --font-sans: var(--font-barlow), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-outfit), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", monospace;
 
   --radius-panel: 8px;
@@ -49,46 +50,29 @@
 }
 
 :root,
-[data-theme="mando"] {
-  color-scheme: dark;
-  --v-bg: #0a0e13;
-  --v-surface: #10161d;
-  --v-surface-2: #161e27;
-  --v-line: #223040;
-  --v-line-strong: #33465c;
-  --v-text: #e8eef4;
-  --v-muted: #8fa0b4;
-  --v-faint: #647487;
-  --v-on-solid: #0a0e13;
-  --v-accent: #ff6a47;
-  --v-critical: #ff4d4d;
-  --v-warning: #ffb224;
-  --v-ok: #35d49a;
-  --v-info: #48b8ff;
-  --v-drone: #a78bfa;
-  --v-soft: 16%;
-  --v-scrollbar: #2a3a4d;
+[data-theme="mando"],
+[data-theme="vecino"] {
+  color-scheme: light;
+  --v-bg: #ffffff;
+  --v-surface: #ffffff;
+  --v-surface-2: #f6f7f9;
+  --v-line: #e8eaee;
+  --v-line-strong: #d3d7de;
+  --v-text: #0f1217;
+  --v-muted: #5a6372;
+  --v-faint: #7d8594;
+  --v-on-solid: #ffffff;
+  --v-accent: #0f1217;
+  --v-critical: #cc2a1e;
+  --v-warning: #b54708;
+  --v-ok: #067647;
+  --v-info: #1d5fd1;
+  --v-drone: #6941c6;
+  --v-soft: 8%;
+  --v-scrollbar: #d3d7de;
 }
 
 [data-theme="vecino"] {
-  color-scheme: light;
-  --v-bg: #fffdf9;
-  --v-surface: #ffffff;
-  --v-surface-2: #f5f1ea;
-  --v-line: #e2dbd0;
-  --v-line-strong: #c4b9a9;
-  --v-text: #16130f;
-  --v-muted: #5a5248;
-  --v-faint: #7a7166;
-  --v-on-solid: #ffffff;
-  --v-accent: #c8102e;
-  --v-critical: #b3141f;
-  --v-warning: #8a5a00;
-  --v-ok: #0f7a4a;
-  --v-info: #0a62a8;
-  --v-drone: #6a3fc9;
-  --v-soft: 11%;
-  --v-scrollbar: #cfc6b8;
   /* Vecinos: texto base más grande. */
   font-size: 1.0625rem;
 }
@@ -150,7 +134,7 @@
     color: var(--v-text);
   }
   dialog::backdrop {
-    background: rgb(3 6 10 / 0.72);
+    background: rgb(15 18 23 / 0.45);
   }
   [data-theme="vecino"] dialog::backdrop,
   dialog[data-theme="vecino"]::backdrop {
@@ -163,12 +147,10 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Rótulo técnico: mayúsculas condensadas con tracking (barras de título, etiquetas). */
+/* Rótulo (barras de título, etiquetas): en minúsculas y sin espaciado; el nombre quedó por compatibilidad. */
 @utility label-caps {
-  font-family: var(--font-display);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-weight: 600;
+  font-family: var(--font-sans);
+  font-weight: 500;
 }
 
 @keyframes pulse-critical {
