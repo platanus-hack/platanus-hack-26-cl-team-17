@@ -1,0 +1,9 @@
+# Lo que NO se sube a Cloud Build (deploy/detector.sh). Los ONNX sí se suben aunque no se versionen.
+.gcloudignore
+.venv/
+__pycache__/
+*.log
+models/*.pt
+models/*.ts
+models/*.jpg
+models/samples/

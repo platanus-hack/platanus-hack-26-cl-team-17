@@ -123,6 +123,13 @@ export const config = {
   get detectorUrl() {
     return env("VIGIA_DETECTOR_URL").replace(/\/$/, "");
   },
+  /**
+   * "gcp" = el detector es un servicio privado de Cloud Run (deploy/detector.sh): cada llamada
+   * lleva un token de identidad de la cuenta del servicio. Vacío = sin autenticación (local).
+   */
+  get detectorAuth() {
+    return env("VIGIA_DETECTOR_AUTH").toLowerCase();
+  },
   /** Agente Vigía: escucha continua de las emergencias activas. VIGIA_AGENT=0 lo apaga. */
   get vigiaAgent() {
     return env("VIGIA_AGENT") !== "0";

@@ -151,6 +151,23 @@ Variantes útiles:
 Las migraciones de `db/migrations/` se aplican solas al primer uso (con candado de Postgres,
 así que varias instancias no chocan). Para desactivarlo: `VIGIA_AUTO_MIGRATE=0`.
 
+### Detector YOLO (cajas en el video en vivo)
+
+La imagen de la app no trae el detector (`detector/` es Python y pesa ~50 MB de modelos). Para
+que el video en vivo del dron dibuje las cajas en la nube, se despliega aparte como servicio
+**privado** `vigia-detector` (4 vCPU / 2 GiB, `MIN_INSTANCES=0`: sin tráfico se apaga; el primer
+cuadro tras un rato sin uso espera unos segundos el arranque en frío):
+
+```bash
+bash deploy/detector.sh          # construye, despliega, da roles/run.invoker a vigia-run y conecta la app
+```
+
+La app lo llama con token de identidad (`VIGIA_DETECTOR_AUTH=gcp`, necesita una imagen de la app
+con ese soporte). `cloudrun.sh` encuentra `vigia-detector` solo y mantiene `VIGIA_DETECTOR_URL`
+en cada despliegue. Más CPU = YOLO más rápido por cuadro: `CPU=8 MEMORY=4Gi SKIP_BUILD=1 bash deploy/detector.sh`.
+Sobre el video solo se dibujan personas, bomberos, fuego, humo, cilindros de gas y cables caídos
+(`OVERLAY_LABELS` en `src/lib/vision/live-detections.ts`); el observador IA recibe todo.
+
 ## IAM: firmar URLs V4 sin llave, y CORS
 
 El navegador sube la evidencia **directo** a Cloud Storage con una URL firmada V4 (PUT) y la

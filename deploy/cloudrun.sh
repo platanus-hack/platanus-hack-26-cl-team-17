@@ -71,6 +71,11 @@ VIGIA_AI_FAST="${VIGIA_AI_FAST:-1}"
 # agente en el servidor; usa el mismo valor que el .env.local del puente. Vacío = solo
 # cuenta lo que empieza con «Vigía, …».
 ZELLO_OBAC_USERNAME="${ZELLO_OBAC_USERNAME:-}"
+# Detector YOLO (deploy/detector.sh). Vacío = se usa el servicio $DETECTOR_SERVICE de la región
+# si existe (privado: VIGIA_DETECTOR_AUTH=gcp); si no existe, la app corre sin detector.
+DETECTOR_SERVICE="${DETECTOR_SERVICE:-vigia-detector}"
+VIGIA_DETECTOR_URL="${VIGIA_DETECTOR_URL:-}"
+VIGIA_DETECTOR_AUTH="${VIGIA_DETECTOR_AUTH:-}"
 
 # 1 → falla si el secreto de Anthropic no tiene valor (por defecto se despliega con IA simulada).
 REQUIRE_ANTHROPIC="${REQUIRE_ANTHROPIC:-0}"
@@ -174,6 +179,10 @@ if [[ -z "$APP_URL" ]]; then
   APP_URL_WAS_DEFAULT=1
 fi
 APP_URL="${APP_URL%/}"
+if [[ -z "$VIGIA_DETECTOR_URL" && -n "$DETECTOR_SERVICE" ]]; then
+  VIGIA_DETECTOR_URL="$(gc run services describe "$DETECTOR_SERVICE" --region="$REGION" --format='value(status.url)' 2>/dev/null || true)"
+  if [[ -n "$VIGIA_DETECTOR_URL" ]]; then VIGIA_DETECTOR_AUTH="${VIGIA_DETECTOR_AUTH:-gcp}"; fi
+fi
 
 cat <<EOF
 
@@ -187,6 +196,7 @@ Vigía → Cloud Run. Esto es lo que se va a usar o crear:
   Cuenta de servicio   $SA_EMAIL
   Secretos             $SECRET_DATABASE_URL, $SECRET_SESSION, $SECRET_ADMIN_PASSWORD, $SECRET_ANTHROPIC, $SECRET_BRIDGE
   Admin inicial       $VIGIA_ADMIN_EMAIL
+  Detector YOLO        ${VIGIA_DETECTOR_URL:-ninguno (sin cajas en el video en vivo; ver deploy/detector.sh)}
   URL de la app        $APP_URL
   Infraestructura      $([[ "$SKIP_INFRA" == "1" ]] && echo "se omite (SKIP_INFRA=1)" || echo "se revisa y se crea lo que falte")
   Imagen               ${IMAGE:-se construye con Cloud Build ($BUILD_MACHINE)}
@@ -437,6 +447,8 @@ info "Desplegando $SERVICE en Cloud Run"
   [[ -n "$VIGIA_AI_EFFORT" ]] && printf 'VIGIA_AI_EFFORT: %s\n' "$(yaml_quote "$VIGIA_AI_EFFORT")"
   [[ -n "$VIGIA_AI_FAST" ]] && printf 'VIGIA_AI_FAST: %s\n' "$(yaml_quote "$VIGIA_AI_FAST")"
   [[ -n "$ZELLO_OBAC_USERNAME" ]] && printf 'ZELLO_OBAC_USERNAME: %s\n' "$(yaml_quote "$ZELLO_OBAC_USERNAME")"
+  [[ -n "$VIGIA_DETECTOR_URL" ]] && printf 'VIGIA_DETECTOR_URL: %s\n' "$(yaml_quote "$VIGIA_DETECTOR_URL")"
+  [[ -n "$VIGIA_DETECTOR_AUTH" ]] && printf 'VIGIA_DETECTOR_AUTH: %s\n' "$(yaml_quote "$VIGIA_DETECTOR_AUTH")"
   true
 } >"$WORK_DIR/env.yaml"
 

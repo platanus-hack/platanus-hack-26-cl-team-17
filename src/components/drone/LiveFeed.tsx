@@ -20,14 +20,17 @@ import {
 } from "@/lib/vision/live-detections";
 import { CRITICAL_LABELS, detectionText, type Detection } from "@/lib/vision/types";
 
-/** Pausa entre consultas de cuadro (la respuesta 204 sin cuadro nuevo es barata). */
-const FRAME_POLL_MS = 250;
+/**
+ * Intervalo entre consultas de cuadro, contado desde que empezó la anterior (el sensor manda
+ * hasta ~8 por segundo; la respuesta 204 sin cuadro nuevo es barata).
+ */
+const FRAME_POLL_MS = 100;
 const FRAME_RETRY_MS = 2000;
 const INSIGHTS_POLL_MS = 3000;
 /** Sin cuadro nuevo por más que esto, el video se marca como detenido. */
 const STALE_MS = 4000;
 /** Detecciones YOLO del video en vivo: consulta frecuente con detector; muy espaciada sin él. */
-const DETECTIONS_POLL_MS = 300;
+const DETECTIONS_POLL_MS = 150;
 const DETECTIONS_IDLE_MS = 10_000;
 
 const SEVERITY_TONE: Record<TimelineSeverity, Tone> = {
@@ -65,6 +68,7 @@ function useLiveFrame(missionId: string, enabled: boolean): FeedState {
       if (ctl.signal.aborted || running) return;
       if (document.hidden) return;
       running = true;
+      const started = Date.now();
       let next = FRAME_POLL_MS;
       try {
         const q = seq ? `?after=${encodeURIComponent(seq)}` : "";
@@ -100,7 +104,7 @@ function useLiveFrame(missionId: string, enabled: boolean): FeedState {
       } finally {
         running = false;
       }
-      schedule(next);
+      schedule(Math.max(0, next - (Date.now() - started)));
     }
 
     const onVisibility = () => {
