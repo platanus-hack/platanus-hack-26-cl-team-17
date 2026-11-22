@@ -6,7 +6,6 @@ import { Button, Field, fieldMessageIds, Input, SegmentedControl } from "@/compo
 import { ApiClientError, api, errorMessage } from "@/lib/client/api";
 import type { CreateMissionResponse } from "@/lib/contract";
 import type { MissionMode, MissionPattern } from "@/lib/domain";
-import { LIMITS } from "@/lib/domain";
 import { cn } from "@/lib/cn";
 import {
   ALTITUDE_MAX_M,
@@ -27,7 +26,7 @@ const MODE_OPTIONS: { value: MissionMode; label: string; icon: LucideIcon }[] = 
 const MODE_HELP: Record<MissionMode, string> = {
   simulated:
     "Para practicar o mostrar la plataforma: la telemetría la genera Vigía y no hay cámara. Queda rotulado como SIMULADO.",
-  device: `Un teléfono hace de dron: abre un enlace, comparte su GPS y brújula y envía una foto cada 5 s (en lotes de ${LIMITS.DRONE_BATCH_FRAMES} para la IA). Sirve también desde una escala o un punto alto.`,
+  device: "Un teléfono hace de dron: abre un enlace, comparte su GPS y brújula y transmite video en vivo (no queda guardado). Sirve también desde una escala o un punto alto.",
   api: "Un dron real (o el puente de prueba) envía telemetría y cuadros por la API con un token propio. Te mostraremos el comando para conectarlo.",
 };
 

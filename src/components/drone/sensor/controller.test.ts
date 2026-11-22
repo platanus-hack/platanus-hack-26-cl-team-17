@@ -52,7 +52,7 @@ class HttpLikeError extends Error {
   }
 }
 
-function setup(opts: { gps?: boolean } = {}) {
+function setup(opts: { gps?: boolean; noFrames?: boolean } = {}) {
   const clock = new ManualClock();
   const telemetry: TelemetryInput[] = [];
   const frames: { meta: FrameMeta; flush: boolean }[] = [];
@@ -88,10 +88,32 @@ function setup(opts: { gps?: boolean } = {}) {
     cameraReady: () => true,
     capture: async () => new Blob([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], { type: "image/jpeg" }),
   };
+  if (opts.noFrames) delete transport.frame;
+  let captures = 0;
+  const capture = inputs.capture;
+  inputs.capture = () => {
+    captures++;
+    return capture();
+  };
   const states: SessionState[] = [];
   const c = new SensorController(transport, inputs, (s) => states.push(s), clock);
-  return { clock, c, telemetry, frames, server, states };
+  return { clock, c, telemetry, frames, server, states, captures: () => captures };
 }
+
+test("sin canal de cuadros: solo telemetría, no captura fotos y al detener no cierra lote", async () => {
+  const { clock, c, telemetry, captures } = setup({ noFrames: true });
+  c.start();
+  await clock.advance(30_000);
+  assert.ok(telemetry.length >= 15, `telemetría ${telemetry.length}`);
+  assert.equal(captures(), 0);
+  assert.equal(c.state.framesSent, 0);
+  c.stop();
+  await clock.advance(2_000);
+  assert.equal(c.state.phase, "stopped");
+  assert.equal(captures(), 0);
+  assert.equal(telemetry.at(-1)!.status, "landed");
+  c.dispose();
+});
 
 test("ciclo: telemetría cada 2 s y un cuadro cada 5 s; el estado se informa una vez", async () => {
   const { clock, c, telemetry, frames } = setup();

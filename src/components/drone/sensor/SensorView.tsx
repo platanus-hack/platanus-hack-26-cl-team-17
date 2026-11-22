@@ -31,7 +31,6 @@ import { cn } from "@/lib/cn";
 import { SensorController, type SensorInputs, type SensorTransport } from "./controller";
 import { useLiveStream } from "./use-live-stream";
 import {
-  BATCH_SIZE,
   commandView,
   createSession,
   gpsState,
@@ -137,17 +136,10 @@ export function SensorView({ token, mission, incident }: SensorViewProps) {
   }, [stopCamera, stopGps, stopCompass]);
 
   useEffect(() => {
+    // Sin cuadros a lotes de análisis: del dron importa el tiempo real (useLiveStream), y esas
+    // fotos quedarían guardadas en el incidente.
     const transport: SensorTransport = {
       telemetry: (body, signal) => api.drone.telemetry(mission.id, token, body, { signal }),
-      frame: (blob, meta, flush, signal) =>
-        api.drone.frame(
-          mission.id,
-          token,
-          blob,
-          // Sin posición: NaN se omite de la query y el servidor usa la última telemetría.
-          { lat: meta.lat ?? Number.NaN, lng: meta.lng ?? Number.NaN, alt: meta.alt, heading: meta.heading, t: meta.t, flush },
-          { signal },
-        ),
     };
     const inputs: SensorInputs = {
       fix: () => fixRef.current,
@@ -333,9 +325,8 @@ export function SensorView({ token, mission, incident }: SensorViewProps) {
           <section aria-label="Antes de empezar" className="flex flex-col gap-1">
             <p className="text-base leading-relaxed text-muted">
               Este teléfono enviará al puesto de mando su <strong className="text-text">ubicación y rumbo cada 2 s</strong>,{" "}
-              <strong className="text-text">video en vivo</strong> (hasta 8 cuadros por segundo, en baja resolución) y{" "}
-              <strong className="text-text">una foto cada 5 s</strong> (la IA las analiza en lotes de {BATCH_SIZE}). Apunta la cámara
-              trasera al incidente y mantén la pantalla encendida.
+              <strong className="text-text">video en vivo</strong> (hasta 8 cuadros por segundo, en baja resolución; no queda guardado).
+              Apunta la cámara trasera al incidente y mantén la pantalla encendida.
             </p>
             <ul className="divide-y divide-line">
               <CheckRow
@@ -358,9 +349,11 @@ export function SensorView({ token, mission, incident }: SensorViewProps) {
           <section aria-label="Envío al puesto de mando" className="flex flex-col gap-2">
             <div className="grid grid-cols-2 gap-2">
               <Counter label="Posiciones enviadas" value={session.pointsSent} hint={`Cada ${SENSOR_TIMING.telemetryEveryMs / 1000} s`} />
-              <Counter label="Cuadros enviados" value={session.framesSent} hint={`Cada ${SENSOR_TIMING.frameEveryMs / 1000} s`} />
-              <Counter label="Lote actual" value={`${session.batchFrames}/${BATCH_SIZE}`} hint="Se analiza al completarse" />
-              <Counter label="Lotes a análisis" value={session.batchesClosed} hint={session.mediaId ? "Recibidos por el mando" : undefined} />
+              <Counter
+                label="Video en vivo"
+                value={live.status === "live" ? `${live.fps.toLocaleString("es-CL")} c/s` : "—"}
+                hint="Solo tiempo real, no se guarda"
+              />
             </div>
             <p role="status" className={cn("flex items-center gap-2 text-sm", retrying ? "text-warning" : "text-muted")}>
               {retrying ? <TriangleAlert aria-hidden="true" className="size-4 shrink-0" /> : <CircleCheck aria-hidden="true" className="size-4 shrink-0 text-ok" />}

@@ -13,9 +13,10 @@ Fuentes (elige una):
   --mavlink CONEXIÓN   lee posición y batería de un dron MAVLink (pymavlink).
                        REFERENCIA NO PROBADA CON HARDWARE: revísala antes de volar.
   --rtmp [ESCUCHA]     servidor RTMP local para DJI Fly (Transmisión en vivo → RTMP):
-                       manda video en vivo (~8 cuadros/s) y un cuadro cada --every
-                       segundos a análisis. DJI Fly no entrega telemetría por RTMP: la
-                       posición es la órbita sintética. Requiere ffmpeg.
+                       manda solo video en vivo (~8 cuadros/s), que no se guarda en el
+                       incidente; --every N agrega un cuadro cada N s a lotes de análisis.
+                       DJI Fly no entrega telemetría por RTMP: la posición es la órbita
+                       sintética. Requiere ffmpeg.
   --stream URL         igual que --rtmp, pero lee el video de una URL (RTSP, RTMP, SRT…),
                        p. ej. la de un servidor MediaMTX.
 
@@ -1068,8 +1069,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--alt", type=float, default=45.0, help="Altura de vuelo en metros (45).")
     p.add_argument("--speed", type=float, default=8.0, help="Velocidad en m/s (8).")
     p.add_argument(
-        "--every", type=float, default=5.0,
-        help="Segundos de video entre cuadros enviados a análisis (5). Con --rtmp/--stream, 0 = solo video en vivo.",
+        "--every", type=float, default=None,
+        help="Segundos de video entre cuadros enviados a lotes de análisis, que quedan guardados en el incidente "
+        "(--video: 5). Con --rtmp/--stream vale 0 (solo video en vivo) salvo que se indique.",
     )
     p.add_argument(
         "--live-fps", type=float, default=8.0,
@@ -1078,6 +1080,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument("--ffmpeg", default="ffmpeg", help="Ejecutable de ffmpeg (ffmpeg).")
     args = p.parse_args(argv)
     live = args.rtmp is not None or args.stream is not None
+    # En vivo importa el tiempo real: sin --every no se guardan cuadros del dron en el incidente.
+    if args.every is None:
+        args.every = 0.0 if live else 5.0
     if bool(args.mission) != bool(args.token):
         p.error("--mission y --token van juntos.")
     args.auto = live and not args.mission

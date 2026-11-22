@@ -36,7 +36,8 @@ import {
 
 export interface SensorTransport {
   telemetry(body: TelemetryInput, signal: AbortSignal): Promise<TelemetryResponse>;
-  frame(blob: Blob, meta: FrameMeta, flush: boolean, signal: AbortSignal): Promise<DroneFrameResponse>;
+  /** Cuadros a lotes de análisis (quedan guardados en el incidente). Sin él, el ciclo no captura cuadros. */
+  frame?(blob: Blob, meta: FrameMeta, flush: boolean, signal: AbortSignal): Promise<DroneFrameResponse>;
 }
 
 export interface SensorInputs {
@@ -170,7 +171,7 @@ export class SensorController {
     }
     if (this.s.phase !== "running") return;
     const now = this.clock.now();
-    const job = nextJob(this.s, now, { cameraReady: this.inputs.cameraReady() });
+    const job = nextJob(this.s, now, { cameraReady: this.transport.frame !== undefined && this.inputs.cameraReady() });
     if (job.type === "wait") {
       this.pumpTimer = this.clock.setTimeout(() => this.pump(), job.ms);
       return;
@@ -214,6 +215,8 @@ export class SensorController {
   }
 
   private async sendFrame(now: number): Promise<void> {
+    const send = this.transport.frame?.bind(this.transport);
+    if (!send) return; // pump() no agenda cuadros sin este canal
     this.commit(beginSend(this.s, "frame", now));
     const capturedAt = this.clock.now();
     let blob: Blob;
@@ -228,7 +231,7 @@ export class SensorController {
     if (this.disposed) return;
     const meta = buildFrameMeta(this.inputs.fix(), this.heading(capturedAt), capturedAt);
     try {
-      const res = await this.call((signal) => this.transport.frame(blob, meta, false, signal), SENSOR_TIMING.frameTimeoutMs);
+      const res = await this.call((signal) => send(blob, meta, false, signal), SENSOR_TIMING.frameTimeoutMs);
       if (this.disposed) return;
       this.commit(frameSucceeded(this.s, res, this.clock.now()));
     } catch (err) {
@@ -261,7 +264,8 @@ export class SensorController {
     let fatal: { code: StopCode; message: string } | null = null;
     let flushOk: boolean | null = null;
 
-    if (plan.flushFrame) {
+    const send = this.transport.frame?.bind(this.transport);
+    if (plan.flushFrame && send) {
       flushOk = false;
       for (let attempt = 1; attempt <= SENSOR_TIMING.finalAttempts && !this.disposed; attempt++) {
         if (!this.inputs.cameraReady()) break;
@@ -269,7 +273,7 @@ export class SensorController {
           const capturedAt = this.clock.now();
           const blob = await this.inputs.capture();
           const meta = buildFrameMeta(this.inputs.fix(), this.heading(capturedAt), capturedAt);
-          await this.call((signal) => this.transport.frame(blob, meta, true, signal), SENSOR_TIMING.frameTimeoutMs);
+          await this.call((signal) => send(blob, meta, true, signal), SENSOR_TIMING.frameTimeoutMs);
           flushOk = true;
           break;
         } catch (err) {

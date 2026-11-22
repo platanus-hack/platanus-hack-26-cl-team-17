@@ -16,7 +16,7 @@ Conecta un dron (o algo que lo imite) con una misión de Vigía: envía la telem
 | `--simulate` | Vuelo sintético sin cámara: despega unos 300 m al sur, vuela a la órbita y gira alrededor del incidente mirando al centro. Necesita `--lat` y `--lng`. |
 | `--video ARCHIVO` | Igual que `--simulate`, pero además reproduce el video y envía un cuadro cada `--every` segundos (5 por defecto) al ritmo real de reproducción, con el lado mayor a 1280 px. Sirve para mostrar en una demo un video aéreo real. |
 | `--mavlink CONEXIÓN` | Lee posición y batería de un dron MAVLink (p. ej. `udp:127.0.0.1:14550`). **Retornar** pone el dron en modo RTL y **Abortar** en LAND. Es una **referencia que no se ha probado con hardware**: revísala y pruébala en simulador (SITL) antes de volar. |
-| `--rtmp [ESCUCHA]` | Servidor RTMP local para la **transmisión en vivo de DJI Fly** (por defecto `rtmp://0.0.0.0:1935/live/dron`). Manda video en vivo al puesto de mando y un cuadro cada `--every` s a análisis. La posición es la órbita sintética. Sin `--mission`, va sola a la emergencia que atiende Vigía. Ver [Video en vivo desde DJI Fly](#video-en-vivo-desde-dji-fly-rtmp). |
+| `--rtmp [ESCUCHA]` | Servidor RTMP local para la **transmisión en vivo de DJI Fly** (por defecto `rtmp://0.0.0.0:1935/live/dron`). Manda solo video en vivo al puesto de mando (no queda guardado en el incidente); `--every N` agrega un cuadro cada N s a lotes de análisis. La posición es la órbita sintética. Sin `--mission`, va sola a la emergencia que atiende Vigía. Ver [Video en vivo desde DJI Fly](#video-en-vivo-desde-dji-fly-rtmp). |
 | `--stream URL` | Igual que `--rtmp`, pero lee el video de una URL que ffmpeg sepa abrir (RTSP, RTMP, SRT…), p. ej. la de un MediaMTX. |
 
 ### Ejemplos
@@ -63,7 +63,7 @@ Los pasos de abajo usan el servidor RTMP de ffmpeg integrado en el puente (`--rt
 
 **Qué llega al puesto de mando.**
 - Video en vivo: 640 px a 8 cuadros/s (`--live-fps`), con YOLO si hay detector y el observador de Claude cada 15 s. Con red lenta bajan los cuadros por segundo; nunca se acumula atraso.
-- Análisis: un cuadro de 1280 px cada `--every` s (5 por defecto), en lotes de 6. `--every 0` manda solo el video en vivo.
+- Nada queda guardado como imagen en el incidente: solo cuenta el video en vivo. Para guardar lotes de análisis (un cuadro de 1280 px cada N s, en lotes de 6, que quedan en la línea de tiempo), agrega `--every N`.
 - Posición: la órbita sintética alrededor del incidente, porque DJI Fly no manda telemetría por RTMP. La batería aparece como desconocida y no fuerza el retorno.
 
 **Cortes.** Si DJI Fly deja de transmitir, el puente cierra el lote en curso y vuelve a esperar; al reanudar sigue solo. Si el teléfono pierde la red sin cerrar la conexión, a los 15 s sin cuadros reinicia la recepción.

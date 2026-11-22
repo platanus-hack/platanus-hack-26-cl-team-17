@@ -5,7 +5,6 @@ import { Info, KeyRound, Smartphone, Terminal, TriangleAlert } from "lucide-reac
 import { Button, CopyButton, Dialog, Spinner } from "@/components/ui";
 import { qrSvgDataUrl } from "@/lib/client/qr";
 import type { MissionMode } from "@/lib/domain";
-import { LIMITS } from "@/lib/domain";
 import { bridgeCommand, isLoopbackOrigin } from "./model";
 
 /** Credenciales de una misión recién creada. Solo viven en el estado del panel, nunca se guardan ni registran. */
@@ -130,7 +129,7 @@ export function CredentialsDialog({ credentials, onClose }: CredentialsDialogPro
               <div className="flex min-w-0 flex-1 flex-col gap-2 text-sm text-muted">
                 <p>
                   Escanea el código con la cámara del teléfono o copia el enlace. El teléfono enviará su posición, brújula y
-                  una foto cada 5 s (en lotes de {LIMITS.DRONE_BATCH_FRAMES} para el análisis).
+                  video en vivo (no queda guardado).
                 </p>
                 <CodeBlock value={c.sensorUrl} label="Copiar enlace" />
               </div>
