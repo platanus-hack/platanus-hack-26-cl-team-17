@@ -57,6 +57,31 @@ export function isMissionActive(m: Pick<DroneMission, "status">): boolean {
   return m.status !== "landed" && m.status !== "aborted";
 }
 
+/**
+ * El dron real en vuelo cuyo video conviene mostrar: entre las misiones activas no simuladas,
+ * primero las que ya dieron señales de vida (telemetría, cuadros o ya despegaron) y, entre
+ * ellas, la de actividad más reciente. Una misión recién creada que todavía no vuela ni
+ * transmite no le quita el lugar a la que sí lo hace.
+ */
+export function pickLiveMission(missions: readonly DroneMission[]): DroneMission | null {
+  const alive = (m: DroneMission) => m.last !== null || m.frames_received > 0 || m.status !== "planned";
+  const activity = (m: DroneMission) => m.last?.at ?? m.started_at ?? m.created_at;
+  let best: DroneMission | null = null;
+  for (const m of missions) {
+    if (m.mode === "simulated" || !isMissionActive(m)) continue;
+    if (!best) {
+      best = m;
+      continue;
+    }
+    if (alive(m) !== alive(best)) {
+      if (alive(m)) best = m;
+      continue;
+    }
+    if (activity(m).localeCompare(activity(best)) > 0) best = m;
+  }
+  return best;
+}
+
 const PATTERN_TEXT: Record<MissionPattern, string> = {
   orbit: "órbita",
   hover: "punto fijo",

@@ -23,7 +23,7 @@ import { Scene3D, type SceneSelection } from "@/components/scene3d";
 import { Live3DStage, useLive3dEnabled } from "@/components/drone/Live3D";
 import { LiveVideo } from "@/components/drone/LiveFeed";
 import { useSimulatedMissionTicker } from "@/components/drone/use-mission-ticker";
-import { isMissionActive } from "@/lib/drone/plan";
+import { pickLiveMission } from "@/lib/drone/plan";
 import { useToast } from "@/components/ui/Toast";
 import { VigiaDock, useVigia } from "@/components/vigia";
 import { agentMessages, buildFicha, type ChatMessage, type LngLat } from "./model";
@@ -115,12 +115,8 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
   const [schemeSel, setSchemeSel] = useState<SceneSelection | null>(null);
   /** El estado forzado "hablando" dura hasta que el OBAC toca algo. */
   const [demoActive, setDemoActive] = useState(demoState === "hablando");
-  // Dron real en vuelo (el más reciente) → pestaña «Dron 3D» si hay servicio de reconstrucción en vivo.
-  const liveMissionId = useMemo(() => {
-    const active = (snapshot?.missions ?? []).filter((m) => m.mode !== "simulated" && isMissionActive(m));
-    active.sort((a, b) => b.created_at.localeCompare(a.created_at));
-    return active[0]?.id ?? null;
-  }, [snapshot]);
+  // Dron real en vuelo (el que transmite) → pestaña «Dron 3D» si hay servicio de reconstrucción en vivo.
+  const liveMissionId = useMemo(() => pickLiveMission(snapshot?.missions ?? NO_MISSIONS)?.id ?? null, [snapshot]);
   const live3d = useLive3dEnabled(liveMissionId ?? "");
   const tabs = live3d ? [...TABS, DRONE_TAB] : TABS;
   // Video en vivo de ese dron: ventana flotante sobre el mapa, intercambiable con él (el video al
@@ -209,14 +205,10 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
   // La pestaña «Dron 3D» ya trae el video en miniatura: ahí no hay ventana flotante.
   const floating = liveMission !== null && tab !== "drone3d";
   const videoBig = floating && videoMainFor === liveMissionId;
-  const floatW = compact ? 288 : 360;
-  // Bajo la caja de norte y escala del mapa; con el video al centro, dentro de él con margen.
-  const floatBox: CSSProperties = {
-    top: TOP + 108,
-    right: gapRight + (videoBig ? 12 : 0),
-    width: floatW,
-    height: Math.round((floatW * 9) / 16),
-  };
+  // Abajo a la izquierda, bajo «Lo crítico» y de su mismo ancho (ahí no tapa el mapa ni a Vigía).
+  const floatH = Math.round((panelL * 9) / 16);
+  const floatBox: CSSProperties = { left: GAP, bottom: GAP, width: panelL, height: floatH };
+  const floatShown = floating && !floatHidden;
   const stageBox: CSSProperties = { top: TOP + 56, left: gapLeft, right: gapRight, bottom: 110 };
   const swap = () => {
     setFloatHidden(false);
@@ -294,7 +286,6 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
         header={ficha.header}
         onStatus={(status) => void patch({ status }, "No se pudo cambiar el estado")}
         onVerify={() => void patch({ verified: true }, "No se pudo verificar el incidente")}
-        technicalHref={`/mando/${encodeURIComponent(id)}/tecnica`}
         busy={busy}
         compact={compact}
         alerts={<FichaHealth stale={stale} lastUpdatedAt={lastUpdatedAt} vigia={agent.view} />}
@@ -338,7 +329,12 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
           setSchemeSel(null);
           setPicked(f);
         }}
-        style={{ top: TOP, left: GAP, width: panelL, maxHeight: `calc(100% - ${TOP + GAP}px)` }}
+        style={{
+          top: TOP,
+          left: GAP,
+          width: panelL,
+          maxHeight: `calc(100% - ${TOP + GAP + (floatShown ? floatH + GAP : 0)}px)`,
+        }}
       />
 
       <VigiaPanel
@@ -378,7 +374,7 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
         floating &&
         (floatHidden ? (
           <FloatingPill
-            style={{ top: floatBox.top, right: floatBox.right }}
+            style={{ left: GAP, bottom: GAP }}
             icon={videoBig ? MapIcon : Video}
             label={videoBig ? "Mapa" : `Video del dron ${liveMission.label}`}
             onShow={() => setFloatHidden(false)}

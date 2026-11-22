@@ -1,7 +1,7 @@
 /**
  * GET /api/incidents/[id]/diagnostico   (personal) → IncidentDiagnostics
  *
- * Vista técnica (/mando/[id]/tecnica): qué está fallando ahora. Puente Zello, últimas llamadas
+ * Diagnóstico de una emergencia: qué está fallando ahora. Puente Zello, últimas llamadas
  * a Claude, detector, salida de Vigía, errores recientes y motor en uso. La mesa la sondea cada
  * ~3 s. Exige la misma sesión que el resto del mando (requireStaff; en modo local abierto, la
  * sesión de demostración) y nunca devuelve secretos, tokens, share_key ni datos del personal.

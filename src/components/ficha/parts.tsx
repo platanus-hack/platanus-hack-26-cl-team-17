@@ -18,7 +18,6 @@ import {
   House,
   Radio,
   Route,
-  SlidersHorizontal,
   TriangleAlert,
   Truck,
   User,
@@ -86,7 +85,6 @@ export function TopBar({
   header,
   onStatus,
   onVerify,
-  technicalHref,
   busy,
   compact,
   alerts,
@@ -94,8 +92,6 @@ export function TopBar({
   header: FichaHeader;
   onStatus: (s: IncidentStatus) => void;
   onVerify: () => void;
-  /** Vista técnica completa (radio, dron, 3DGS, compartir). */
-  technicalHref: string;
   busy: boolean;
   compact: boolean;
   /** Lo que está fallando (sin conexión, Zello, Vigía sin IA); null si todo anda. */
@@ -159,15 +155,6 @@ export function TopBar({
           );
         })}
       </div>
-      <Link
-        href={technicalHref}
-        title="Vista técnica: radio, dron, reconstrucción 3DGS, compartir y agregar videos"
-        aria-label="Vista técnica"
-        className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-2.5 text-[14px] font-semibold text-f-muted hover:bg-f-wash hover:text-f-ink"
-      >
-        <SlidersHorizontal className="size-[18px]" aria-hidden="true" />
-        {!compact && "Técnica"}
-      </Link>
     </header>
   );
 }
