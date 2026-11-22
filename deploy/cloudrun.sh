@@ -52,6 +52,8 @@ MAX_INSTANCES="${MAX_INSTANCES:-4}"
 CONCURRENCY="${CONCURRENCY:-40}"
 TIMEOUT="${TIMEOUT:-900}"
 DATABASE_POOL_MAX="${DATABASE_POOL_MAX:-8}"
+# Zona horaria del proceso (las horas que Vigía dice por radio salen de aquí).
+APP_TZ="${APP_TZ:-America/Santiago}"
 
 # URL pública de la app. Vacío → la URL determinista de Cloud Run
 # (https://SERVICIO-NUMERODEPROYECTO.REGION.run.app), que se conoce antes del primer deploy.
@@ -450,6 +452,8 @@ info "Desplegando $SERVICE en Cloud Run"
   printf 'VIGIA_ADMIN_EMAIL: %s\n' "$(yaml_quote "$VIGIA_ADMIN_EMAIL")"
   printf 'NEXT_PUBLIC_APP_URL: %s\n' "$(yaml_quote "$APP_URL")"
   printf 'DATABASE_POOL_MAX: %s\n' "$(yaml_quote "$DATABASE_POOL_MAX")"
+  # Hora de Chile: Vigía cita las horas con la hora local del proceso; sin TZ las dice en UTC.
+  printf 'TZ: %s\n' "$(yaml_quote "$APP_TZ")"
   [[ -n "$NEXT_PUBLIC_MAP_STYLE_DARK" ]] && printf 'NEXT_PUBLIC_MAP_STYLE_DARK: %s\n' "$(yaml_quote "$NEXT_PUBLIC_MAP_STYLE_DARK")"
   [[ -n "$NEXT_PUBLIC_MAP_STYLE_LIGHT" ]] && printf 'NEXT_PUBLIC_MAP_STYLE_LIGHT: %s\n' "$(yaml_quote "$NEXT_PUBLIC_MAP_STYLE_LIGHT")"
   [[ -n "$SPLAT_JOB" ]] && printf 'SPLAT_JOB: %s\n' "$(yaml_quote "$SPLAT_JOB")"

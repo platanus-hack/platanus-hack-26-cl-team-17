@@ -10,7 +10,8 @@ FROM ${NODE_IMAGE}
 WORKDIR /app
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     NEXT_TELEMETRY_DISABLED=1 \
-    npm_config_update_notifier=false
+    npm_config_update_notifier=false \
+    TZ=America/Santiago
 
 # ffmpeg con libopus: la voz de Vigía (PCM 16 kHz de ElevenLabs → Opus de 60 ms).
 RUN apt-get update \

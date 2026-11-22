@@ -46,11 +46,13 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
+# TZ: Vigía cita horas con la hora local del proceso (formatClock); sin esto las dice en UTC.
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=8080 \
     HOSTNAME=0.0.0.0 \
-    FFMPEG_PATH=/usr/bin/ffmpeg
+    FFMPEG_PATH=/usr/bin/ffmpeg \
+    TZ=America/Santiago
 
 # Usuario sin privilegios (el usuario "node", uid 1000, ya viene en la imagen base).
 # .data solo se usa en modo local sin DATABASE_URL/GCS_BUCKET (disco efímero en Cloud Run).
