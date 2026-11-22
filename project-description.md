@@ -1,4 +1,4 @@
-# Vigía
+# Vigilia
 
 **La emergencia, vista antes de llegar.** Puesto de mando asistido por IA para Bomberos.
 
@@ -8,10 +8,10 @@ Cuando sale una emergencia, los bomberos van en camino sin saber con qué se van
 
 ## La solución
 
-Vigía es un integrante más del puesto de mando: mira y escucha todo para que el oficial a cargo (OBAC) pueda concentrarse en decidir.
+Vigilia suma al puesto de mando a **Vigía**, un agente de IA que trabaja como un integrante más: mira y escucha todo para que el oficial a cargo (OBAC) pueda concentrarse en decidir.
 
 - **Vecinos**: escanean un QR o abren un enlace y envían videos o fotos, sin crear cuenta. Vigía les puede pedir más videos de un lado de la casa.
-- **Dron**: el video en vivo de un dron DJI llega al puesto de mando con cajas de YOLO (personas, bomberos, fuego, humo, gas, cables) y una mirada de Claude cada pocos segundos. Mientras vuela se arma una nube 3D de la escena.
+- **Dron**: el video en vivo de un dron DJI llega al puesto de mando con cajas de YOLO (personas, bomberos, fuego, humo, gas, cables) y una mirada de Claude cada pocos segundos. Mientras vuela se arma la escena en 3D en vivo: una nube de puntos y, encima, Gaussian splats.
 - **Radio**: Vigía escucha el canal de Zello de todas las compañías, transcribe cada transmisión y la cruza con lo que muestran los videos.
 - **El agente**: cada 2 segundos revisa si hay algo nuevo, cruza las fuentes y actualiza la ficha. Cuando importa (posible persona en riesgo, un riesgo nuevo o una contradicción entre la radio y la imagen), avisa por radio con voz. Si el OBAC le pregunta por Zello, responde en unos 4 segundos.
 - **La ficha del oficial**: mapa 3D con la casa, el piso del foco, humo, zonas de peligro y unidades; personas, riesgos y lo que dice Vigía, legible en tres segundos desde tres metros. Suma un esquema técnico de la escena y una reconstrucción 3D con Gaussian Splatting a partir de todos los videos.

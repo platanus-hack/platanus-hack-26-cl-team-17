@@ -1,12 +1,12 @@
 {
   // Your project's name, as it will appear on the voting page.
-  "project-name": "Vigía",
+  "project-name": "Vigilia",
 
   // Short one-line summary of your project (in Spanish).
-  "project-oneliner-spanish": "Un vigía con IA en el puesto de mando de Bomberos: mira los videos de los vecinos y el dron, escucha la radio y le cuenta al oficial a cargo lo que pasa antes de que las unidades lleguen.",
+  "project-oneliner-spanish": "Puesto de mando con IA para Bomberos: su agente Vigía mira los videos de los vecinos y el dron, escucha la radio y le cuenta al oficial a cargo lo que pasa antes de que las unidades lleguen.",
 
   // Brief description of your project (in Spanish).
-  "project-description-spanish": "Cuando sale una emergencia, los bomberos van en camino sin saber con qué se van a encontrar. Vigía es un integrante más del puesto de mando: los vecinos le mandan videos escaneando un QR, sin crear cuenta; el dron le transmite video en vivo con detección de personas, fuego y humo; y escucha la radio de todas las compañías por Zello. Cada 2 segundos cruza esas fuentes y arma la ficha del oficial a cargo: mapa 3D con la casa y el foco, posibles personas atrapadas, riesgos, unidades y una reconstrucción 3D de la escena. Cuando algo importa, avisa por radio con voz, y si le preguntan por Zello responde en unos 4 segundos. Informa y no decide: no da órdenes, cita de dónde sale cada dato, nunca descarta víctimas y nada simulado pasa por real.",
+  "project-description-spanish": "Cuando sale una emergencia, los bomberos van en camino sin saber con qué se van a encontrar. Vigilia suma al puesto de mando a Vigía, un agente de IA que trabaja como un integrante más: los vecinos le mandan videos escaneando un QR, sin crear cuenta; el dron le transmite video en vivo con detección de personas, fuego y humo; y escucha la radio de todas las compañías por Zello. Cada 2 segundos cruza esas fuentes y arma la ficha del oficial a cargo: mapa 3D con la casa y el foco, posibles personas atrapadas, riesgos, unidades y una reconstrucción 3D de la escena. Cuando algo importa, avisa por radio con voz, y si le preguntan por Zello responde en unos 4 segundos. Informa y no decide: no da órdenes, cita de dónde sale cada dato, nunca descarta víctimas y nada simulado pasa por real.",
 
   // Public URL where your project is deployed and running.
   // Must be a valid URL, for example: https://my-project.vercel.app
