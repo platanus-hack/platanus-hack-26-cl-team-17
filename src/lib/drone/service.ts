@@ -15,9 +15,9 @@ import {
 import { errors, readLimitedBody as readLimitedBodyBase } from "@/lib/http";
 import { newToken, sha256Hex } from "@/lib/ids";
 import { storagePaths, type FileStorage, type Store } from "@/lib/store/types";
+import type { LiveInsightInput, LiveInsightResult } from "@/lib/ai/live";
 import { jpegSize } from "./jpeg";
 import { deployedTitle, isMissionActive, MAX_ACTIVE_MISSIONS, planMission } from "./plan";
-import { advance } from "./sim";
 
 export interface DroneDeps {
   store: Store;
@@ -25,12 +25,13 @@ export interface DroneDeps {
   now: () => number;
   defer: (task: () => Promise<void>) => void;
   processMedia: (mediaId: string) => Promise<void>;
+  /** Observador del video en vivo; sin inyectar usa Claude (o nada si no hay credencial). Lo inyectan las pruebas. */
+  analyzeLive?: (input: LiveInsightInput) => Promise<LiveInsightResult>;
 }
 
 const iso = (ms: number) => new Date(ms).toISOString();
 
 const MODE_DETAIL: Record<MissionMode, string> = {
-  simulated: "Misión simulada: telemetría generada por la plataforma, sin cámara real.",
   device: "Teléfono como sensor: abre el enlace del modo sensor en el teléfono que vuela o acompaña al dron.",
   api: "Dron real por API: conecta el puente (tools/drone_bridge.py) con el token entregado.",
 };
@@ -131,51 +132,10 @@ export async function commandMission(
         : `Orden al dron ${mission.label}: retornar a la base`,
     detail: neverFlew
       ? "La misión no alcanzó a despegar y quedó cerrada."
-      : mission.mode === "simulated"
-        ? "El simulador aplica la orden en el próximo ciclo."
-        : "El dron recibirá la orden en su próximo envío de telemetría.",
+      : "El dron recibirá la orden en su próximo envío de telemetría.",
     mission_id: missionId,
   });
   return updated;
-}
-
-/** Avanza una misión simulada hasta ahora. Misiones no simuladas o terminadas: sin cambios. */
-export async function tickMission(deps: DroneDeps, missionId: string): Promise<DroneMission> {
-  const { store } = deps;
-  const mission = await requireMission(store, missionId);
-  if (mission.mode !== "simulated" || !isMissionActive(mission)) return mission;
-  const incident = await store.getIncident(mission.incident_id);
-  if (!incident) throw errors.notFound("El incidente no existe.");
-  // Dos pestañas sondeando a la vez no deben duplicar puntos.
-  const lock = `drone-tick:${missionId}`;
-  if (!(await store.acquireLock(mission.incident_id, lock, 5))) return mission;
-  try {
-    const fresh = (await store.getMission(missionId)) ?? mission;
-    const r = advance(fresh, { lat: incident.lat, lng: incident.lng }, deps.now());
-    let out = fresh;
-    if (r.points.length > 0) out = await store.appendTelemetry(missionId, r.points);
-    if (r.status !== fresh.status || r.started_at !== fresh.started_at || r.ended_at !== fresh.ended_at) {
-      out = await store.updateMission(missionId, {
-        status: r.status,
-        started_at: r.started_at,
-        ended_at: r.ended_at,
-      });
-    }
-    for (const e of r.events) {
-      await store.addEvent({
-        incident_id: fresh.incident_id,
-        at: e.at,
-        kind: "drone",
-        severity: e.severity,
-        title: e.title,
-        detail: e.detail,
-        mission_id: missionId,
-      });
-    }
-    return out;
-  } finally {
-    await store.releaseLock(mission.incident_id, lock);
-  }
 }
 
 /* ───────────── Dron (Bearer) ───────────── */

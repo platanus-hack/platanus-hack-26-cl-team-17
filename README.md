@@ -39,7 +39,7 @@ Son reglas duras (`src/lib/vigia/rules.ts`): el agente no puede saltárselas y e
 3. **Cita su fuente**: `M<n>` videos, `C<n>` radio, `D<n>` dron.
 4. **«No se ve» no es «no hay»**: sin evidencia no descarta víctimas.
 5. **Habla poco**: un mensaje por radio cada ~20 s, salvo posible persona en riesgo, y nunca encima de alguien con el PTT apretado.
-6. **Nada simulado pasa por real**: sin IA configurada funciona igual, todo rotulado como simulado.
+6. **Nada inventado**: sin IA configurada no hay análisis; nada se presenta como si viniera de los videos.
 
 ## Correr en local
 
@@ -48,7 +48,7 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-Sin credenciales corre en **modo local**: datos en `.data/`, acceso abierto y motor de IA simulado (rotulado en la interfaz). Con `ANTHROPIC_API_KEY` en `.env.local` usa Claude de verdad. Todas las variables están en `.env.example`.
+Sin credenciales corre en **modo local**: datos en `.data/`, acceso abierto y sin análisis de IA (la interfaz muestra «Sin IA»). Con `ANTHROPIC_API_KEY` en `.env.local` usa Claude de verdad. Todas las variables están en `.env.example`.
 
 - Puente Zello: `npm run zello` (credenciales de Zello y ElevenLabs en `.env.local`; ver `tools/README.md`).
 - Dron DJI en vivo: `tools/dron-dji.sh` (ver `tools/README.md`).
@@ -68,8 +68,9 @@ Pruebas: `npm test` · tipos: `npm run typecheck` · lint: `npm run lint`.
 |---|---|
 | `/` | Portada |
 | `/reportar` · `/reportar/[código]` | Vecinos: enviar un video (a una emergencia cercana o con su código) |
-| `/mando` | Tablero: emergencias, mapa de la ciudad, emergencia en foco y demostración |
+| `/mando` | Tablero: emergencias, mapa de la ciudad, emergencia en foco |
 | `/mando/[id]` | Ficha del OBAC |
+| `/login` | Inicio de sesión de maqueta para la demo: cualquier dato entra como administrador (no protege nada; ver `src/lib/auth.ts`) |
 | `/mando/personal` | Cuentas del personal (admin) |
 | `/en-ruta/[id]?k=…` | Tablet de la unidad en ruta |
 | `/dron/[missionId]` | Teléfono usado como sensor del dron |

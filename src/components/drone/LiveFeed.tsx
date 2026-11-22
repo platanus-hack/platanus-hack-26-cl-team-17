@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Eye, Maximize2, Minimize2, ScanEye, Sparkles, VideoOff } from "lucide-react";
-import { Badge, IconButton, Spinner, useNow } from "@/components/ui";
+import { IconButton, Spinner, useNow } from "@/components/ui";
 import { toneText, type Tone } from "@/components/ui/tone";
 import { api } from "@/lib/client/api";
 import type { LiveInsightView, LiveInsightsResponse } from "@/lib/contract";
@@ -281,11 +281,6 @@ function InsightRow({ insight, latest }: { insight: LiveInsightView; latest: boo
         >
           {insight.summary}
         </p>
-        {insight.engine === "simulated" && (
-          <Badge tone="warning" size="sm" variant="solid">
-            Simulado
-          </Badge>
-        )}
       </div>
       {latest && insight.observations.length > 0 && (
         <ul className="ml-14 list-disc space-y-0.5 pl-4 text-sm text-text/80">

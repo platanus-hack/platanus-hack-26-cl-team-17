@@ -23,7 +23,7 @@ import {
 import { Badge, Button, ConfidenceMeter, EmptyState, KeyValue, Panel, type KeyValueItem } from "@/components/ui";
 import { toneText } from "@/components/ui/tone";
 import type { CommEntry, EvidenceRef, Incident, SituationReport } from "@/lib/domain";
-import type { MediaView, RuntimeMode } from "@/lib/contract";
+import type { MediaView } from "@/lib/contract";
 import {
   analysisEngineLabel,
   analysisEngineTone,
@@ -54,7 +54,7 @@ const REANALYZE_COOLDOWN_MS = 5000;
 /** Chips de evidencia visibles por ítem antes de plegar en "+N". */
 const MAX_CHIPS = 3;
 
-export function SituationPanel({ incident, media, comms, onEvidence, onReanalyze, mode, className }: SituationPanelProps) {
+export function SituationPanel({ incident, media, comms, onEvidence, onReanalyze, className }: SituationPanelProps) {
   const [closed, setClosed] = useState<ReadonlySet<SectionId>>(() => new Set());
   const situation = incident.situation;
 
@@ -73,7 +73,7 @@ export function SituationPanel({ incident, media, comms, onEvidence, onReanalyze
       title="Situación"
       icon={ClipboardList}
       badge={situation ? <ConfidenceMeter level={situation.overall_confidence} size="sm" className="ml-1" /> : null}
-      footer={<PanelFooter incident={incident} media={media} comms={comms} onReanalyze={onReanalyze} mode={mode} />}
+      footer={<PanelFooter incident={incident} media={media} comms={comms} onReanalyze={onReanalyze} />}
       className={cn("h-full", className)}
     >
       {incident.pipeline.fusion_status !== "idle" ? (
@@ -416,17 +416,9 @@ interface PanelFooterProps {
   media: MediaView[];
   comms: CommEntry[];
   onReanalyze: () => void;
-  mode?: RuntimeMode | null;
 }
 
-/** Explicación del rótulo "Simulado" (tooltip y lector de pantalla). */
-function simulatedReason(mode: RuntimeMode | null | undefined, demo: boolean): string {
-  if (demo) return "Informe simulado: datos de demostración, ficticios.";
-  if (mode?.ai === "simulated") return "Informe simulado por el motor de reglas: no proviene de los videos.";
-  return "Informe simulado por el motor de reglas, no por el modelo de IA. Reanaliza para reintentar con el modelo.";
-}
-
-function PanelFooter({ incident, media, comms, onReanalyze, mode }: PanelFooterProps) {
+function PanelFooter({ incident, media, comms, onReanalyze }: PanelFooterProps) {
   const [requested, setRequested] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -457,7 +449,6 @@ function PanelFooter({ incident, media, comms, onReanalyze, mode }: PanelFooterP
           tone={analysisEngineTone[engine] ?? "neutral"}
           variant="outline"
           data-engine={engine}
-          title={engine === "simulated" ? simulatedReason(mode, incident.origin === "demo") : undefined}
         >
           {labelOr(analysisEngineLabel, engine)}
         </Badge>

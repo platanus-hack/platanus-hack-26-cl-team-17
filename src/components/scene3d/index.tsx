@@ -41,7 +41,6 @@ export function Scene3D(props: Scene3DProps) {
     incident,
     media,
     missions,
-    engine,
     updatedAt,
     updating = false,
     selection,
@@ -107,7 +106,6 @@ export function Scene3D(props: Scene3DProps) {
   return (
     <SceneFrame
       view={view}
-      engine={engine}
       updatedAt={updatedAt}
       updating={updating}
       compact={compact}

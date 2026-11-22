@@ -141,7 +141,7 @@ const zodLabelMaps: [string, Record<string, string>, readonly string[]][] = [
   ["fireIntensityLabel", labels.fireIntensityLabel, sceneFireZone.intensity.options],
 ];
 
-const MEDIA_SOURCES = allOf<MediaSource>()(["citizen", "drone", "responder", "demo"]);
+const MEDIA_SOURCES = allOf<MediaSource>()(["citizen", "drone", "responder"]);
 const MEDIA_KINDS = allOf<MediaKind>()(["video", "photo", "frames"]);
 const MEDIA_STATUSES = allOf<MediaStatus>()([
   "uploading",
@@ -151,7 +151,7 @@ const MEDIA_STATUSES = allOf<MediaStatus>()([
   "failed",
 ]);
 const VIDEO_STATUSES = allOf<Media["video_status"]>()(["none", "uploading", "uploaded", "failed"]);
-const COMM_SOURCES = allOf<CommSource>()(["manual", "dictation", "simulated", "import", "zello"]);
+const COMM_SOURCES = allOf<CommSource>()(["manual", "dictation", "import", "zello"]);
 const MISSION_STATUSES = allOf<MissionStatus>()([
   "planned",
   "launching",
@@ -162,7 +162,7 @@ const MISSION_STATUSES = allOf<MissionStatus>()([
   "aborted",
 ]);
 const MISSION_PATTERNS = allOf<MissionPattern>()(["orbit", "hover", "grid"]);
-const MISSION_MODES = allOf<MissionMode>()(["simulated", "device", "api"]);
+const MISSION_MODES = allOf<MissionMode>()(["device", "api"]);
 const MISSION_COMMANDS = allOf<DroneMission["command"]>()(["continue", "recall", "abort"]);
 const MISSION_ACTIONS = allOf<MissionCommandRequest["action"]>()(["recall", "abort", "resume"]);
 const TIMELINE_KINDS = allOf<TimelineKind>()([
@@ -182,7 +182,7 @@ const TIMELINE_KINDS = allOf<TimelineKind>()([
 const TIMELINE_SEVERITIES = allOf<TimelineSeverity>()(["info", "notice", "warning", "critical"]);
 const PIPELINE_STATUSES = allOf<PipelineStatus>()(["idle", "pending", "running", "error"]);
 const STAFF_ROLES = allOf<StaffRole>()(["admin", "officer", "operator"]);
-const ORIGINS = allOf<Incident["origin"]>()(["command", "citizen", "demo"]);
+const ORIGINS = allOf<Incident["origin"]>()(["command", "citizen"]);
 const STORES = allOf<RuntimeMode["store"]>()(["postgres", "local"]);
 const FILES = allOf<RuntimeMode["files"]>()(["gcs", "local"]);
 const AUTHS = allOf<RuntimeMode["auth"]>()(["staff", "open"]);

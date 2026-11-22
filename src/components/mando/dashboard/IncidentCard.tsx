@@ -7,7 +7,6 @@ import {
   CircleDashed,
   CircleHelp,
   Drone,
-  FlaskConical,
   Radio,
   ShieldCheck,
   Siren,
@@ -76,27 +75,11 @@ export function TrappedBadge({ status, size = "lg" }: { status: TrappedStatus | 
   );
 }
 
-/** Confianza del informe y aviso de simulación junto al estado de atrapados (lo que dice la IA siempre muestra cuánto confía). */
+/** Confianza del informe junto al estado de atrapados (lo que dice la IA siempre muestra cuánto confía). */
 export function ReportMeta({ incident: i, compact = false }: { incident: IncidentSummary; compact?: boolean }) {
   const confidence = i.situation_confidence ?? null;
-  const simulated = i.situation_engine === "simulated" && i.origin !== "demo";
-  if (!confidence && !simulated) return null;
-  return (
-    <span className="inline-flex flex-wrap items-center gap-1.5">
-      {confidence && <ConfidenceMeter level={confidence} size="sm" showLabel={!compact} />}
-      {simulated &&
-        (compact ? (
-          <span className="inline-flex text-warning" title="Informe del motor de reglas, no del modelo de IA">
-            <FlaskConical aria-hidden="true" className="size-3.5" />
-            <span className="sr-only">Simulado</span>
-          </span>
-        ) : (
-          <Badge tone="warning" icon={FlaskConical} title="Informe del motor de reglas, no del modelo de IA">
-            Simulado
-          </Badge>
-        ))}
-    </span>
-  );
+  if (!confidence) return null;
+  return <ConfidenceMeter level={confidence} size="sm" showLabel={!compact} />;
 }
 
 /** Punto de color de la fila: personas atrapadas o gravedad (cerrados en gris). */
@@ -202,12 +185,6 @@ export const IncidentCard = memo(function IncidentCard({ incident: i, selected =
             <span className="inline-flex text-warning" title="Sin verificar">
               <CircleDashed aria-hidden="true" className="size-3.5" />
               <span className="sr-only">Sin verificar</span>
-            </span>
-          )}
-          {i.origin === "demo" && (
-            <span className="inline-flex" title="Datos ficticios de demostración">
-              <FlaskConical aria-hidden="true" className="size-3.5" />
-              <span className="sr-only">Demo</span>
             </span>
           )}
           <Count icon={Video} n={i.media_count} label={pluralize(i.media_count, "medio", "medios")} />

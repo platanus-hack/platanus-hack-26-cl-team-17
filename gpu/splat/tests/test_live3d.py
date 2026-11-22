@@ -5,8 +5,9 @@ import cv2
 import numpy as np
 
 from splat import live3d
+
+from .fakes import FakeEstimator
 from splat.live3d import (
-    FakeEstimator,
     Session,
     decode_points,
     display_matrix,
@@ -116,7 +117,7 @@ class TestSession(unittest.TestCase):
         gt_c = np.stack([est.camera(k.index)[:3, 3] for k in s.placed])
         sc, r, t = live3d.weighted_umeyama(est_c, gt_c, np.ones(len(est_c)))
         world = sc * xyz @ r.T + t
-        # Relieve del motor simulado: hasta 8 % de la profundidad (~3 m a ~35 m).
+        # Relieve del doble FakeEstimator: hasta 8 % de la profundidad (~3 m a ~35 m).
         self.assertLess(float(np.median(np.abs(world[:, 2]))), 3.5)
         keys = live3d.voxel_keys(xyz.astype(np.float32), s.voxel)
         self.assertEqual(len(np.unique(keys)), len(keys))

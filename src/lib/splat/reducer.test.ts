@@ -28,8 +28,6 @@ test("una reconstrucción reemplazada o inexistente pide cancelar", () => {
   });
   const other = reconstruction({ id: "otra" });
   assert.equal(applyReconstructionUpdate(other, upd({}), ctx).cancel, true);
-  const demo = reconstruction({ backend: "demo", status: "ready" });
-  assert.equal(applyReconstructionUpdate(demo, upd({}), ctx).applied, false);
 });
 
 test("terminada: ready ignora más avisos sin cancelar; failed pide cancelar", () => {

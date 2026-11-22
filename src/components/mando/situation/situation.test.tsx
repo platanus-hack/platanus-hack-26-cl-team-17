@@ -6,7 +6,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { EMPTY_PIPELINE, type CommEntry, type Incident, type SituationReport } from "@/lib/domain";
-import type { MediaView, RuntimeMode } from "@/lib/contract";
+import type { MediaView } from "@/lib/contract";
 import { CriticalStrip, SituationPanel } from "./index";
 import { evidenceLabel, resolveEvidence } from "./evidence";
 import { briefingCopyText, byPriority, divergentType, fusionPipelineView, trappedCountText, trappedRange, uniqueLocations } from "./model";
@@ -162,8 +162,6 @@ function commFixture(seq: number, text: string): CommEntry {
 const MEDIA = [mediaFixture("M1", 2), mediaFixture("M2", 6)];
 const COMMS = [commFixture(3, "Vecino informa adulta mayor en 2º piso"), commFixture(5, "Central: casa estaría vacía")];
 const noop = () => {};
-const MODE_NO_KEY: RuntimeMode = { store: "local", files: "local", ai: "simulated", auth: "open", model: null };
-const MODE_CLAUDE: RuntimeMode = { store: "local", files: "local", ai: "claude", auth: "open", model: "claude-opus-5-5" };
 
 /** Texto visible sin etiquetas, con espacios normalizados. */
 function text(html: string): string {
@@ -236,26 +234,6 @@ test("franja: cleared_by_unit dice que lo informó la unidad en el lugar, en ton
   assert.match(html, /bg-ok-soft/);
 });
 
-test("franja: motor simulado muestra el aviso de simulación según el modo", () => {
-  const sim = (incident: Incident, mode?: RuntimeMode) =>
-    text(renderToStaticMarkup(<CriticalStrip incident={incident} mediaCount={2} onEvidence={noop} mode={mode} />));
-  // Sin clave de IA: no proviene de los videos y se dice cómo activarla.
-  const noKey = sim(incidentFixture({ situation_engine: "simulated" }), MODE_NO_KEY);
-  assert.match(noKey, /SIMULADO/);
-  assert.match(noKey, /no proviene de los videos/);
-  assert.match(noKey, /ANTHROPIC_API_KEY/);
-  // Con IA real configurada: respaldo por reglas, sin pedir la clave que ya existe.
-  const fallback = sim(incidentFixture({ situation_engine: "simulated" }), MODE_CLAUDE);
-  assert.match(fallback, /SIMULADO/);
-  assert.match(fallback, /motor de reglas/);
-  assert.doesNotMatch(fallback, /ANTHROPIC_API_KEY/);
-  // Incidente de demostración: datos ficticios.
-  const demo = sim(incidentFixture({ situation_engine: "simulated", origin: "demo" }), MODE_CLAUDE);
-  assert.match(demo, /datos de demostración/);
-  assert.doesNotMatch(demo, /ANTHROPIC_API_KEY/);
-  // Sin modo: igual se rotula SIMULADO.
-  assert.match(text(strip(incidentFixture({ situation_engine: "simulated" }))), /SIMULADO/);
-});
 
 test("franja: error de pipeline muestra fusion_error; running y pending sus textos", () => {
   const err = text(
@@ -300,7 +278,7 @@ test("franja compacta: lugar repetido una vez, 3 chips + '+N', fundamento plegad
     headline: "Incendio estructural; posible persona atrapada (sin confirmar)",
     overall_confidence: "low",
   });
-  const html = strip(incidentFixture({ situation: s, situation_engine: "simulated" }));
+  const html = strip(incidentFixture({ situation: s }));
   const t = text(html);
   assert.match(t, /POSIBLE/);
   assert.match(t, /Hasta 1 persona/);
@@ -316,9 +294,8 @@ test("franja compacta: lugar repetido una vez, 3 chips + '+N', fundamento plegad
   // Gravedad suave (sin relleno sólido) y lesionados sin evidencia, que no descarta.
   assert.doesNotMatch(html, /bg-critical text-on-solid|text-on-solid bg-critical/);
   assert.match(t, /Lesionados: Sin evidencia \(no descarta\)/);
-  // Confianza y rótulo de simulado siguen visibles.
+  // La confianza sigue visible.
   assert.match(t, /Confianza baja/);
-  assert.match(t, /Simulado/);
 });
 
 test("uniqueLocations agrupa el mismo lugar citado por varias fuentes", () => {
@@ -379,15 +356,6 @@ test("panel: sin situación y sin medios → espera; con medios → analizando",
   assert.doesNotMatch(html, /<button[^>]*title="Aún no hay medios/);
 });
 
-test("panel: motor simulado queda rotulado 'Simulado' en el pie, con su explicación", () => {
-  // El aviso grande vive solo en la franja; el panel conserva un rótulo visible propio.
-  const html = panel(incidentFixture({ situation_engine: "simulated" }));
-  assert.match(html, /<span[^>]*data-engine="simulated"[^>]*title="[^"]*motor de reglas[^"]*"[^>]*>(?:(?!<\/span><\/span>).)*Simulado/);
-  const demo = panel(incidentFixture({ situation_engine: "simulated", origin: "demo" }));
-  assert.match(demo, /data-engine="simulated"[^>]*title="[^"]*datos de demostración/);
-  // Con IA real no hay rótulo de simulado.
-  assert.doesNotMatch(text(panel(incidentFixture())), /Simulado/);
-});
 
 test("panel: hallazgo con detalle largo se pliega a 2 líneas, sin rótulo de categoría y con su confianza", () => {
   const long = "Indicio sin corroborar: nota del informante en M1, M2, M3, M6 y M7 indica personas adentro; nada en las imágenes lo confirma todavía.";

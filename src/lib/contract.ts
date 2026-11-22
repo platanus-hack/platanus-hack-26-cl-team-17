@@ -24,9 +24,6 @@
  *           o si no hay GPU configurada; el progreso llega en incident.reconstruction del snapshot)
  *   POST   /api/incidents/[id]/missions        CreateMissionInput → CreateMissionResponse
  *   PATCH  /api/missions/[id]                  MissionCommandRequest → { mission }
- *   POST   /api/missions/[id]/tick             (solo misiones simuladas) → { mission }
- *   POST   /api/demo/seed                      → { incident_id }
- *   POST   /api/demo/scenario                  ScenarioStepRequest → ScenarioStepResponse
  *   GET    /api/incidents/[id]/diagnostico     → IncidentDiagnostics   (vista técnica: qué está fallando)
  *
  * Público (vecinos, sin sesión)
@@ -59,7 +56,8 @@
  *   GET    /api/files/<storage_path>[?k=<share_key>]   → 302 a URL firmada (Cloud Storage) o stream con Range (local)
  *   PUT    /api/local-upload/<storage_path>?exp=&sig=  (solo modo local; destino de UploadTarget)
  *
- * Personal (sesión con cookie firmada; solo cuando mode.auth === "staff")
+ * Personal (maqueta para la demo: el login nunca rechaza y sin sesión se responde como la
+ * cuenta administradora de demostración; ver src/lib/auth.ts)
  *   POST   /api/auth/login                     LoginRequest → { staff: StaffPublic }
  *   POST   /api/auth/logout                    → { ok: true }
  *   GET    /api/auth/me                        → { staff: StaffPublic | null, mode: RuntimeMode }
@@ -95,15 +93,17 @@ export interface ApiError {
   details?: unknown;
 }
 
+/** claude = análisis real con visión; off = sin credencial de Anthropic: no hay análisis de IA. */
+export type AiMode = "claude" | "off";
+
 /** Cómo está corriendo esta instancia. La UI lo muestra de forma permanente. */
 export interface RuntimeMode {
   /** postgres = Cloud SQL / Postgres real; local = JSON en .data/ (desarrollo y demo). */
   store: "postgres" | "local";
   /** gcs = Cloud Storage con URLs firmadas; local = .data/files. */
   files: "gcs" | "local";
-  /** claude = análisis real con visión; simulated = sin ANTHROPIC_API_KEY, resultados de demostración. */
-  ai: AnalysisEngine;
-  /** staff = requiere inicio de sesión del personal; open = sin autenticación (solo demo/local). */
+  ai: AiMode;
+  /** staff = hay cuentas y pantalla de login (hoy de maqueta: deja entrar a cualquiera); open = sin login. */
   auth: "staff" | "open";
   model: string | null;
   /** cloud_run_gpu = hay job de GPU configurado para 3D Gaussian Splatting; off = no disponible. */
@@ -119,7 +119,7 @@ export interface StaffPublic {
   email: string;
   name: string;
   role: StaffRole;
-  /** true en modo abierto (sin base de datos): sesión de demostración. */
+  /** true si es la sesión de demostración (modo abierto, o quien entra sin una cuenta real). */
   demo: boolean;
 }
 
@@ -155,7 +155,7 @@ export interface IncidentSummary {
   headline: string | null;
   severity: Severity | null;
   trapped_status: TrappedStatus | null;
-  /** Motor que produjo el informe (null sin informe). Opcional: la UI rotula "Simulado" si es simulated. */
+  /** Motor que produjo el informe (null sin informe). Opcional. */
   situation_engine?: AnalysisEngine | null;
   /** Confianza global del informe (`overall_confidence`; null sin informe). Opcional. */
   situation_confidence?: Confidence | null;
@@ -241,24 +241,6 @@ export interface CreateMissionResponse {
 
 export interface MissionCommandRequest {
   action: "recall" | "abort" | "resume";
-}
-
-export interface ScenarioStepRequest {
-  /** null para iniciar un simulacro nuevo (el paso 0 crea el incidente); luego el id devuelto. */
-  incident_id: string | null;
-  /** Paso a ejecutar (0..n-1). El cliente avanza el guion con un temporizador. */
-  step: number;
-}
-
-export interface ScenarioStepResponse {
-  /** Incidente del simulacro (creado en el paso 0). */
-  incident_id: string;
-  done: boolean;
-  next_step: number;
-  /** Segundos que el cliente debe esperar antes del siguiente paso. */
-  wait_s: number;
-  label: string;
-  total_steps: number;
 }
 
 /* ───────────── Público (vecinos) ───────────── */
@@ -387,8 +369,8 @@ export interface LiveInsightView {
   severity: TimelineSeverity;
   changed: boolean;
   observations: string[];
-  /** "simulated" = sin IA real; "error" = la ventana no se pudo analizar. */
-  engine: "claude" | "simulated" | "error";
+  /** "error" = la ventana no se pudo analizar. */
+  engine: "claude" | "error";
   /** Cuadros que miró el observador. */
   frames: number;
 }
@@ -553,12 +535,10 @@ export interface DiagnosticsModelSettings {
 
 /** Motor en uso. Nunca incluye credenciales: solo si existen. */
 export interface DiagnosticsEngine {
-  /** claude = Claude real; simulated = motor simulado y plantillas, rotulado como tal en la interfaz. */
-  ai: AnalysisEngine;
+  /** claude = Claude real; off = sin credencial (sin análisis; Vigía usa plantillas). */
+  ai: AiMode;
   /** Hay credencial de Anthropic en el servidor. */
   has_credential: boolean;
-  /** VIGIA_AI=simulated: simulado a propósito aunque haya credencial. */
-  forced_simulated: boolean;
   /** Análisis de videos, informe y escena (VIGIA_AI_MODEL, VIGIA_AI_EFFORT, VIGIA_AI_FAST). */
   analysis: DiagnosticsModelSettings;
   /** Observador del dron en vivo y preguntas (VIGIA_AI_LIVE_*). */

@@ -4,7 +4,7 @@
  * Panel de la reconstrucción 3D (Gaussian Splatting) de un incidente: explica qué
  * es, la lanza, muestra el avance por etapas y, cuando está lista, el visor con sus
  * insignias de honestidad (alineación, escala, GPU, cuadros, fecha).
- * La vista sintética (backend "demo") se rotula SIEMPRE como tal.
+ * Sin GPU configurada solo explica que no está disponible.
  */
 import { useState } from "react";
 import {
@@ -12,7 +12,6 @@ import {
   Box,
   Check,
   Cpu,
-  FlaskConical,
   Info,
   RefreshCw,
   Ruler,
@@ -38,7 +37,6 @@ import {
 } from "@/lib/splat/status";
 import { Badge, Button, ConfidenceMeter, Elapsed, Panel, ProgressBar, Spinner, useNow } from "@/components/ui";
 import type { Tone } from "@/components/ui";
-import { SimulatedNotice } from "@/components/shell";
 import { SplatViewer } from "./SplatViewer";
 
 export interface ReconstructionPanelProps {
@@ -50,7 +48,6 @@ export interface ReconstructionPanelProps {
   className?: string;
 }
 
-export const SYNTHETIC_LABEL = "Vista sintética · generada desde el esquema de la IA, no desde los videos";
 
 const fileUrl = (path: string) => `/api/files/${path.split("/").map(encodeURIComponent).join("/")}`;
 
@@ -63,11 +60,7 @@ const alignmentTone: Record<Reconstruction["alignment"], Tone> = {
 function StatusBadge({ rec, stale }: { rec: Reconstruction | null; stale: boolean }) {
   if (!rec) return null;
   if (rec.status === "ready") {
-    return rec.backend === "demo" ? (
-      <Badge tone="warning" icon={FlaskConical}>
-        Sintética
-      </Badge>
-    ) : (
+    return (
       <Badge tone="ok" dot>
         Lista
       </Badge>
@@ -94,7 +87,7 @@ function InputsSummary({ media }: { media: MediaView[] }) {
     return (
       <p className="flex items-start gap-2 text-sm text-muted">
         <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-faint" />
-        Aún no hay videos ni cuadros reales de este incidente (los de demostración no sirven para reconstruir).
+        Aún no hay videos ni cuadros de este incidente para reconstruir.
       </p>
     );
   }
@@ -119,14 +112,12 @@ function InputsSummary({ media }: { media: MediaView[] }) {
 }
 
 function Intro({
-  incident,
   media,
   gpu,
   busy,
   canStart,
   onStart,
 }: {
-  incident: Incident;
   media: MediaView[];
   gpu: boolean;
   busy: boolean;
@@ -160,23 +151,15 @@ function Intro({
           role="note"
           className="flex items-start gap-2.5 rounded-md border border-warning/40 bg-warning-soft px-3 py-2.5 text-sm text-text"
         >
-          <FlaskConical aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-          <span>
-            Esta instancia no tiene GPU configurada.{" "}
-            {incident.scene ? (
-              <>
-                Se generará una <strong>vista sintética</strong> a partir del esquema de la escena de la IA: no viene
-                de los videos y no sirve para medir.
-              </>
-            ) : (
-              <>La IA todavía no arma el esquema de la escena; cuando aparezca podrás generar una vista sintética.</>
-            )}
-          </span>
+          <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <span>Esta instancia no tiene GPU configurada: la reconstrucción 3D no está disponible.</span>
         </div>
       )}
-      <Button variant="primary" icon={Box} onClick={onStart} loading={busy} disabled={!canStart}>
-        Reconstruir en 3D
-      </Button>
+      {gpu && (
+        <Button variant="primary" icon={Box} onClick={onStart} loading={busy} disabled={!canStart}>
+          Reconstruir en 3D
+        </Button>
+      )}
     </div>
   );
 }
@@ -290,33 +273,15 @@ function Failed({
   );
 }
 
-function Ready({ rec, incident, media }: { rec: Reconstruction; incident: Incident; media: MediaView[] }) {
-  const demo = rec.backend === "demo";
+function Ready({ rec, media }: { rec: Reconstruction; media: MediaView[] }) {
   const used = rec.media_ids
     .map((id) => media.find((m) => m.id === id))
     .filter((m): m is MediaView => Boolean(m))
     .map((m) => (m.source === "drone" ? `${m.label} (dron)` : m.label));
-  const geo = demo ? null : geometricConfidence(rec);
+  const geo = geometricConfidence(rec);
 
   return (
     <div className="space-y-3">
-      {demo && (
-        <div
-          role="note"
-          className="flex items-start gap-2.5 rounded-md border border-warning/50 bg-warning-soft px-3 py-2.5 text-sm text-text"
-        >
-          <FlaskConical aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
-          <span>
-            <strong className="font-semibold">{SYNTHETIC_LABEL}</strong>
-            <span className="block text-muted">
-              Muestra lo que infirió la IA (estructuras, fuego, humo, vehículos, personas); no reconstruye las
-              imágenes ni sirve para medir.
-            </span>
-          </span>
-        </div>
-      )}
-      {demo && incident.scene_engine === "simulated" && <SimulatedNotice compact what="El esquema de la escena" />}
-
       {rec.splat_path ? (
         <SplatViewer
           url={fileUrl(rec.splat_path)}
@@ -329,37 +294,21 @@ function Ready({ rec, incident, media }: { rec: Reconstruction; incident: Incide
       )}
 
       <div className="flex flex-wrap gap-1.5">
-        {demo ? (
-          <>
-            <Badge tone="warning" icon={FlaskConical}>
-              Sin GPU · sintética
-            </Badge>
-            <Badge tone="info" title="Posiciones y tamaños estimados por la IA a partir de los videos.">
-              Ubicada según el esquema de la IA
-            </Badge>
-            <Badge tone="warning" icon={Ruler}>
-              Escala estimada por la IA
-            </Badge>
-          </>
-        ) : (
-          <>
-            <Badge tone={alignmentTone[rec.alignment]} title={alignmentHint[rec.alignment]}>
-              {alignmentLabel[rec.alignment]}
-            </Badge>
-            <Badge tone={rec.scale_known ? "ok" : "warning"} icon={Ruler}>
-              {rec.scale_known ? "Escala métrica conocida" : "Escala desconocida"}
-            </Badge>
-            <Badge tone="info" icon={Cpu}>
-              {rec.gpu ? `GPU ${rec.gpu}` : "GPU en la nube"}
-              {rec.gpu_seconds !== null ? ` · ${formatDuration(rec.gpu_seconds)}` : ""}
-            </Badge>
-            <Badge tone={rec.frames_registered === null ? "neutral" : "info"}>
-              {rec.frames_registered === null
-                ? `${pluralize(rec.frame_count, "cuadro")} de entrada`
-                : `${rec.frames_registered} de ${pluralize(rec.frame_count, "cuadro")} registrados`}
-            </Badge>
-          </>
-        )}
+        <Badge tone={alignmentTone[rec.alignment]} title={alignmentHint[rec.alignment]}>
+          {alignmentLabel[rec.alignment]}
+        </Badge>
+        <Badge tone={rec.scale_known ? "ok" : "warning"} icon={Ruler}>
+          {rec.scale_known ? "Escala métrica conocida" : "Escala desconocida"}
+        </Badge>
+        <Badge tone="info" icon={Cpu}>
+          {rec.gpu ? `GPU ${rec.gpu}` : "GPU en la nube"}
+          {rec.gpu_seconds !== null ? ` · ${formatDuration(rec.gpu_seconds)}` : ""}
+        </Badge>
+        <Badge tone={rec.frames_registered === null ? "neutral" : "info"}>
+          {rec.frames_registered === null
+            ? `${pluralize(rec.frame_count, "cuadro")} de entrada`
+            : `${rec.frames_registered} de ${pluralize(rec.frame_count, "cuadro")} registrados`}
+        </Badge>
         {rec.finished_at && (
           <Badge tone="neutral" title={formatDateTime(rec.finished_at)}>
             {`Generada ${formatDate(rec.finished_at)} · ${formatClock(rec.finished_at, { seconds: false })}`}
@@ -368,24 +317,15 @@ function Ready({ rec, incident, media }: { rec: Reconstruction; incident: Incide
       </div>
 
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        {demo ? (
-          incident.scene && (
-            <>
-              <span className="text-muted">Esquema de la IA:</span>
-              <ConfidenceMeter level={incident.scene.confidence} size="sm" />
-            </>
-          )
-        ) : (
-          geo && (
-            <>
-              <span className="text-muted">Geometría:</span>
-              <ConfidenceMeter level={geo.level} size="sm" />
-              <span className="text-xs text-muted">{geo.basis}</span>
-            </>
-          )
+        {geo && (
+          <>
+            <span className="text-muted">Geometría:</span>
+            <ConfidenceMeter level={geo.level} size="sm" />
+            <span className="text-xs text-muted">{geo.basis}</span>
+          </>
         )}
       </div>
-      {!demo && used.length > 0 && (
+      {used.length > 0 && (
         <p className="text-xs text-muted">
           Entrenada con {used.join(", ")}
           {rec.iterations !== null ? ` · ${formatNumber(rec.iterations)} iteraciones` : ""}
@@ -420,7 +360,7 @@ export function ReconstructionPanel({ incident, media, mode, onChanged, classNam
   const now = useNow(15_000);
   const active = isReconstructionActive(rec);
   const stale = rec !== null && now !== null && isReconstructionStale(rec, now);
-  const canStart = gpu ? media.some(isReconstructionEligible) : Boolean(incident.scene);
+  const canStart = gpu && media.some(isReconstructionEligible);
 
   async function start() {
     setBusy(true);
@@ -450,9 +390,9 @@ export function ReconstructionPanel({ incident, media, mode, onChanged, classNam
             onClick={start}
             loading={busy}
             disabled={!canStart}
-            aria-label={gpu ? "Reconstruir de nuevo" : "Regenerar la vista sintética"}
+            aria-label="Reconstruir de nuevo"
           >
-            <span className="hidden sm:inline">{gpu ? "Reconstruir de nuevo" : "Regenerar"}</span>
+            <span className="hidden sm:inline">Reconstruir de nuevo</span>
           </Button>
         ) : null
       }
@@ -460,11 +400,11 @@ export function ReconstructionPanel({ incident, media, mode, onChanged, classNam
       bodyClassName="space-y-3"
     >
       {!rec && (
-        <Intro incident={incident} media={media} gpu={gpu} busy={busy} canStart={canStart} onStart={start} />
+        <Intro media={media} gpu={gpu} busy={busy} canStart={canStart} onStart={start} />
       )}
       {rec && active && <Progress rec={rec} stale={stale} busy={busy} canStart={canStart} onStart={start} />}
       {rec?.status === "failed" && <Failed rec={rec} busy={busy} canStart={canStart} onStart={start} />}
-      {rec?.status === "ready" && <Ready rec={rec} incident={incident} media={media} />}
+      {rec?.status === "ready" && <Ready rec={rec} media={media} />}
       {error && (
         <p role="alert" className="flex items-start gap-2 text-sm text-critical">
           <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0" />

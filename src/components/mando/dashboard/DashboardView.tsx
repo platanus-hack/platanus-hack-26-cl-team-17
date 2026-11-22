@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowDownUp, CircleCheck, FlaskConical, Inbox, ListFilter, Map as MapIcon, Play, Plus, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
+import { ArrowDownUp, CircleCheck, Inbox, ListFilter, Map as MapIcon, Plus, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
 import { MandoShell } from "@/components/shell";
 import { Badge, Button, EmptyState, SegmentedControl, Select, Skeleton, TimeAgo } from "@/components/ui";
 import { OverviewMap } from "@/components/map";
@@ -12,7 +12,6 @@ import type { IncidentSummary } from "@/lib/contract";
 import { cn } from "@/lib/cn";
 import { CitizenReportCard } from "./CitizenReportCard";
 import { DashboardHeader } from "./DashboardHeader";
-import { DemoMenu, useSeedDemo, useToggleScenario } from "./DemoMenu";
 import { FocusSelect } from "./FocusSelect";
 import { IncidentCard, incidentCardDomId } from "./IncidentCard";
 import { NewIncidentDialog } from "./NewIncidentDialog";
@@ -108,7 +107,7 @@ const FILTER_EMPTY: Record<IncidentFilter, { title: string; description: string 
   active: { title: "No hay incidentes activos", description: "Revisa Controlados o Cerrados, o crea uno nuevo." },
   controlled: { title: "No hay incidentes controlados", description: "Los incidentes pasan aquí cuando el oficial a cargo los marca como controlados." },
   closed: { title: "No hay incidentes cerrados", description: "Los incidentes cerrados y los reportes descartados aparecen aquí." },
-  all: { title: "No hay incidentes", description: "Crea uno nuevo o carga datos de demostración." },
+  all: { title: "No hay incidentes", description: "Crea uno nuevo." },
 };
 
 function prefersReducedMotion(): boolean {
@@ -137,8 +136,6 @@ export function DashboardView() {
   const onChanged = useCallback(() => {
     void refresh();
   }, [refresh]);
-  const { seed, seeding } = useSeedDemo(onChanged);
-  const { toggle: toggleScenario, running: scenarioRunning } = useToggleScenario();
 
   const incidents = list.incidents ?? NO_INCIDENTS;
   const loaded = list.incidents !== null;
@@ -215,19 +212,8 @@ export function DashboardView() {
         title="No hay incidentes registrados"
         description={
           <>
-            Crea uno con <strong>Nuevo incidente</strong>, o prueba Vigía con incidentes de demostración o un simulacro en
-            vivo. Son <strong>datos ficticios</strong>, rotulados como DEMO.
+            Crea uno con <strong>Nuevo incidente</strong>.
           </>
-        }
-        action={
-          <div className="flex flex-wrap justify-center gap-2">
-            <Button icon={FlaskConical} loading={seeding} onClick={() => void seed()}>
-              Cargar incidentes de demostración
-            </Button>
-            <Button icon={Play} onClick={toggleScenario} disabled={scenarioRunning}>
-              {scenarioRunning ? "Simulacro en curso" : "Iniciar simulacro en vivo"}
-            </Button>
-          </div>
         }
       />
     );
@@ -298,7 +284,6 @@ export function DashboardView() {
       staff={staff}
       actions={
         <>
-          <DemoMenu onSeeded={onChanged} />
           <Button variant="primary" icon={Plus} onClick={() => setDialogOpen(true)}>
             <span className="max-sm:sr-only">Nuevo incidente</span>
           </Button>

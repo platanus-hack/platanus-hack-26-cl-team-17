@@ -17,7 +17,6 @@ import {
 } from "lucide-react";
 import { Badge, ConfidenceMeter, Spinner, TimeAgo } from "@/components/ui";
 import { toneSoftBg, toneText, type Tone } from "@/components/ui/tone";
-import { SimulatedNotice } from "@/components/shell/SimulatedNotice";
 import type { SituationReport, TrappedStatus } from "@/lib/domain";
 import {
   incidentTypeIcon,
@@ -63,12 +62,12 @@ const stripIcon: Record<TrappedStatus, LucideIcon> = {
 const MAX_PLACES = 2;
 const MAX_CHIPS = 3;
 
-export function CriticalStrip({ incident, mediaCount, onEvidence, mode, className }: CriticalStripProps) {
+export function CriticalStrip({ incident, mediaCount, onEvidence, className }: CriticalStripProps) {
   const situation = incident.situation;
   if (!situation) {
     return <EmptyStrip incident={incident} mediaCount={mediaCount} className={className} />;
   }
-  return <ReportStrip incident={incident} situation={situation} onEvidence={onEvidence} mode={mode} className={className} />;
+  return <ReportStrip incident={incident} situation={situation} onEvidence={onEvidence} className={className} />;
 }
 
 /* ─────────────────────────── Sin informe ─────────────────────────── */
@@ -107,11 +106,10 @@ interface ReportStripProps {
   incident: CriticalStripProps["incident"];
   situation: SituationReport;
   onEvidence: CriticalStripProps["onEvidence"];
-  mode: CriticalStripProps["mode"];
   className?: string;
 }
 
-function ReportStrip({ incident, situation, onEvidence, mode, className }: ReportStripProps) {
+function ReportStrip({ incident, situation, onEvidence, className }: ReportStripProps) {
   const [whyOpen, setWhyOpen] = useState(false);
   const whyId = useId();
   const { trapped, injured } = situation;
@@ -127,7 +125,6 @@ function ReportStrip({ incident, situation, onEvidence, mode, className }: Repor
   const basis = trapped.basis.trim();
   const seenType = divergentType(incident, situation);
   const SeenIcon = seenType ? incidentTypeIcon[seenType] : ScanEye;
-  const simulated = incident.situation_engine === "simulated";
   // Sin evidencia de lesionados se lee atenuado, pero el texto mantiene "(no descarta)".
   const injuredTone = injured.status === "no_evidence" ? "neutral" : (likelihoodTone[injured.status] ?? "neutral");
 
@@ -240,9 +237,6 @@ function ReportStrip({ incident, situation, onEvidence, mode, className }: Repor
                 <span aria-hidden="true">·</span>
                 <TimeAgo iso={incident.situation_updated_at} />
               </>
-            ) : null}
-            {simulated ? (
-              <SimulatedNotice compact what="Este informe" mode={mode} demo={incident.origin === "demo"} />
             ) : null}
             <PipelineStatusLine pipeline={incident.pipeline} />
           </div>

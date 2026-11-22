@@ -67,7 +67,7 @@ Es **idempotente**: consulta cada recurso antes de crearlo y nunca recrea lo que
    `.dockerignore`.
 9. `gcloud run deploy` con: `--add-cloudsql-instances`, `--no-cpu-throttling` (el trabajo de IA
    corre en `after()` después de responder y necesita CPU), `--timeout=900`, `--cpu=2
-   --memory=2Gi`, `--min-instances=1`, `--max-instances=4`, `--concurrency=40`,
+   --memory=2Gi`, `--min-instances=1`, `--max-instances=1`, `--concurrency=80`,
    `--execution-environment=gen2`, `--cpu-boost`, `--allow-unauthenticated` (los vecinos
    reportan sin cuenta), la cuenta de servicio, las variables (`GCS_BUCKET`,
    `GOOGLE_CLOUD_PROJECT`, `VIGIA_ADMIN_EMAIL`, `NEXT_PUBLIC_APP_URL`, `DATABASE_POOL_MAX`, y las
@@ -79,7 +79,7 @@ Es **idempotente**: consulta cada recurso antes de crearlo y nunca recrea lo que
 ### Llave de Anthropic pendiente
 
 Si `anthropic-api-key` **no tiene ninguna versión**, el script **no lo monta** y despliega
-igual: la IA corre en **modo simulado**, que la interfaz rotula siempre como tal. Al final te
+igual, **sin IA**: los videos y la radio no se analizan y la interfaz muestra «Sin IA». Al final te
 muestra cómo cargar la llave y redesplegar sin reconstruir:
 
 ```bash
@@ -87,7 +87,7 @@ printf '%s' "$ANTHROPIC_API_KEY" | gcloud secrets versions add anthropic-api-key
 SKIP_INFRA=1 IMAGE=<imagen del último deploy> bash deploy/cloudrun.sh
 ```
 
-Si prefieres que el script falle en vez de desplegar con IA simulada: `REQUIRE_ANTHROPIC=1`.
+Si prefieres que el script falle en vez de desplegar sin IA: `REQUIRE_ANTHROPIC=1`.
 
 ### La URL de la app (huevo y gallina)
 
@@ -136,6 +136,8 @@ bash deploy/cloudrun.sh
 curl -fsS https://vigia-<NÚMERO>.southamerica-west1.run.app/api/status
 gcloud secrets versions access latest --secret=vigia-admin-password --project=platanus-515411
 # Entra a /login con admin@vigia.local y esa clave (la cuenta se crea en ese primer login).
+# OJO, demo: el login es una maqueta. Cualquier otro dato (o ninguno) entra como la cuenta
+# administradora «Demo», y las rutas del personal responden sin sesión (src/lib/auth.ts).
 ```
 
 Variantes útiles:
@@ -227,7 +229,7 @@ npm run dev
 ```
 
 Sin `DATABASE_URL`, `GCS_BUCKET` ni `ANTHROPIC_API_KEY`: datos en `.data/`, acceso abierto
-(sesión demo) e IA simulada, rotulada en la interfaz. Copia `.env.example` a `.env.local`
+(sesión demo) y sin análisis de IA. Copia `.env.example` a `.env.local`
 para ver todas las variables.
 
 ### Con Postgres en Docker

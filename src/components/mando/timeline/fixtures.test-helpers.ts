@@ -52,7 +52,7 @@ export function mediaView(over: Partial<MediaView> = {}): MediaView {
     status: "analyzed",
     error: null,
     analysis: null,
-    analysis_engine: "simulated",
+    analysis_engine: "claude",
     analyzed_at: new Date(T0 + 120_000).toISOString(),
     frames: [],
     created_at: new Date(T0).toISOString(),

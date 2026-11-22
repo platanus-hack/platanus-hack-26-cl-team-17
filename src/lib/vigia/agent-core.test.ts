@@ -62,7 +62,7 @@ function radio(seq: number, speaker: string, text: string, msAgo = 10_000, obac 
 
 function world(partial: Partial<World> = {}): World {
   return {
-    incident: { id: "inc-1", code: "VG-TEST", title: "Incendio", type: "structure_fire", address: "Calle 1", status: "active", lat: -33.4, lng: -70.6, origin: "demo" },
+    incident: { id: "inc-1", code: "VG-TEST", title: "Incendio", type: "structure_fire", address: "Calle 1", status: "active", lat: -33.4, lng: -70.6, origin: "command" },
     now: new Date(NOW).toISOString(),
     media: [],
     radio: [],

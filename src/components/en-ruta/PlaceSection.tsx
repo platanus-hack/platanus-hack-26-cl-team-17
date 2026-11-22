@@ -21,7 +21,6 @@ export function SceneSection({ briefing }: { briefing: BriefingSnapshot }) {
         incident={{ id: incident.id, lat: incident.lat, lng: incident.lng, type: incident.type, title: incident.title }}
         media={[]}
         missions={[]}
-        engine={incident.scene_engine}
         updatedAt={sceneUpdatedAt}
         className="h-[340px] w-full overflow-hidden rounded-md lg:h-[400px]"
       />

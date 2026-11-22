@@ -6,7 +6,7 @@ import type { SplatManifest } from "@/lib/contract";
 import { LIMITS, type Incident, type Media, type MediaFrame } from "@/lib/domain";
 import { storagePaths } from "@/lib/store/types";
 
-/** Solo cuadros JPEG reales: los pósters SVG de demostración no sirven para reconstruir. */
+/** Solo cuadros JPEG: otros formatos no sirven para reconstruir. */
 const REAL_FRAME_RE = /\.jpe?g$/i;
 
 export function realFrames(media: Pick<Media, "frames">): MediaFrame[] {
@@ -17,9 +17,8 @@ export function hasOriginalVideo(media: Pick<Media, "video_path" | "video_status
   return media.video_status === "uploaded" && Boolean(media.video_path);
 }
 
-/** Un medio sirve si no es de demostración y trae el video original o cuadros reales. */
+/** Un medio sirve si trae el video original o cuadros JPEG. */
 export function isReconstructionEligible(media: Media): boolean {
-  if (media.source === "demo") return false;
   return hasOriginalVideo(media) || realFrames(media).length > 0;
 }
 
@@ -59,8 +58,7 @@ export function buildSplatManifest(input: BuildManifestInput): SplatManifest {
     media: media.map((m) => ({
       id: m.id,
       label: m.label,
-      // isReconstructionEligible ya descartó "demo".
-      source: m.source as "citizen" | "drone" | "responder",
+      source: m.source,
       video_path: hasOriginalVideo(m) ? m.video_path : null,
       lat: m.lat,
       lng: m.lng,

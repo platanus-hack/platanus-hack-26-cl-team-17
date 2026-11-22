@@ -1,7 +1,7 @@
 /**
  * Orquestación de la reconstrucción 3DGS (solo servidor):
- *  - startReconstruction: con GPU escribe el manifiesto y lanza el job de Cloud Run;
- *    sin GPU genera la vista sintética desde el esquema de la IA (backend "demo").
+ *  - startReconstruction: escribe el manifiesto y lanza el job de Cloud Run con GPU
+ *    (sin GPU configurada responde 409).
  *  - handleReconstructionCallback: aplica el progreso que reporta el job.
  */
 import { config, runtimeMode } from "@/lib/config";
@@ -24,7 +24,6 @@ import {
   reconstructionStatusLabel,
   reconstructionStatusMessage,
 } from "./status";
-import { buildSyntheticSplat, IDENTITY_TRANSFORM } from "./synthetic";
 import { reconstructionToken, verifyReconstructionToken } from "./token";
 
 export interface SplatDeps {
@@ -103,6 +102,9 @@ export async function startReconstruction(
   const { store } = deps;
   const incident = await store.getIncident(incidentId);
   if (!incident) throw errors.notFound("Incidente no encontrado.");
+  if (deps.splat !== "cloud_run_gpu") {
+    throw errors.conflict("No hay GPU configurada para reconstruir en 3D desde los videos.");
+  }
 
   const current = incident.reconstruction ?? null;
   if (current && isReconstructionActive(current) && !isReconstructionStale(current, deps.now().getTime())) {
@@ -114,8 +116,7 @@ export async function startReconstruction(
     throw errors.conflict("Ya se está iniciando una reconstrucción 3D para este incidente.");
   }
   try {
-    if (deps.splat === "cloud_run_gpu") return await launchGpu(incident.id, incident, input, origin, deps);
-    return await generateSynthetic(incident.id, incident.scene, deps);
+    return await launchGpu(incident.id, incident, input, origin, deps);
   } finally {
     await store.releaseLock(incident.id, LOCK).catch(() => undefined);
   }
@@ -134,7 +135,7 @@ async function launchGpu(
     throw errors.conflict(
       input.media_ids?.length
         ? "Los medios elegidos no tienen video original ni cuadros reales."
-        : "No hay videos ni cuadros reales para reconstruir (los de demostración no sirven). Sube un video o despliega el dron.",
+        : "No hay videos ni cuadros para reconstruir. Sube un video o despliega el dron.",
     );
   }
   const id = deps.newId();
@@ -190,49 +191,6 @@ async function launchGpu(
     });
     throw new HttpError(502, "internal", `No se pudo lanzar el job de GPU: ${detail}`);
   }
-  return rec;
-}
-
-async function generateSynthetic(
-  incidentId: string,
-  scene: Parameters<typeof buildSyntheticSplat>[0] | null,
-  deps: SplatDeps,
-): Promise<Reconstruction> {
-  if (!scene) {
-    throw errors.conflict(
-      "No hay GPU configurada para reconstruir desde los videos, y la IA todavía no arma el esquema de la escena para generar una vista sintética. Inténtalo cuando aparezca la escena 3D.",
-    );
-  }
-  const id = deps.newId();
-  const path = `${storagePaths.reconstruction(incidentId, id)}scene.splat`;
-  const { bytes, count } = buildSyntheticSplat(scene);
-  await deps.files.upload(path, bytes, "application/octet-stream");
-  const nowIso = deps.now().toISOString();
-  const rec: Reconstruction = {
-    ...baseReconstruction(id, nowIso),
-    status: "ready",
-    progress: 1,
-    message: "Vista sintética generada desde el esquema de la IA (no desde los videos).",
-    backend: "demo",
-    splat_path: path,
-    splat_format: "splat",
-    // El archivo ya está en ENU local: posiciones y escala son las que estimó la IA.
-    transform: [...IDENTITY_TRANSFORM],
-    alignment: "approximate",
-    scale_known: false,
-    gaussians: count,
-    started_at: nowIso,
-    finished_at: nowIso,
-  };
-  await deps.store.updateIncident(incidentId, { reconstruction: rec });
-  await deps.store.addEvent({
-    incident_id: incidentId,
-    kind: "scene_updated",
-    severity: "info",
-    title: "Vista 3D sintética generada",
-    detail:
-      "Generada desde el esquema de la IA, no desde los videos (no hay GPU configurada). No sirve para medir ni para descartar víctimas.",
-  });
   return rec;
 }
 

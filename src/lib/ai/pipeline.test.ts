@@ -383,7 +383,7 @@ function fakeEngine(kind: Engine["kind"], impl: Partial<Engine> = {}): Engine & 
 }
 
 function setup(
-  opts: { engine?: Engine & { calls: EngineCalls }; extractFrames?: PipelineDeps["extractFrames"]; rulesOnly?: PipelineDeps["rulesOnly"] } = {},
+  opts: { engine?: Engine & { calls: EngineCalls }; extractFrames?: PipelineDeps["extractFrames"]; noAi?: boolean } = {},
 ) {
   let t = Date.parse("2026-11-21T12:00:00.000Z");
   const now = () => new Date((t += 1000));
@@ -392,14 +392,11 @@ function setup(
   const files = new FakeFiles();
   store.incidents.set(INC, makeIncident());
   const engine = opts.engine ?? fakeEngine("claude");
-  const fallback = fakeEngine("simulated");
   let sanitizeCalls = 0;
   const pipeline = createPipeline({
     store,
     files,
-    engine,
-    fallbackEngine: fallback,
-    rulesOnly: opts.rulesOnly,
+    engine: opts.noAi ? null : engine,
     extractFrames:
       opts.extractFrames ??
       (async () => {
@@ -411,7 +408,7 @@ function setup(
       return { ...scene, description: `${scene.description} [saneada]` };
     },
   });
-  return { store, files, engine, fallback, pipeline, sanitizeCalls: () => sanitizeCalls };
+  return { store, files, engine, pipeline, sanitizeCalls: () => sanitizeCalls };
 }
 
 function addMediaWithFrames(
@@ -509,17 +506,8 @@ test("processMedia: descarga fotogramas, guarda análisis, alerta de persona atr
   assert.equal(ctx.store.locks.size, 0);
 });
 
-test("processMedia: medio demo con análisis no se reanaliza pero sí pide fusión", async () => {
-  const ctx = setup();
-  addMediaWithFrames(ctx, "m1", 1, [0], { source: "demo", analysis: makeAnalysis(), analysis_engine: "simulated", status: "analyzed" }, "svg");
-  await ctx.pipeline.processMedia("m1");
-  assert.equal(ctx.engine.calls.media.length, 0);
-  assert.equal(ctx.engine.calls.situation.length, 1);
-  assert.equal(ctx.engine.calls.situation[0].keyFrames.length, 0, "nunca fotogramas de demo");
-  assert.equal(ctx.store.media.get("m1")!.status, "analyzed");
-});
 
-test("processMedia: medio precargado del simulacro alerta, queda analizado y no duplica alertas", async () => {
+test("processMedia: medio que ya trae análisis alerta, queda analizado y no duplica alertas", async () => {
   const ctx = setup();
   const analysis = makeAnalysis({
     people: [
@@ -540,7 +528,7 @@ test("processMedia: medio precargado del simulacro alerta, queda analizado y no 
     "m2",
     2,
     [0],
-    { source: "demo", analysis, analysis_engine: "simulated", status: "uploaded", analyzed_at: null },
+    { source: "citizen", analysis, analysis_engine: "claude", status: "uploaded", analyzed_at: null },
     "svg",
   );
 
@@ -595,14 +583,11 @@ test("rankKeyFrameCandidates: maximiza puntos de vista — dron primero, un cuad
     mk("w1", 6, {}, {}),
     // Dron: siempre entra, aunque su contenido pese menos.
     mk("d1", 7, { source: "drone", kind: "frames" }, { viewpoint: { ...makeAnalysis().viewpoint, elevation: "aerial" } }),
-    // Demo: nunca.
-    mk("x1", 8, { source: "demo" }, trapped),
   ];
 
   const ranked = rankKeyFrameCandidates(media, origin);
   const first6 = ranked.slice(0, 6).map((c) => `${c.media.label}#${c.frame.idx}`);
   assert.deepEqual(first6, ["M7#0", "M1#0", "M4#0", "M5#0", "M6#0", "M2#0"]);
-  assert.ok(!ranked.some((c) => c.media.source === "demo"));
   // Después del primer cuadro de cada medio vienen los segundos key_frames, alternando.
   assert.equal(new Set(ranked.slice(0, 7).map((c) => c.media.id)).size, 7, "un cuadro por medio antes de repetir");
   assert.equal(ranked.length, 14);
@@ -654,7 +639,7 @@ test("processMedia: extracción falla y no hay nota → medio fallido", async ()
   assert.equal(ctx.engine.calls.media.length, 0);
 });
 
-test("processMedia: falla del motor → failed + evento, sin respaldo por reglas", async () => {
+test("processMedia: falla del motor → failed + evento", async () => {
   const engine = fakeEngine("claude", {
     analyzeMedia: async () => {
       throw new Error("El modelo no respondió a tiempo.");
@@ -667,57 +652,41 @@ test("processMedia: falla del motor → failed + evento, sin respaldo por reglas
   assert.equal(m.status, "failed");
   assert.match(m.error ?? "", /El modelo no respondió a tiempo/);
   assert.equal(m.analysis, null);
-  assert.equal(ctx.fallback.calls.media.length, 0);
   const failed = ctx.store.events.filter((e) => e.kind === "media_failed");
   assert.equal(failed.length, 1);
   assert.equal(failed[0].media_id, "m1");
 });
 
-test("requestFusion: si Claude falla, cae al motor de reglas y lo deja dicho", async () => {
-  const engine = fakeEngine("claude", {
-    fuseSituation: async () => {
-      throw new Error("Servicio sobrecargado.");
-    },
-    fuseScene: async () => {
-      throw new Error("Servicio sobrecargado.");
-    },
-  });
+test("requestFusion: si Claude falla queda en error, sin informe inventado", async () => {
+  const boom = async (): Promise<never> => {
+    throw new Error("Servicio sobrecargado.");
+  };
+  const engine = fakeEngine("claude", { fuseSituation: boom, fuseScene: boom });
   const ctx = setup({ engine });
   addMediaWithFrames(ctx, "m1", 1, [0], { analysis: makeAnalysis(), analysis_engine: "claude", status: "analyzed" });
   await ctx.pipeline.requestFusion(INC);
 
   const inc = ctx.store.incidents.get(INC)!;
-  assert.equal(inc.situation_engine, "simulated");
-  assert.equal(inc.scene_engine, "simulated");
-  assert.ok(inc.situation);
-  assert.equal(inc.scene?.description, "Casa al norte de la calle [saneada]");
-  assert.equal(ctx.sanitizeCalls(), 1);
-  assert.equal(ctx.fallback.calls.situation.length, 1);
-  assert.equal(ctx.fallback.calls.scene.length, 1);
+  assert.equal(inc.situation, null);
+  assert.equal(inc.scene, null);
+  assert.equal(inc.pipeline.fusion_status, "error");
   assert.match(inc.pipeline.fusion_error ?? "", /sobrecargado/);
-  assert.equal(inc.pipeline.fusion_status, "idle");
-  assert.ok(inc.pipeline.fusion_finished_at);
-
-  const ruled = ctx.store.events.filter((e) => e.title.startsWith("Informe generado por reglas: el modelo no respondió"));
-  assert.equal(ruled.length, 2);
-  assert.ok(ruled.every((e) => /NO viene del modelo/.test(e.detail)));
   assert.equal(ctx.store.events.filter((e) => e.kind === "error").length, 2);
   assert.equal(ctx.store.locks.size, 0);
 });
 
-test("requestFusion: si también falla el respaldo queda en error", async () => {
-  const boom = async (): Promise<never> => {
-    throw new Error("falla");
-  };
-  const engine = fakeEngine("claude", { fuseSituation: boom });
-  const ctx = setup({ engine });
-  ctx.fallback.fuseSituation = boom;
-  addMediaWithFrames(ctx, "m1", 1, [0], { analysis: makeAnalysis(), status: "analyzed" });
-  await ctx.pipeline.requestFusion(INC);
+test("sin IA configurada (engine null): el medio queda fallido con el motivo y no hay fusión ni radio", async () => {
+  const ctx = setup({ noAi: true });
+  addMediaWithFrames(ctx, "m1", 1, [0]);
+  await ctx.pipeline.processMedia("m1");
+  const m = ctx.store.media.get("m1")!;
+  assert.equal(m.status, "failed");
+  assert.match(m.error ?? "", /No hay IA configurada/);
+  await ctx.pipeline.requestFusion(INC, { force: true });
+  await ctx.pipeline.requestCommsAnalysis(INC);
   const inc = ctx.store.incidents.get(INC)!;
-  assert.equal(inc.pipeline.fusion_status, "error");
   assert.equal(inc.situation, null);
-  assert.equal(inc.scene_engine, "claude");
+  assert.equal(inc.comms_analysis, null);
   assert.equal(ctx.store.locks.size, 0);
 });
 
@@ -769,7 +738,7 @@ test("requestFusion: contradicciones nuevas generan alerta una sola vez", async 
   assert.equal(upd[0].severity, "warning", "posible → warning");
 });
 
-test("fusión: fotogramas clave ≤ 6, nunca de demo, primero los medios con personas", async () => {
+test("fusión: fotogramas clave ≤ 6, primero los medios con personas", async () => {
   const ctx = setup();
   const kf = (n: number) => Array.from({ length: n }, (_, i) => ({ frame: i, caption: `cuadro ${i}` }));
   addMediaWithFrames(ctx, "m1", 1, [0, 1, 2, 3], { analysis: makeAnalysis({ key_frames: kf(4) }), status: "analyzed" });
@@ -783,19 +752,13 @@ test("fusión: fotogramas clave ≤ 6, nunca de demo, primero los medios con per
     status: "analyzed",
   });
   addMediaWithFrames(ctx, "m3", 3, [0, 1, 2, 3], { analysis: makeAnalysis({ key_frames: kf(4) }), status: "analyzed" });
-  addMediaWithFrames(ctx, "m4", 4, [0, 1, 2, 3], { source: "demo", analysis: makeAnalysis({ key_frames: kf(4) }), status: "analyzed" });
 
   await ctx.pipeline.requestFusion(INC);
   const input = ctx.engine.calls.situation[0];
   assert.equal(input.keyFrames.length, 6);
-  assert.ok(input.keyFrames.every((k) => k.media_label !== "M4"));
   assert.equal(input.keyFrames[0].media_label, "M2");
   assert.equal(input.keyFrames[0].caption, "cuadro 0");
-  assert.deepEqual(input.media.map((m) => m.media.label), ["M1", "M2", "M3", "M4"]);
-  assert.ok(!ctx.files.downloads.some((p) => p.includes("/m4/")));
-
-  const fm: FusionMedia[] = input.media;
-  assert.ok(rankKeyFrameCandidates(fm).every((c) => c.media.source !== "demo"));
+  assert.deepEqual(input.media.map((m) => m.media.label), ["M1", "M2", "M3"]);
 });
 
 test("requestCommsAnalysis: MAYDAY y víctimas reportadas generan alerta crítica una vez", async () => {
@@ -843,7 +806,7 @@ test("requestCommsAnalysis: MAYDAY y víctimas reportadas generan alerta crític
   assert.equal(ctx.store.locks.size, 0);
 });
 
-test("requestCommsAnalysis: si Claude falla usa reglas y lo dice", async () => {
+test("requestCommsAnalysis: si Claude falla queda el error, sin análisis inventado", async () => {
   const engine = fakeEngine("claude", {
     analyzeComms: async () => {
       throw new Error("Sin conexión con el modelo.");
@@ -864,10 +827,10 @@ test("requestCommsAnalysis: si Claude falla usa reglas y lo dice", async () => {
   });
   await ctx.pipeline.requestCommsAnalysis(INC);
   const inc = ctx.store.incidents.get(INC)!;
-  assert.equal(inc.comms_engine, "simulated");
+  assert.equal(inc.comms_analysis, null);
   assert.match(inc.pipeline.comms_error ?? "", /Sin conexión/);
-  assert.equal(inc.pipeline.comms_status, "idle");
-  assert.ok(ctx.store.events.some((e) => e.title === "Análisis de radio generado por reglas: el modelo no respondió"));
+  assert.equal(inc.pipeline.comms_status, "error");
+  assert.ok(ctx.store.events.some((e) => e.title === "Falló el análisis de radio"));
 });
 
 test("las funciones nunca lanzan aunque el store falle", async () => {
@@ -888,40 +851,4 @@ test("funciones de nivel superior nunca lanzan", async () => {
   await mod.processMedia("no-existe");
   await mod.requestFusion("no-existe");
   await mod.requestCommsAnalysis("no-existe");
-});
-
-const radioLine = (seq: number, text: string): CommEntry => ({
-  id: `c${seq}`,
-  incident_id: INC,
-  seq,
-  at: "2026-11-21T11:30:00.000Z",
-  channel: "",
-  speaker: "B-3",
-  text,
-  source: "manual",
-  audio_path: null,
-  created_at: "2026-11-21T11:30:00.000Z",
-});
-
-test("«Vigía sin IA» en la emergencia: la fusión y la radio van directo por reglas, sin esperar al modelo", async () => {
-  const ctx = setup({ rulesOnly: async (id) => id === INC });
-  addMediaWithFrames(ctx, "m1", 1, [0], { analysis: makeAnalysis(), status: "analyzed" });
-  ctx.store.comms.push(radioLine(1, "Central, B-3 en el lugar"));
-  await ctx.pipeline.requestFusion(INC);
-  await ctx.pipeline.requestCommsAnalysis(INC);
-  assert.equal(ctx.engine.calls.situation.length, 0, "no llama al modelo");
-  assert.equal(ctx.engine.calls.scene.length, 0);
-  assert.equal(ctx.engine.calls.comms.length, 0);
-  // La radio vuelve a pedir la fusión al guardar su análisis: el respaldo puede correr más de una vez.
-  assert.ok(ctx.fallback.calls.situation.length >= 1);
-  assert.equal(ctx.fallback.calls.comms.length, 1);
-  const inc = ctx.store.incidents.get(INC)!;
-  assert.equal(inc.situation_engine, "simulated");
-  assert.equal(inc.scene_engine, "simulated");
-  assert.equal(inc.comms_engine, "simulated");
-  // Si no se puede saber (error al leer la memoria de Vigía), se usa el modelo como siempre.
-  const other = setup({ rulesOnly: async () => { throw new Error("sin store"); } });
-  addMediaWithFrames(other, "m1", 1, [0], { analysis: makeAnalysis(), status: "analyzed" });
-  await other.pipeline.requestFusion(INC);
-  assert.equal(other.engine.calls.situation.length, 1);
 });

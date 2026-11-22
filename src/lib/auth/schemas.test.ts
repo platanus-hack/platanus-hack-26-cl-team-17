@@ -9,20 +9,21 @@ describe("esquemas de personal", () => {
     assert.equal(r.email, "admin@vigia.local");
   });
 
-  it("login exige correo y contraseña", () => {
-    assert.equal(LoginSchema.safeParse({ email: "", password: "x" }).success, false);
-    assert.equal(LoginSchema.safeParse({ email: "a@b.cl", password: "" }).success, false);
-    assert.equal(LoginSchema.safeParse({ email: "a@b.cl" }).success, false);
+  it("login de maqueta: acepta datos vacíos o ausentes y solo acota el largo", () => {
+    assert.deepEqual(LoginSchema.parse({}), { email: "", password: "" });
+    assert.deepEqual(LoginSchema.parse({ email: "", password: "" }), { email: "", password: "" });
+    assert.deepEqual(LoginSchema.parse({ email: "a@b.cl" }), { email: "a@b.cl", password: "" });
     assert.equal(LoginSchema.safeParse({ email: "a@b.cl", password: "x".repeat(300) }).success, false);
+    assert.equal(LoginSchema.safeParse({ email: "a".repeat(300), password: "x" }).success, false);
   });
 
-  it("crear cuenta valida correo, nombre, rol y contraseña ≥ 10", () => {
+  it("crear cuenta valida correo, nombre, rol y contraseña no vacía", () => {
     const good = { email: "Op@Bomberos.cl", name: " Operadora Uno ", role: "operator", password: "0123456789" };
     const r = CreateStaffSchema.parse(good);
     assert.deepEqual(r, { email: "op@bomberos.cl", name: "Operadora Uno", role: "operator", password: "0123456789" });
     assert.equal(CreateStaffSchema.safeParse({ ...good, email: "no-es-correo" }).success, false);
     assert.equal(CreateStaffSchema.safeParse({ ...good, name: "  " }).success, false);
     assert.equal(CreateStaffSchema.safeParse({ ...good, role: "root" }).success, false);
-    assert.equal(CreateStaffSchema.safeParse({ ...good, password: "123456789" }).success, false);
+    assert.equal(CreateStaffSchema.safeParse({ ...good, password: "" }).success, false);
   });
 });

@@ -14,7 +14,7 @@ const RULES: { title: string; body: string }[] = [
   { title: "Cita su fuente", body: "Cada hallazgo dice de dónde sale: el video M1, la radio C5, el dron D1." },
   { title: "«No se ve» no es «no hay»", body: "Sin evidencia no descarta nada. Solo una unidad en el lugar puede hacerlo." },
   { title: "Habla poco", body: "Un mensaje por radio cada ~20 s, salvo que haya una persona en riesgo." },
-  { title: "Nada simulado pasa por real", body: "Sin IA configurada funciona igual, y todo queda rotulado como simulado." },
+  { title: "Nada inventado", body: "Sin IA configurada no hay análisis: nada se presenta como si viniera de los videos." },
 ];
 
 /** Datos del sistema (medidos en la demo). */
@@ -166,7 +166,7 @@ export function Landing() {
             <div className="mt-16 flex flex-col items-start gap-6 border-t border-white/15 pt-10 md:flex-row md:items-center md:justify-between">
               <p className="flex items-center gap-4 font-display text-xl font-bold text-white sm:text-3xl">
                 <Logo size={44} title="" />
-                Pruébalo con un incidente de demostración.
+                Pruébalo en el puesto de mando.
               </p>
               <div className="flex flex-col gap-3 sm:flex-row">
                 <Cta href="/mando" icon={MonitorDot} variant="light">

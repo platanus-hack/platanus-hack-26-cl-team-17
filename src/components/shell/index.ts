@@ -2,4 +2,3 @@
 export { MandoShell, type MandoShellProps } from "./MandoShell";
 export { VecinoShell, type VecinoShellProps } from "./VecinoShell";
 export { ModeBadges, type ModeBadgesProps } from "./ModeBadges";
-export { SimulatedNotice, type SimulatedNoticeProps } from "./SimulatedNotice";

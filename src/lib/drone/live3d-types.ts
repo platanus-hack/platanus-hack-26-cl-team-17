@@ -6,7 +6,7 @@
 /** Estado de la sesión de reconstrucción (sesión = id de la misión del dron). */
 export interface Live3DStatus {
   session: string;
-  /** "fake" = motor simulado (sin GPU): la interfaz lo rotula como «Simulado». */
+  /** Motor de la sesión ("vggt"). */
   engine: string;
   /** Modelo cargado. */
   ready: boolean;
@@ -36,7 +36,7 @@ export interface Live3DStatus {
 
 /** Estado del Gaussian splatting en vivo (solo entrena mientras alguien pide /splat). */
 export interface Live3DSplatInfo {
-  /** "gsplat" (GPU) o "fake" (simulado: gaussianas sin entrenar); null = desactivado en el servicio. */
+  /** "gsplat" (GPU); null = desactivado en el servicio. */
   engine: string | null;
   /** Entrenando ahora (alguien pidió los splats hace poco). */
   active: boolean;

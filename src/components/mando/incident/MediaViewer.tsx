@@ -23,7 +23,7 @@ import {
   Star,
   X,
 } from "lucide-react";
-import type { MediaView, RuntimeMode } from "@/lib/contract";
+import type { MediaView } from "@/lib/contract";
 import type { MediaAnalysis } from "@/lib/domain";
 import { api, errorMessage } from "@/lib/client/api";
 import { extractVideoFrames, isFrameExtractionError } from "@/lib/client/frames";
@@ -40,7 +40,6 @@ import {
   useToast,
   type KeyValueItem,
 } from "@/components/ui";
-import { SimulatedNotice } from "@/components/shell";
 import { cn } from "@/lib/cn";
 import {
   formatBytes,
@@ -104,9 +103,6 @@ export interface MediaViewerProps {
   target: MediaViewerTarget | null;
   onClose: () => void;
   onChanged: () => void;
-  mode: RuntimeMode | null;
-  /** Incidente de demostración: sus análisis son datos ficticios. */
-  demo?: boolean;
 }
 
 /* ═════════════════════ Extracción de fotogramas en el navegador ═════════════════════ */
@@ -253,7 +249,7 @@ function targetKey(t: MediaViewerTarget | null): string {
 }
 
 /** Visor de un medio a pantalla casi completa: video, fotogramas, análisis de la IA, metadatos y acciones. */
-export function MediaViewer({ incidentId, media, target, onClose, onChanged, mode, demo = false }: MediaViewerProps) {
+export function MediaViewer({ incidentId, media, target, onClose, onChanged }: MediaViewerProps) {
   const baseKey = targetKey(target);
   // Navegación anterior/siguiente local: vale solo mientras el padre mantenga el mismo destino.
   const [nav, setNav] = useState<{ baseKey: string; target: MediaViewerTarget } | null>(null);
@@ -349,8 +345,6 @@ export function MediaViewer({ incidentId, media, target, onClose, onChanged, mod
             incidentId={incidentId}
             media={current}
             citedFrame={effective.mediaId === current.id ? (effective.frame ?? null) : null}
-            mode={mode}
-            demo={demo}
             onChanged={onChanged}
             extraction={extraction.state?.mediaId === current.id ? extraction.state : null}
             extractionBusy={extraction.state !== null && extraction.state.phase !== "error"}
@@ -370,8 +364,6 @@ interface ViewerBodyProps {
   incidentId: string;
   media: MediaView;
   citedFrame: number | null;
-  mode: RuntimeMode | null;
-  demo: boolean;
   onChanged: () => void;
   extraction: ExtractionState | null;
   /** Hay una extracción en curso (de este u otro medio). */
@@ -385,8 +377,6 @@ function ViewerBody({
   incidentId,
   media: m,
   citedFrame,
-  mode,
-  demo,
   onChanged,
   extraction,
   extractionBusy,
@@ -409,8 +399,7 @@ function ViewerBody({
     shown !== null ? (frames.find((f) => f.idx === shown) ?? null) : videoUrl ? null : (frames[0] ?? null);
   const keyFrames = m.analysis?.key_frames ?? [];
   const captionFor = (idx: number) => keyFrames.find((k) => k.frame === idx)?.caption ?? null;
-  // Sin motor informado nunca se supone "IA": solo se marca simulado si la instancia no tiene modelo.
-  const engine = m.analysis_engine ?? (m.analysis && (demo || m.source === "demo" || mode?.ai === "simulated") ? "simulated" : null);
+  const engine = m.analysis_engine ?? null;
 
   const showFrame = (idx: number) => {
     if (!frames.some((f) => f.idx === idx)) return;
@@ -505,7 +494,7 @@ function ViewerBody({
       {/* ── Derecha: estado, acciones, análisis y metadatos ── */}
       <div className="flex min-h-0 min-w-0 flex-col gap-4 lg:overflow-y-auto lg:pr-1">
         <div className="flex flex-col gap-2">
-          {m.status === "failed" && m.source !== "demo" && (
+          {m.status === "failed" && (
             <div role="alert" className="flex items-start gap-2 rounded-md border border-critical/40 bg-critical-soft px-3 py-2 text-sm">
               <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-critical" />
               <div className="min-w-0 flex-1">
@@ -519,20 +508,16 @@ function ViewerBody({
           )}
 
           <div className="flex flex-wrap items-center gap-2">
-            {m.source === "demo" ? (
-              <span className="text-xs text-muted">Medio de demostración: su análisis es fijo y no se reanaliza.</span>
-            ) : (
-              <Button
-                size="sm"
-                icon={RefreshCw}
-                loading={reanalyzing}
-                disabled={reanalyzeDisabled}
-                title={reanalyzeDisabled ? "Espera a que termine el proceso en curso" : undefined}
-                onClick={() => void reanalyze()}
-              >
-                Reanalizar este medio
-              </Button>
-            )}
+            <Button
+              size="sm"
+              icon={RefreshCw}
+              loading={reanalyzing}
+              disabled={reanalyzeDisabled}
+              title={reanalyzeDisabled ? "Espera a que termine el proceso en curso" : undefined}
+              onClick={() => void reanalyze()}
+            >
+              Reanalizar este medio
+            </Button>
             {canExtractFramesInBrowser(m) && extraction === null && (
               <Button
                 size="sm"
@@ -560,7 +545,7 @@ function ViewerBody({
           )}
         </div>
 
-        <AnalysisSection media={m} engine={engine} mode={mode} demo={demo || m.source === "demo"} onShowFrame={showFrame} />
+        <AnalysisSection media={m} engine={engine} onShowFrame={showFrame} />
 
         <MetadataSection media={m} />
       </div>
@@ -774,14 +759,10 @@ function TextList({ items, empty }: { items: string[]; empty: string }) {
 function AnalysisSection({
   media: m,
   engine,
-  mode,
-  demo,
   onShowFrame,
 }: {
   media: MediaView;
   engine: MediaView["analysis_engine"];
-  mode: RuntimeMode | null;
-  demo: boolean;
   onShowFrame: (idx: number) => void;
 }) {
   const a = m.analysis;
@@ -818,7 +799,6 @@ function AnalysisSection({
             </span>
           )}
         </div>
-        {engine === "simulated" && <SimulatedNotice what="Este análisis" mode={mode} demo={demo} />}
         {!a.usable && (
           <p role="note" className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm">
             <CircleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />

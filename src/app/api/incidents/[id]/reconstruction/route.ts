@@ -3,8 +3,7 @@
  *
  * Con GPU (SPLAT_JOB + Cloud Storage): escribe el manifiesto y lanza el job de
  * Cloud Run; el progreso llega después en incident.reconstruction del snapshot.
- * Sin GPU: genera al tiro la vista sintética desde el esquema de la IA (backend "demo").
- * 409 si ya hay una en curso que no venció, o si no hay con qué reconstruir.
+ * 409 si no hay GPU, si ya hay una en curso que no venció, o si no hay con qué reconstruir.
  */
 import { requireStaff } from "@/lib/auth";
 import { StartReconstructionInputSchema, type StartReconstructionInput } from "@/lib/domain";

@@ -68,7 +68,7 @@ test("crear misión: token una vez, ruta del sensor, evento y tope de 2 activas"
   assert.equal(res.mission.waypoints.length, 16);
   const events = await deps.store.listEvents(inc.id);
   assert.ok(events.some((e) => e.title === "Dron D1 desplegado — órbita de 60 m a 45 m de altura"));
-  await svc.createMission(deps, inc.id, CreateMissionInputSchema.parse({ mode: "simulated", pattern: "hover" }));
+  await svc.createMission(deps, inc.id, CreateMissionInputSchema.parse({ mode: "api", pattern: "hover" }));
   await assert.rejects(
     svc.createMission(deps, inc.id, CreateMissionInputSchema.parse({ mode: "api" })),
     /misiones activas/,
@@ -122,34 +122,17 @@ test("órdenes: abortar una misión que nunca despegó la cierra; reanudar retir
   const aborted = await svc.commandMission(deps, a.mission.id, "abort");
   assert.equal(aborted.status, "aborted");
   assert.ok(aborted.ended_at);
-  const b = await svc.createMission(deps, inc.id, CreateMissionInputSchema.parse({ mode: "simulated" }));
-  await svc.tickMission(deps, b.mission.id);
-  clock += 4_000;
-  await svc.tickMission(deps, b.mission.id);
+  const b = await svc.createMission(deps, inc.id, CreateMissionInputSchema.parse({ mode: "device" }));
+  await svc.ingestTelemetry(deps, b.mission, {
+    points: [{ lat: inc.lat, lng: inc.lng, alt_m: 20, heading_deg: 0 }],
+    status: "launching",
+  });
   const recalled = await svc.commandMission(deps, b.mission.id, "recall");
   assert.equal(recalled.command, "recall");
   const resumed = await svc.commandMission(deps, b.mission.id, "resume");
   assert.equal(resumed.command, "continue");
 });
 
-test("tick: avanza solo misiones simuladas, registra traza y eventos de fase", async () => {
-  const inc = await newIncident();
-  const sim = await svc.createMission(deps, inc.id, CreateMissionInputSchema.parse({ mode: "simulated" }));
-  let m = await svc.tickMission(deps, sim.mission.id);
-  assert.equal(m.status, "launching");
-  for (let i = 0; i < 60; i++) {
-    clock += 10_000;
-    m = await svc.tickMission(deps, sim.mission.id);
-  }
-  assert.equal(m.status, "on_station");
-  assert.ok(m.track.length > 50);
-  const titles = (await deps.store.listEvents(inc.id, 500)).map((e) => e.title);
-  assert.ok(titles.some((t) => t.includes("despegó")));
-  assert.ok(titles.some((t) => t.includes("en posición")));
-  const dev = await svc.createMission(deps, inc.id, CreateMissionInputSchema.parse({ mode: "device" }));
-  const same = await svc.tickMission(deps, dev.mission.id);
-  assert.equal(same.track.length, 0);
-});
 
 test("cuadros: lote de 6 → uploaded + processMedia; flush cierra antes; rechaza no-JPEG y tamaño", async () => {
   const inc = await newIncident();

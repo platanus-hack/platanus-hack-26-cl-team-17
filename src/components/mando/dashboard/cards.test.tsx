@@ -60,16 +60,6 @@ test("tarjeta: atrapados con icono y texto, gravedad y confianza del informe", (
   assert.match(html, /href="\/mando\/inc-1"/);
 });
 
-test("tarjeta: informe simulado fuera de la demo queda rotulado", () => {
-  const t = text(renderToStaticMarkup(<IncidentCard incident={summary({ situation_engine: "simulated" })} />));
-  assert.match(t, /Simulado/);
-  // En la demo ya se rotula "Demo" (datos ficticios): no se duplica.
-  const demo = text(
-    renderToStaticMarkup(<IncidentCard incident={summary({ situation_engine: "simulated", origin: "demo" })} />),
-  );
-  assert.match(demo, /Demo/);
-  assert.doesNotMatch(demo, /Simulado/);
-});
 
 test("tarjeta: sin informe nunca se lee como seguro", () => {
   const t = text(

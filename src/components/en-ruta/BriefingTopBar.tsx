@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { FlaskConical, ShieldAlert, Sun, Timer, WifiOff } from "lucide-react";
+import { ShieldAlert, Sun, Timer, WifiOff } from "lucide-react";
 import type { BriefingSnapshot } from "@/lib/contract";
 import { Elapsed } from "@/components/ui";
 import { incidentStatusLabel, incidentTypeIcon, incidentTypeLabel, labelOr } from "@/lib/labels";
@@ -11,7 +11,6 @@ import { Pill } from "./parts";
 
 export interface BriefingTopBarProps {
   incident: BriefingSnapshot["incident"];
-  simulated: boolean;
   stale: boolean;
   lastUpdatedAt: number | null;
   now: number | null;
@@ -21,7 +20,7 @@ export interface BriefingTopBarProps {
 }
 
 /** Barra fija: tipo, dirección, cronómetro desde el aviso, frescura de los datos e insignias de honestidad. */
-export function BriefingTopBar({ incident, simulated, stale, lastUpdatedAt, now, wakeLock, children }: BriefingTopBarProps) {
+export function BriefingTopBar({ incident, stale, lastUpdatedAt, now, wakeLock, children }: BriefingTopBarProps) {
   const TypeIcon = incidentTypeIcon[incident.type] ?? ShieldAlert;
   const address = incident.address.trim();
   const ago = updatedAgoText(lastUpdatedAt, now);
@@ -61,11 +60,6 @@ export function BriefingTopBar({ incident, simulated, stale, lastUpdatedAt, now,
                 {ago}
               </span>
             )
-          )}
-          {simulated && (
-            <Pill tone="warning" icon={FlaskConical}>
-              SIMULADO · no proviene de videos reales
-            </Pill>
           )}
           {!incident.verified && <Pill tone="neutral">SIN VERIFICAR</Pill>}
           {incident.status !== "active" && (

@@ -384,12 +384,11 @@ function body(entity: EntityRef, props: InspectorProps): Body {
         kicker: "Dron",
         title: d.label,
         tone: "drone",
-        foot: d.mode === "simulated" ? "Telemetría simulada: no es un dron real." : "Telemetría informada por el dron.",
+        foot: "Telemetría informada por el dron.",
         content: (
           <>
             <div className="flex flex-wrap gap-1.5">
               <Badge tone={d.active ? "drone" : "muted"}>{MISSION_STATUS_LABEL[d.status]}</Badge>
-              {d.mode === "simulated" && <Badge tone="warning">Dron simulado</Badge>}
             </div>
             <Rows
               rows={[

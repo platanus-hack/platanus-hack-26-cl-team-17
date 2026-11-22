@@ -20,7 +20,6 @@ const base: Scene3DProps = {
   incident,
   media: [],
   missions: [],
-  engine: "claude",
   updatedAt: "2026-11-21T12:00:00.000Z",
 };
 
@@ -47,18 +46,16 @@ test("planta 2D de un incidente estructural: estructura, persona en ventana, fue
   assert.ok(t.includes("Pasaje 3 · bloqueada"), "calle bloqueada");
   assert.ok(t.includes("Cilindros de gas"), "peligro");
   assert.ok(t.includes("Supuestos (2)"), "botón de supuestos con conteo");
-  assert.ok(!t.includes("ESCENA SIMULADA"), "sin insignia de simulación si el motor es claude");
   assert.ok(/<polygon[^>]*points="-4,5 4,5 4,-5 -4,-5"/.test(html), "planta de S1 con el frente al sur (y SVG hacia abajo)");
 });
 
-test("motor simulado: insignia permanente ESCENA SIMULADA", () => {
-  const html = renderToStaticMarkup(<ScenePlan2D {...base} engine="simulated" updating />);
-  assert.ok(text(html).includes("ESCENA SIMULADA"));
+test("actualizando: indicador de estado", () => {
+  const html = renderToStaticMarkup(<ScenePlan2D {...base} updating />);
   assert.ok(html.includes('role="status"'), "indicador de actualización");
 });
 
 test("scene null: estado vacío informativo, sin dibujo", () => {
-  const html = renderToStaticMarkup(<ScenePlan2D {...base} scene={null} updatedAt={null} engine={null} />);
+  const html = renderToStaticMarkup(<ScenePlan2D {...base} scene={null} updatedAt={null} />);
   const t = text(html);
   assert.ok(t.includes(EMPTY_TEXT));
   assert.ok(t.includes(LEGEND_TEXT));

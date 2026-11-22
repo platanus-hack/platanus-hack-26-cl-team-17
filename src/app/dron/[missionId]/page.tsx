@@ -36,7 +36,6 @@ export default async function DroneSensorPage({
 
   const incident = await store.getIncident(mission.incident_id);
   const where = incident ? ` — ${incident.title}` : "";
-  if (mission.mode === "simulated") return <SensorGate kind="simulated" detail={`Dron ${mission.label}${where}.`} />;
   if (!isMissionActive(mission)) {
     return (
       <SensorGate

@@ -52,10 +52,6 @@ export const POST = route<{ id: string }>(async (req, ctx) => {
   if (body.media_id) {
     const media = await store.getMedia(body.media_id);
     if (!media || media.incident_id !== id) throw errors.notFound("Ese medio no pertenece a este incidente.");
-    // Sus cuadros son ilustraciones: reanalizarlos borraría el análisis de demostración.
-    if (media.source === "demo") {
-      throw errors.conflict("Los medios de demostración no se reanalizan: su análisis simulado es fijo.");
-    }
     const mediaId = media.id;
     after(() => processMedia(mediaId, { force: true }));
   }

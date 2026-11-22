@@ -82,7 +82,7 @@ function drone(label: string, detections: Detection[]): WorldDrone {
 
 function world(partial: Partial<World>): World {
   return {
-    incident: { id: "inc-1", code: "VG-TEST", title: "Incendio en edificio", type: "structure_fire", address: "Av. Independencia 1350", status: "active", lat: -33.42, lng: -70.66, origin: "demo" },
+    incident: { id: "inc-1", code: "VG-TEST", title: "Incendio en edificio", type: "structure_fire", address: "Av. Independencia 1350", status: "active", lat: -33.42, lng: -70.66, origin: "command" },
     now: new Date(NOW).toISOString(),
     media: [],
     radio: [],

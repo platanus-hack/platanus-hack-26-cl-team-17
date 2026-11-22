@@ -1,7 +1,7 @@
 "use client";
 
 import { memo, type ReactNode } from "react";
-import { ChevronDown, Drone, FlaskConical, OctagonAlert, Radio, TriangleAlert, type LucideIcon } from "lucide-react";
+import { ChevronDown, Drone, OctagonAlert, Radio, TriangleAlert, type LucideIcon } from "lucide-react";
 import type { TimelineEvent } from "@/lib/domain";
 import type { MediaView } from "@/lib/contract";
 import { Badge, toneSolidBg, toneSoftBg, toneText } from "@/components/ui";
@@ -15,7 +15,7 @@ import {
   timelineSeverityLabel,
   timelineSeverityTone,
 } from "@/lib/labels";
-import { splitEngineNote, type TimelineBurstRow } from "./timeline-core";
+import type { TimelineBurstRow } from "./timeline-core";
 
 export interface RowHandlers {
   onOpenMedia?: (mediaId: string) => void;
@@ -63,18 +63,6 @@ function SeverityMark({ severity }: { severity: TimelineEvent["severity"] }) {
     );
   }
   return null;
-}
-
-function SimulatedMark() {
-  return (
-    <span
-      title="Generado por el motor de reglas, sin el modelo de IA"
-      className="inline-flex items-center gap-1 text-[11px] font-medium text-muted"
-    >
-      <FlaskConical aria-hidden="true" className="size-3 shrink-0" />
-      Simulado
-    </span>
-  );
 }
 
 const refChip = "inline-flex h-6 max-w-full items-center gap-1 rounded-full border border-line px-2 text-xs font-medium";
@@ -162,11 +150,8 @@ export const EventItem = memo(function EventItem({ event, media, fresh, handlers
   const tone = timelineSeverityTone[event.severity];
   const Icon = timelineKindIcon[event.kind];
   const critical = event.severity === "critical";
-  const title = splitEngineNote(event.title);
-  const detail = splitEngineNote(event.detail);
-  const simulated = title.simulated || detail.simulated;
   const refs = references(event, media, handlers);
-  const hasMeta = event.severity === "warning" || critical || simulated || fresh || refs.length > 0;
+  const hasMeta = event.severity === "warning" || critical || fresh || refs.length > 0;
 
   return (
     <li
@@ -183,13 +168,12 @@ export const EventItem = memo(function EventItem({ event, media, fresh, handlers
       <div className="min-w-0 flex-1">
         <span className="sr-only">{timelineKindLabel[event.kind]}:</span>
         <p className={cn("line-clamp-2 text-sm leading-snug text-text", critical ? "font-semibold" : "font-medium")}>
-          {title.text}
+          {event.title}
         </p>
-        {detail.text !== "" && <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{detail.text}</p>}
+        {event.detail !== "" && <p className="mt-0.5 line-clamp-2 text-sm leading-snug text-muted">{event.detail}</p>}
         {hasMeta && (
           <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1">
             <SeverityMark severity={event.severity} />
-            {simulated && <SimulatedMark />}
             {fresh && <FreshBadge />}
             {refs}
           </div>

@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useState, type CSSProperties, type ReactNode } from "react";
-import { FlaskConical, Info, Link2Off, RotateCw, SearchX, WifiOff, type LucideIcon } from "lucide-react";
+import { Info, Link2Off, RotateCw, SearchX, WifiOff, type LucideIcon } from "lucide-react";
 import type { BriefingSnapshot } from "@/lib/contract";
 import type { EvidenceRef } from "@/lib/domain";
 import { Spinner, useNow } from "@/components/ui";
 import { errorMessage } from "@/lib/client/api";
 import { useBriefing } from "@/lib/client/use-live";
-import { isSimulated } from "./briefing-diff";
 import { useBriefingUpdates, useBriefingVoice, useWakeLock } from "./hooks";
 import { BriefingTopBar } from "./BriefingTopBar";
 import { AccessSection, HazardsSection, SummarySection, UnknownsSection, VoiceControls } from "./BriefingSections";
@@ -112,7 +111,6 @@ function BriefingScreen({
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
 
   const { incident, situation, key_frames: keyFrames } = briefing;
-  const simulated = isSimulated(briefing);
 
   const findFrame = useCallback(
     (e: EvidenceRef) => keyFrames.findIndex((k) => k.media_label === e.ref && k.frame === e.frame),
@@ -123,7 +121,6 @@ function BriefingScreen({
     <Screen>
       <BriefingTopBar
         incident={incident}
-        simulated={simulated}
         stale={stale}
         lastUpdatedAt={lastUpdatedAt}
         now={now}
@@ -140,19 +137,6 @@ function BriefingScreen({
       </BriefingTopBar>
 
       <main className="mx-auto max-w-[1400px] px-4 pt-4 pb-60 lg:px-6">
-        {simulated && (
-          <p
-            role="note"
-            className="mb-4 flex items-start gap-3 rounded-lg border-2 border-warning bg-warning-soft p-3 text-lg leading-snug text-text"
-          >
-            <FlaskConical aria-hidden className="mt-0.5 size-6 shrink-0 text-warning" />
-            <span className="min-w-0">
-              <strong className="font-bold text-warning">SIMULADO.</strong> Este briefing es de demostración: no proviene
-              de videos reales. No lo uses para decidir.
-            </span>
-          </p>
-        )}
-
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] lg:items-start lg:gap-5">
           <div className="flex min-w-0 flex-col gap-4 lg:gap-5">
             {situation ? (

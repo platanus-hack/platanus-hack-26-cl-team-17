@@ -150,17 +150,12 @@ test("engineView no envía credenciales, solo si existen", () => {
   const prev = { ...process.env };
   try {
     process.env.ANTHROPIC_API_KEY = "sk-ant-api03-secreto";
-    process.env.VIGIA_AI = "";
     const e = engineView();
     assert.equal(e.ai, "claude");
     assert.equal(e.has_credential, true);
     assert.doesNotMatch(JSON.stringify(e), /secreto/);
-    process.env.VIGIA_AI = "simulated";
-    assert.equal(engineView().ai, "simulated");
-    assert.equal(engineView().forced_simulated, true);
     delete process.env.ANTHROPIC_API_KEY;
-    delete process.env.VIGIA_AI;
-    assert.equal(engineView().ai, "simulated");
+    assert.equal(engineView().ai, "off");
     assert.equal(engineView().agent.engine, "plantilla");
   } finally {
     process.env = prev;

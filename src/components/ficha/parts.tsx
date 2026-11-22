@@ -13,7 +13,6 @@ import {
   ChevronDown,
   CircleCheck,
   EyeOff,
-  FlaskConical,
   Flame,
   House,
   Radio,
@@ -111,15 +110,6 @@ export function TopBar({
           {elapsed(header.startedAt, now)}
         </span>
       </div>
-      {(header.demo || header.simulated) && (
-        <span
-          className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-f-wash px-3 text-[13px] font-medium text-f-muted"
-          title={header.simulated ? "El informe o la escena salen del motor de reglas, sin IA real." : undefined}
-        >
-          <FlaskConical className="size-3.5" aria-hidden="true" />
-          {header.demo ? "Demo · datos ficticios" : "Análisis simulado"}
-        </span>
-      )}
       {alerts}
       {header.unverified && (
         <button
@@ -342,7 +332,7 @@ function Bubble({ msg, speaking, onPick }: { msg: ChatMessage; speaking: boolean
           <span className="font-mono tabular">{hhmm(msg.at)}</span>
         </span>
         <span className={cn("mt-0.5 block text-[14px] leading-snug", speaking ? "text-f-ink" : "text-f-ink/85")}>{msg.text}</span>
-        {msg.simulated && <span className="mt-0.5 block text-[11.5px] text-f-faint">Respuesta simulada (sin IA real)</span>}
+        {msg.template && <span className="mt-0.5 block text-[11.5px] text-f-faint">Respuesta por plantilla (sin IA)</span>}
       </button>
     </li>
   );

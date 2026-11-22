@@ -1,4 +1,4 @@
-import { Cpu, FlaskConical, HardDrive } from "lucide-react";
+import { BrainCircuit, Cpu, HardDrive } from "lucide-react";
 import { Badge } from "@/components/ui/Badge";
 import { Tooltip } from "@/components/ui/Tooltip";
 import type { RuntimeMode } from "@/lib/contract";
@@ -13,28 +13,27 @@ export interface ModeBadgesProps {
   compact?: boolean;
 }
 
-const SIMULATED_HINT =
-  "Sin ANTHROPIC_API_KEY: los análisis son de demostración y no provienen de los videos";
+const AI_OFF_HINT = "Sin ANTHROPIC_API_KEY: los videos y la radio no se analizan";
 const LOCAL_HINT = "Sin base de datos: datos guardados en este servidor (.data/) y acceso abierto";
 
-/** Indicadores honestos del modo de ejecución: IA simulada, modelo de IA real y almacenamiento local. */
+/** Indicadores honestos del modo de ejecución: sin IA, modelo de IA real y almacenamiento local. */
 export function ModeBadges({ mode, className, compact = false }: ModeBadgesProps) {
   if (!mode) return null;
 
   const size = compact ? "sm" : "md";
-  const simulated = mode.ai === "simulated";
+  const aiOff = mode.ai === "off";
   const local = mode.store === "local";
-  const showModel = !simulated && !compact;
+  const showModel = !aiOff && !compact;
 
-  if (!simulated && !local && !showModel) return null;
+  if (!aiOff && !local && !showModel) return null;
 
   return (
     <div className={cn("flex min-w-0 items-center gap-1.5", className)}>
-      {simulated ? (
-        <Tooltip content={SIMULATED_HINT} side="bottom">
-          <Badge tone="warning" variant="solid" size={size} icon={FlaskConical} tabIndex={0}>
-            {compact ? "IA sim." : "IA simulada"}
-            <span className="sr-only">. {SIMULATED_HINT}</span>
+      {aiOff ? (
+        <Tooltip content={AI_OFF_HINT} side="bottom">
+          <Badge tone="warning" variant="solid" size={size} icon={BrainCircuit} tabIndex={0}>
+            Sin IA
+            <span className="sr-only">. {AI_OFF_HINT}</span>
           </Badge>
         </Tooltip>
       ) : null}

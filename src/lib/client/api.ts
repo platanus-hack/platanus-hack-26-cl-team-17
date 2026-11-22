@@ -38,8 +38,6 @@ import type {
   PublicIncident,
   PublicIncidentListResponse,
   RuntimeMode,
-  ScenarioStepRequest,
-  ScenarioStepResponse,
   SetFocusInput,
   StaffFramesRequest,
   ZelloStatusResponse,
@@ -276,7 +274,7 @@ export const api = {
       post<{ ok: true }>(`/api/incidents/${seg(id)}/analyze`, body, o),
     staffFrames: (id: string, mediaId: string, body: StaffFramesRequest, o?: RequestOptions) =>
       post<StaffFramesResponse>(`/api/incidents/${seg(id)}/media/${seg(mediaId)}/frames`, body, o),
-    /** Reconstrucción 3D (Gaussian Splatting); sin GPU genera la vista sintética. */
+    /** Reconstrucción 3D (Gaussian Splatting) en el job de GPU. */
     reconstruct: (id: string, body: StartReconstructionInput = {}, o?: RequestOptions) =>
       post<{ reconstruction: Reconstruction }>(`/api/incidents/${seg(id)}/reconstruction`, body, o),
     /** Diagnóstico para la vista técnica: qué subsistema está fallando. */
@@ -307,8 +305,6 @@ export const api = {
         { action } satisfies MissionCommandRequest,
         o,
       ),
-    tick: (missionId: string, o?: RequestOptions) =>
-      post<{ mission: DroneMission }>(`/api/missions/${seg(missionId)}/tick`, {}, o),
   },
 
   public: {
@@ -384,12 +380,6 @@ export const api = {
       }),
     liveInsights: (missionId: string, o?: RequestOptions) =>
       get<LiveInsightsResponse>(`/api/drone/${seg(missionId)}/live/insights`, undefined, o),
-  },
-
-  demo: {
-    seed: (o?: RequestOptions) => post<{ incident_id: string }>("/api/demo/seed", {}, o),
-    scenario: (body: ScenarioStepRequest, o?: RequestOptions) =>
-      post<ScenarioStepResponse>("/api/demo/scenario", body, o),
   },
 } as const;
 

@@ -6,7 +6,6 @@ import {
   autoReadText,
   diffBriefing,
   googleMapsUrl,
-  isSimulated,
   mergeChanges,
   normalizeText,
   sortHazards,
@@ -243,14 +242,6 @@ test("autoReadText: lee los cambios importantes del aviso, no el briefing entero
   // El análisis desaparece: se avisa, sin briefing que leer.
   const gone = snap({ situation: null });
   assert.equal(autoReadText(diffBriefing(base, gone).changes, gone), "Actualización. El análisis dejó de estar disponible. Pide la información por radio.");
-});
-
-test("isSimulated por motor o por modo sin análisis", () => {
-  assert.equal(isSimulated(snap()), false);
-  assert.equal(isSimulated(snap({ incident: { scene_engine: "simulated" } })), true);
-  const s = snap({ situation: null, incident: { situation_engine: null, scene_engine: null } });
-  assert.equal(isSimulated({ ...s, mode: { ...s.mode, ai: "simulated" } }), true);
-  assert.equal(isSimulated(s), false);
 });
 
 test("enlaces de navegación", () => {

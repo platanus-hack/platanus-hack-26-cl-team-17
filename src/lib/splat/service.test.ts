@@ -7,7 +7,6 @@ import { HttpError } from "@/lib/http";
 import { handleReconstructionCallback, startReconstruction, type SplatDeps } from "./service";
 import { reconstructionToken } from "./token";
 import { frame, INCIDENT_ID, media, REC_ID, reconstruction, SCENE } from "./test-fixtures";
-import { decodeSplat } from "./splat-writer";
 
 function incident(extra: Partial<Incident> = {}): Incident {
   return {
@@ -108,34 +107,17 @@ const realVideo = media("m1", {
   frames: [frame("m1", 0)],
 });
 
-test("sin GPU: genera la vista sintética lista, rotulada demo, y registra el evento", async () => {
-  const { deps, state } = fakeDeps(incident(), []);
-  const rec = await startReconstruction(INCIDENT_ID, {}, "http://localhost:3100", deps);
-  assert.equal(rec.status, "ready");
-  assert.equal(rec.backend, "demo");
-  assert.equal(rec.gpu, null);
-  assert.equal(rec.alignment, "approximate");
-  assert.equal(rec.scale_known, false);
-  assert.deepEqual(rec.media_ids, []);
-  assert.equal(rec.splat_path, `incidents/${INCIDENT_ID}/reconstructions/${REC_ID}/scene.splat`);
-  const file = state.uploads.get(rec.splat_path!);
-  assert.ok(file);
-  assert.equal(file.bytes.length, (rec.gaussians ?? 0) * 32);
-  assert.doesNotThrow(() => decodeSplat(file.bytes, 0));
-  assert.deepEqual(state.incident.reconstruction, rec);
-  assert.equal(state.events[0].kind, "scene_updated");
-  assert.match(state.events[0].detail, /no desde los videos/);
-  assert.equal(state.locked, false, "suelta el candado");
-});
-
-test("sin GPU y sin escena: 409 con mensaje claro", async () => {
-  const { deps } = fakeDeps(incident({ scene: null }), []);
+test("sin GPU: 409 con mensaje claro y sin tocar el incidente", async () => {
+  const { deps, state } = fakeDeps(incident(), [realVideo]);
   await assert.rejects(startReconstruction(INCIDENT_ID, {}, "http://x", deps), (err: unknown) => {
     assert.ok(err instanceof HttpError);
     assert.equal(err.status, 409);
-    assert.match(err.message, /esquema de la escena/);
+    assert.match(err.message, /No hay GPU/);
     return true;
   });
+  assert.equal(state.uploads.size, 0);
+  assert.equal(state.runs.length, 0);
+  assert.equal(state.locked, false);
 });
 
 test("409 si hay una en curso no vencida; se puede relanzar si venció", async () => {
@@ -152,8 +134,7 @@ test("409 si hay una en curso no vencida; se puede relanzar si venció", async (
 });
 
 test("con GPU: escribe el manifiesto, guarda la reconstrucción en cola y lanza el job", async () => {
-  const demoMedia = media("m9", { source: "demo", frames: [frame("m9", 0)] });
-  const { deps, state } = fakeDeps(incident(), [realVideo, demoMedia], { splat: "cloud_run_gpu" });
+  const { deps, state } = fakeDeps(incident(), [realVideo], { splat: "cloud_run_gpu" });
   const rec = await startReconstruction(INCIDENT_ID, { iterations: 3000 }, "https://vigia.example", deps);
   assert.equal(rec.status, "queued");
   assert.equal(rec.backend, "cloud_run_gpu");
@@ -175,11 +156,9 @@ test("con GPU: escribe el manifiesto, guarda la reconstrucción en cola y lanza 
   assert.equal(state.incident.reconstruction?.id, REC_ID);
 });
 
-test("con GPU y solo medios demo: 409", async () => {
-  const { deps } = fakeDeps(incident(), [media("m9", { source: "demo", frames: [frame("m9", 0)] })], {
-    splat: "cloud_run_gpu",
-  });
-  await assert.rejects(startReconstruction(INCIDENT_ID, {}, "http://x", deps), /demostración/);
+test("con GPU y sin videos ni cuadros: 409", async () => {
+  const { deps } = fakeDeps(incident(), [], { splat: "cloud_run_gpu" });
+  await assert.rejects(startReconstruction(INCIDENT_ID, {}, "http://x", deps), /No hay videos ni cuadros/);
 });
 
 test("si falla el lanzamiento queda como fallida, con evento y 502", async () => {

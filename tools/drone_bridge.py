@@ -6,7 +6,6 @@ puesto de mando, y obedece las órdenes que vuelven en cada respuesta
 (RETORNAR / ABORTAR). Solo usa la biblioteca estándar de Python 3.
 
 Fuentes (elige una):
-  --simulate           órbita sintética alrededor de --lat/--lng (sin cámara).
   --video ARCHIVO      reproduce un video (ideal: un video aéreo real) y envía un
                        cuadro cada --every segundos al ritmo de reproducción;
                        la posición es la órbita sintética. Requiere ffmpeg.
@@ -26,7 +25,6 @@ atiende Vigía (la elegida en el tablero o, si no hay, la abierta más nueva) y 
 cuando esa cambia.
 
 Ejemplos:
-  python3 tools/drone_bridge.py --url https://vigia.example --mission ID --token TOKEN --simulate --lat -33.4569 --lng -70.5987
   python3 tools/drone_bridge.py --url http://localhost:3000 --mission ID --token TOKEN --video aereo.mp4 --lat -33.4569 --lng -70.5987
   python3 tools/drone_bridge.py --url https://vigia.example --mission ID --token TOKEN --rtmp --lat -33.4569 --lng -70.5987
   python3 tools/drone_bridge.py --url https://vigia.example --rtmp
@@ -774,8 +772,6 @@ def run_synthetic(client: Client, args: argparse.Namespace, stop: threading.Even
         log(f"Reproduciendo {args.video}: un cuadro cada {args.every:g} s.")
     elif live_url:
         start_live(args, stop, frames).set_target(args.mission, args.token)
-    else:
-        log("Modo simulado: solo telemetría, sin cámara.")
 
     if fly(client, flight, frames, stop, has_video=bool(args.video or live_url)) != "stop":
         return 0
@@ -1055,7 +1051,6 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="Modo automático fijo: el dron va solo a esta emergencia (código o id) en vez de seguir la que atiende Vigía.",
     )
     src = p.add_mutually_exclusive_group(required=True)
-    src.add_argument("--simulate", action="store_true", help="Órbita sintética sin cámara.")
     src.add_argument("--video", metavar="ARCHIVO", help="Video a reproducir como cámara del dron (requiere ffmpeg).")
     src.add_argument("--mavlink", metavar="CONEXIÓN", help="Conexión MAVLink, p. ej. udp:127.0.0.1:14550 (referencia no probada).")
     src.add_argument(
@@ -1063,8 +1058,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help=f"Servidor RTMP local para DJI Fly; por defecto escucha en {DEFAULT_RTMP} (requiere ffmpeg).",
     )
     src.add_argument("--stream", metavar="URL", help="Video en vivo desde una URL (p. ej. rtsp://127.0.0.1:8554/live/dron de MediaMTX).")
-    p.add_argument("--lat", type=float, help="Latitud del incidente (con --mission en --simulate, --video, --rtmp y --stream).")
-    p.add_argument("--lng", type=float, help="Longitud del incidente (con --mission en --simulate, --video, --rtmp y --stream).")
+    p.add_argument("--lat", type=float, help="Latitud del incidente (con --mission en --video, --rtmp y --stream).")
+    p.add_argument("--lng", type=float, help="Longitud del incidente (con --mission en --video, --rtmp y --stream).")
     p.add_argument("--radius", type=float, default=60.0, help="Radio de la órbita en metros (60).")
     p.add_argument("--alt", type=float, default=45.0, help="Altura de vuelo en metros (45).")
     p.add_argument("--speed", type=float, default=8.0, help="Velocidad en m/s (8).")
@@ -1090,8 +1085,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         p.error("Faltan --mission y --token (solo --rtmp y --stream funcionan sin ellos, en modo automático).")
     if args.incident and not args.auto:
         p.error("--incident es para el modo automático (--rtmp o --stream sin --mission).")
-    if (args.simulate or args.video or live) and not args.auto and (args.lat is None or args.lng is None):
-        p.error("--simulate, --video, --rtmp y --stream con --mission necesitan --lat y --lng del incidente.")
+    if (args.video or live) and not args.auto and (args.lat is None or args.lng is None):
+        p.error("--video, --rtmp y --stream con --mission necesitan --lat y --lng del incidente.")
     if args.radius <= 0 or args.speed <= 0 or args.alt <= 0:
         p.error("--radius, --speed y --alt deben ser positivos.")
     if args.every < 0 or (args.every == 0 and not live):

@@ -832,7 +832,6 @@ export function ScenePlan2D(props: ScenePlan2DProps) {
     incident,
     media,
     missions,
-    engine,
     updatedAt,
     updating = false,
     selection,
@@ -849,7 +848,6 @@ export function ScenePlan2D(props: ScenePlan2DProps) {
   return (
     <SceneFrame
       view={view}
-      engine={engine}
       updatedAt={updatedAt}
       updating={updating}
       compact={compact}

@@ -13,8 +13,7 @@ VGGT una escena 3DGS que crece con el vuelo:
 - **Tope:** si no caben, se podan las gaussianas más transparentes.
 - **Salida:** cada tanto una instantánea en el binario compacto "VGS1" (17 bytes por gaussiana).
 
-`encode_live_splat` / `decode_live_splat` y `FakeSplatTrainer` son solo numpy (pruebas y motor
-simulado); `LiveSplatTrainer` importa torch y gsplat al construirse (solo en la imagen de GPU,
+`encode_live_splat` / `decode_live_splat` son solo numpy; `LiveSplatTrainer` importa torch y gsplat al construirse (solo en la imagen de GPU,
 aunque el rasterizador se puede inyectar para probarlo en CPU).
 """
 
@@ -253,52 +252,6 @@ class _Base:
     def arrays(self) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """(means, log_scales, quats_wxyz, sh0 (N,3), opacity_logits) en numpy."""
         raise NotImplementedError
-
-
-class FakeSplatTrainer(_Base):
-    """Sin torch ni GPU (LIVE3D_FAKE=1): las gaussianas iniciales tal cual, sin entrenar. Solo
-    para desarrollar la interfaz; el estado dice "fake"."""
-
-    engine = "fake"
-
-    def __init__(self, log: Callable[[str], None] = print):
-        super().__init__(log)
-        self.g: dict[str, np.ndarray] | None = None
-        self.views = 0
-
-    @property
-    def count(self) -> int:
-        return 0 if self.g is None else len(self.g["means"])
-
-    @property
-    def n_views(self) -> int:
-        return self.views
-
-    def _add_views(self, views: list[View]) -> None:
-        self.views = min(MAX_TRAIN_VIEWS, self.views + len(views))
-
-    def _add_gaussians(self, g: dict[str, np.ndarray]) -> None:
-        if self.g is None:
-            self.g = {k: v.copy() for k, v in g.items()}
-        else:
-            self.g = {k: np.concatenate([self.g[k], g[k]]) for k in self.g}
-        if self.count > GS_MAX:
-            self.g = {k: v[-GS_MAX:] for k, v in self.g.items()}
-
-    def train(self, seconds: float) -> int:
-        time.sleep(min(seconds, 0.05))
-        if self.count == 0:
-            return 0
-        self.steps += 5
-        self.psnr = 18.0 + 6.0 * (1.0 - math.exp(-self.steps / 400.0))
-        return 5
-
-    def arrays(self):
-        g = self.g
-        if g is None:
-            z = np.zeros((0, 3), np.float32)
-            return z, z, np.zeros((0, 4), np.float32), z, np.zeros(0, np.float32)
-        return g["means"], g["scales"], g["quats"], g["sh0"][:, 0, :], g["opacities"] + 2.0
 
 
 def gsplat_rasterize(means, quats, scales, opacities, colors, viewmats, Ks, width, height):

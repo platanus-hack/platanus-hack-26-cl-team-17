@@ -96,16 +96,13 @@ test("200 eventos: se renderiza paginado y con ráfagas agrupadas", () => {
   assert.ok(ms < 2000, `render de 200 eventos tardó ${ms.toFixed(0)} ms`);
 });
 
-test("texto compacto: título y detalle en 2 líneas; el sufijo del motor de reglas pasa a rótulo 'Simulado'", () => {
+test("texto compacto: título y detalle en 2 líneas", () => {
   const events = [
-    ev({ kind: "scene_updated", title: "Reconstrucción de la escena actualizada (motor de reglas, sin modelo)", detail: "Casa de 1 piso al centro." }),
-    ev({ kind: "situation_updated", severity: "warning", title: "Situación: posible persona atrapada", detail: "Personas atrapadas: posible. Indicio sin corroborar (motor…" }),
+    ev({ kind: "scene_updated", title: "Reconstrucción de la escena actualizada", detail: "Casa de 1 piso al centro." }),
+    ev({ kind: "situation_updated", severity: "warning", title: "Situación: posible persona atrapada", detail: "Personas atrapadas: posible. Indicio sin corroborar" }),
     ev({ kind: "media_received", severity: "notice", title: "Nuevo video de vecino — M7", detail: "Nota: hay personas adentro" }),
   ];
   const html = renderToStaticMarkup(<TimelinePanel events={events} media={[]} />);
-  assert.doesNotMatch(html, /motor de reglas, sin modelo\)/);
-  assert.doesNotMatch(html, /\(motor…/);
-  assert.equal(count(html, ">Simulado<"), 2, "cada evento simulado sigue rotulado");
   assert.equal(count(html, "line-clamp-2"), 6);
   // La advertencia se lee con texto, pero sin caja ni fondo tintado en la fila.
   assert.match(html, /Advertencia/);

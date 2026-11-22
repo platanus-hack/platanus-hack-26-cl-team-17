@@ -52,7 +52,6 @@ export function engineView(): DiagnosticsEngine {
   return {
     ai: aiEngineKind(),
     has_credential: config.hasAnthropic,
-    forced_simulated: config.forceSimulated,
     analysis: { model: config.aiModel, effort: config.aiEffort, fast: config.aiFast },
     live: { model: live.model, effort: live.effort, fast: live.fast },
     agent: { enabled: config.vigiaAgent, engine: agentEngine(), ...agent },

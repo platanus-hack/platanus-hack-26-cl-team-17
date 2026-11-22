@@ -6,10 +6,10 @@
  * console.error, dejan un evento "error" en la línea de tiempo cuando se puede
  * y actualizan el estado (medio o `incident.pipeline`).
  *
+ * Sin credencial de Anthropic no hay motor (`engine: null`): los medios quedan como
+ * fallidos con el motivo y la fusión y la radio no corren. No hay respaldo inventado.
+ *
  * Reglas de vida o muerte que se respetan aquí:
- *  - Un informe del motor de reglas nunca pasa por informe del modelo: se guarda
- *    con engine "simulated" y se deja dicho en la línea de tiempo.
- *  - Para medios no hay respaldo por reglas (las reglas no ven imágenes).
  *  - Las alertas de personas se emiten apenas se analiza un medio, sin esperar la fusión.
  */
 import { LIMITS } from "@/lib/domain";
@@ -53,14 +53,8 @@ import type {
 export interface PipelineDeps {
   store: Store;
   files: FileStorage;
-  engine: Engine;
-  /** Motor de reglas: respaldo de la fusión y de comunicaciones si Claude falla. */
-  fallbackEngine: Engine;
-  /**
-   * true si la mesa pidió "Vigía sin IA" en esta emergencia: la fusión y la radio van directo
-   * por reglas (sin esperar a un Claude lento o caído). Sin inyectar, nunca.
-   */
-  rulesOnly?: (incidentId: string) => Promise<boolean>;
+  /** null sin credencial de Anthropic: no se analiza nada. */
+  engine: Engine | null;
   /** Extrae fotogramas del video en el servidor (ffmpeg) y los registra en el store. */
   extractFrames: (media: Media) => Promise<MediaFrame[]>;
   now?: () => Date;
@@ -92,16 +86,14 @@ const DEDUPE_EVENT_WINDOW = 1000;
 
 type FusionTask = "situation" | "scene";
 
-const FUSION_TASK_LABEL: Record<FusionTask, { name: string; the: string; this: string }> = {
+const FUSION_TASK_LABEL: Record<FusionTask, { name: string; the: string }> = {
   situation: {
     name: "informe de situación",
     the: "el informe de situación",
-    this: "Este informe de situación",
   },
   scene: {
     name: "reconstrucción de la escena",
     the: "la reconstrucción de la escena",
-    this: "Esta reconstrucción de la escena",
   },
 };
 
@@ -313,7 +305,7 @@ export function rankKeyFrameCandidates(media: FusionMedia[], origin: LatLng | nu
   const groups: Group[] = [];
   media.forEach((fm, order) => {
     const a = fm.analysis;
-    if (!a || fm.media.source === "demo") return;
+    if (!a) return;
     const byIdx = new Map(fm.media.frames.map((f) => [f.idx, f] as const));
     const seen = new Set<number>();
     const list: KeyFrameCandidate[] = [];
@@ -387,23 +379,10 @@ function situationEventSeverity(s: SituationReport): TimelineSeverity {
   return "info";
 }
 
-function engineNote(kind: AnalysisEngine): string {
-  return kind === "simulated" ? " (motor de reglas, sin modelo)" : "";
-}
-
 /* ════════════════════════════ Pipeline ════════════════════════════ */
 
 export function createPipeline(deps: PipelineDeps): Pipeline {
-  const { store, files, engine, fallbackEngine } = deps;
-
-  /** Motor de la fusión y de la radio: el de reglas si la mesa pidió "Vigía sin IA" aquí. */
-  async function primaryEngine(incidentId: string): Promise<Engine> {
-    try {
-      return deps.rulesOnly && (await deps.rulesOnly(incidentId)) ? fallbackEngine : engine;
-    } catch {
-      return engine;
-    }
-  }
+  const { store, files, engine } = deps;
   const clock = deps.now ?? (() => new Date());
   const nowIso = () => clock().toISOString();
 
@@ -494,9 +473,8 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     });
   }
 
-  async function emitMediaAlerts(media: Media, analysis: MediaAnalysis, kind: AnalysisEngine) {
+  async function emitMediaAlerts(media: Media, analysis: MediaAnalysis) {
     const existing = await existingEventKeys(media.incident_id);
-    const note = engineNote(kind);
     const candidates: NewEvent[] = [];
     for (const p of analysis.people) {
       const where = ALERT_PERSON_LABEL[p.status];
@@ -509,7 +487,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         severity: "critical",
         title: `Posible persona atrapada — ${media.label}: ${location}`,
         detail: clip(
-          `${p.count > 0 ? `${p.count} persona(s)` : "Persona(s)"} ${where}. ${p.description} Confianza ${CONFIDENCE_LABEL[p.confidence]}.${frames}${note}`,
+          `${p.count > 0 ? `${p.count} persona(s)` : "Persona(s)"} ${where}. ${p.description} Confianza ${CONFIDENCE_LABEL[p.confidence]}.${frames}`,
           400,
         ),
         media_id: media.id,
@@ -522,7 +500,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         kind: "alert",
         severity: "warning",
         title: `Peligro: ${capitalize(HAZARD_LABEL[h.kind])} — ${media.label}`,
-        detail: clip(`${h.description}${note}`, 400),
+        detail: clip(`${h.description}`, 400),
         media_id: media.id,
       });
     }
@@ -543,7 +521,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       return;
     }
     if (media.analysis && !force) {
-      // Ya trae análisis (p. ej. simulacro): no se reanaliza, pero sí alerta y entra a la fusión.
+      // Ya trae análisis: no se reanaliza, pero sí alerta y entra a la fusión.
       let current = media;
       if (media.status !== "analyzed") {
         try {
@@ -556,13 +534,18 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
           console.error("[pipeline] no se pudo marcar como analizado el medio precargado", media.id, err);
         }
       }
-      await emitMediaAlerts(current, media.analysis, media.analysis_engine ?? "simulated");
+      await emitMediaAlerts(current, media.analysis);
       await requestFusionInner(media.incident_id, false);
       return;
     }
     const incident = await store.getIncident(media.incident_id);
     if (!incident) {
       console.error("[pipeline] incidente inexistente para el medio", mediaId);
+      return;
+    }
+
+    if (!engine) {
+      await failMedia(media, "No hay IA configurada en el servidor (falta la credencial de Anthropic): este medio no se analiza.");
       return;
     }
 
@@ -661,10 +644,10 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       kind: "media_analyzed",
       severity: "info",
       title: `${media.label} analizado`,
-      detail: clip(`${analysis.summary}${engineNote(engine.kind)}`, 400),
+      detail: clip(analysis.summary, 400),
       media_id: media.id,
     });
-    await emitMediaAlerts(updated, analysis, engine.kind);
+    await emitMediaAlerts(updated, analysis);
     await requestFusionInner(media.incident_id, false);
   }
 
@@ -708,27 +691,14 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       return { ok: false, value: null, kind: null };
     };
 
+    if (!engine) return { ok: false, value: null, kind: null };
     let value: T;
-    const primary = await primaryEngine(incidentId);
-    let kind: AnalysisEngine = primary.kind;
-    let fallbackReason: string | null = null;
+    const kind: AnalysisEngine = engine.kind;
     try {
-      value = await run(primary);
+      value = await run(engine);
     } catch (err) {
-      console.error(`[pipeline] falló ${label.name} con el motor ${primary.kind}`, incidentId, err);
-      const failed = await fail(
-        err,
-        `Falló ${label.the} (${primary.kind === "claude" ? "modelo" : "reglas"})`,
-      );
-      if (primary.kind !== "claude") return failed;
-      fallbackReason = errorMessage(err);
-      try {
-        value = await run(fallbackEngine);
-        kind = fallbackEngine.kind;
-      } catch (err2) {
-        console.error(`[pipeline] falló también el respaldo por reglas (${label.name})`, incidentId, err2);
-        return fail(err2, `Falló también el respaldo por reglas (${label.name})`);
-      }
+      console.error(`[pipeline] falló ${label.name}`, incidentId, err);
+      return fail(err, `Falló ${label.the}`);
     }
 
     try {
@@ -736,19 +706,6 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     } catch (err) {
       console.error(`[pipeline] no se pudo guardar ${label.name}`, incidentId, err);
       return fail(err, `No se pudo guardar ${label.the}`);
-    }
-
-    if (fallbackReason !== null) {
-      await safeEvent({
-        incident_id: incidentId,
-        kind: task === "situation" ? "situation_updated" : "scene_updated",
-        severity: "warning",
-        title: `Informe generado por reglas: el modelo no respondió (${label.name})`,
-        detail: clip(
-          `${label.this} NO viene del modelo: lo armó el motor de reglas a partir de los análisis y la radio. Verifícalo con las imágenes. Motivo: ${fallbackReason}`,
-          500,
-        ),
-      });
     }
     return { ok: true, value, kind };
   }
@@ -824,7 +781,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         severity: situationEventSeverity(s),
         title: clip(`Situación: ${s.headline || "informe actualizado"}`, 160),
         detail: clip(
-          `${capitalize(TRAPPED_LABEL[s.trapped.status])}. ${s.trapped.basis}${engineNote(situation.kind)}`,
+          `${capitalize(TRAPPED_LABEL[s.trapped.status])}. ${s.trapped.basis}`,
           400,
         ),
       });
@@ -835,7 +792,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         incident_id: incidentId,
         kind: "scene_updated",
         severity: "info",
-        title: `Reconstrucción de la escena actualizada${engineNote(scene.kind)}`,
+        title: "Reconstrucción de la escena actualizada",
         detail: clip(scene.value.description, 400),
       });
     }
@@ -868,6 +825,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
   }
 
   async function requestFusionInner(incidentId: string, force: boolean): Promise<void> {
+    if (!engine) return;
     const incident = await store.getIncident(incidentId);
     if (!incident) {
       console.error("[pipeline] incidente inexistente al pedir fusión", incidentId);
@@ -951,9 +909,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
     current: CommsAnalysis,
     previous: CommsAnalysis | null,
     comms: CommEntry[],
-    kind: AnalysisEngine,
   ): Promise<void> {
-    const note = engineNote(kind);
     if (current.mayday.active && !previous?.mayday.active) {
       const seqs = current.events.filter((e) => e.kind === "mayday").map((e) => e.entry_seq);
       await safeEvent({
@@ -961,7 +917,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         kind: "comms_alert",
         severity: "critical",
         title: clip(`MAYDAY — ${current.mayday.detail || "bombero en peligro"}`, 160),
-        detail: clip(`${current.mayday.detail}${note}`, 400),
+        detail: clip(`${current.mayday.detail}`, 400),
         comm_id: commIdForSeq(comms, seqs),
       });
     }
@@ -976,7 +932,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         kind: "comms_alert",
         severity: "critical",
         title: clip(`Radio: se informan víctimas — ${current.victims.detail || "sin detalle"}`, 160),
-        detail: clip(`${current.victims.detail}${note}`, 400),
+        detail: clip(`${current.victims.detail}`, 400),
         comm_id: commIdForSeq(comms, seqs),
       });
     }
@@ -986,7 +942,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
         kind: "comms_alert",
         severity: "notice",
         title: "Radio: unidad en el lugar informa que no hay personas atrapadas",
-        detail: clip(`${current.victims.detail}${note}`, 400),
+        detail: clip(`${current.victims.detail}`, 400),
         comm_id: commIdForSeq(comms, current.victims.entry_seqs),
       });
     }
@@ -1010,10 +966,9 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       now: nowIso(),
     };
 
+    if (!engine) return { saved: false, ok: true };
     let analysis: CommsAnalysis;
-    const primary = await primaryEngine(incidentId);
-    let kind: AnalysisEngine = primary.kind;
-    let fallbackReason: string | null = null;
+    const kind: AnalysisEngine = engine.kind;
     const recordError = async (err: unknown, title: string) => {
       await safePipelinePatch(incidentId, { comms_error: errorMessage(err) });
       await safeEvent({
@@ -1025,20 +980,11 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       });
     };
     try {
-      analysis = await primary.analyzeComms(input);
+      analysis = await engine.analyzeComms(input);
     } catch (err) {
       console.error("[pipeline] falló el análisis de comunicaciones", incidentId, err);
-      await recordError(err, `Falló el análisis de radio (${primary.kind === "claude" ? "modelo" : "reglas"})`);
-      if (primary.kind !== "claude") return { saved: false, ok: false };
-      fallbackReason = errorMessage(err);
-      try {
-        analysis = await fallbackEngine.analyzeComms(input);
-        kind = fallbackEngine.kind;
-      } catch (err2) {
-        console.error("[pipeline] falló también el respaldo por reglas (radio)", incidentId, err2);
-        await recordError(err2, "Falló también el respaldo por reglas del análisis de radio");
-        return { saved: false, ok: false };
-      }
+      await recordError(err, "Falló el análisis de radio");
+      return { saved: false, ok: false };
     }
 
     await store.updateIncident(incidentId, {
@@ -1046,23 +992,12 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
       comms_engine: kind,
       comms_analysis_updated_at: nowIso(),
     });
-    if (fallbackReason !== null) {
-      await safeEvent({
-        incident_id: incidentId,
-        kind: "comms",
-        severity: "warning",
-        title: "Análisis de radio generado por reglas: el modelo no respondió",
-        detail: clip(
-          `Este análisis NO viene del modelo: lo armó el motor de reglas. Verifícalo con la bitácora. Motivo: ${fallbackReason}`,
-          500,
-        ),
-      });
-    }
-    await emitCommsAlerts(incidentId, analysis, previous, comms, kind);
+    await emitCommsAlerts(incidentId, analysis, previous, comms);
     return { saved: true, ok: true };
   }
 
   async function requestCommsInner(incidentId: string): Promise<void> {
+    if (!engine) return;
     const incident = await store.getIncident(incidentId);
     if (!incident) {
       console.error("[pipeline] incidente inexistente al pedir análisis de radio", incidentId);
@@ -1175,7 +1110,7 @@ export function createPipeline(deps: PipelineDeps): Pipeline {
  * Anthropic al importar este módulo, y permite probar createPipeline aislado.
  */
 async function defaultPipeline(): Promise<Pipeline> {
-  const [{ getStore, getFiles }, { getEngine, getSimulatedEngine }, { extractFramesOnServer }] =
+  const [{ getStore, getFiles }, { getEngine }, { extractFramesOnServer }] =
     await Promise.all([import("@/lib/store"), import("./engine"), import("./server-frames")]);
   const store = getStore();
   const files = getFiles();
@@ -1183,8 +1118,6 @@ async function defaultPipeline(): Promise<Pipeline> {
     store,
     files,
     engine: getEngine(),
-    fallbackEngine: getSimulatedEngine(),
-    rulesOnly: async (incidentId) => (await (await import("@/lib/vigia/state-store")).getVigiaState(incidentId)).ai_off,
     extractFrames: (media) => extractFramesOnServer(media, { store, files }),
     anchorScene: (incident) => {
       const osm = import("@/lib/osm");

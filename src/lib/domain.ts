@@ -200,8 +200,7 @@ export type HazardKind = z.infer<typeof HazardKindSchema>;
 export const HazardSeveritySchema = z.enum(["low", "medium", "high"]);
 export type HazardSeverity = z.infer<typeof HazardSeveritySchema>;
 
-export const AnalysisEngineSchema = z.enum(["claude", "simulated"]);
-/** `simulated` = sin ANTHROPIC_API_KEY: resultados de demostración, nunca evidencia real. */
+export const AnalysisEngineSchema = z.enum(["claude"]);
 export type AnalysisEngine = z.infer<typeof AnalysisEngineSchema>;
 
 /* ═══════════════════════ Referencias a la evidencia ═══════════════════════ */
@@ -737,8 +736,8 @@ export interface Reconstruction {
   /** Estado legible en español ("Estimando cámaras de 84 cuadros…"). */
   message: string;
   method: "gaussian_splatting";
-  /** Dónde se entrenó. "demo" = archivo de demostración, no viene de los videos del incidente. */
-  backend: "cloud_run_gpu" | "demo";
+  /** Dónde se entrenó. */
+  backend: "cloud_run_gpu";
   /** Tipo de GPU usada, p. ej. "nvidia-rtx-pro-6000". */
   gpu: string | null;
   /** Medios usados como entrada. */
@@ -810,7 +809,7 @@ export interface Incident {
   status: IncidentStatus;
   description: string;
   /** "command" = creado por la central; "citizen" = nació de un reporte de vecino. */
-  origin: "command" | "citizen" | "demo";
+  origin: "command" | "citizen";
   /** Los incidentes creados por vecinos parten sin verificar hasta que el mando los confirma. */
   verified: boolean;
   /** Secreto de solo lectura para el enlace de briefing en ruta. */
@@ -833,7 +832,7 @@ export interface Incident {
   updated_at: string;
 }
 
-export type MediaSource = "citizen" | "drone" | "responder" | "demo";
+export type MediaSource = "citizen" | "drone" | "responder";
 export type MediaKind = "video" | "photo" | "frames";
 export type MediaStatus = "uploading" | "uploaded" | "analyzing" | "analyzed" | "failed";
 
@@ -885,7 +884,7 @@ export interface Media {
 }
 
 /** zello = transmisión del canal de Zello, recibida y transcrita en el servidor. */
-export type CommSource = "manual" | "dictation" | "simulated" | "import" | "zello";
+export type CommSource = "manual" | "dictation" | "import" | "zello";
 
 export interface CommEntry {
   id: string;
@@ -911,8 +910,8 @@ export type MissionStatus =
   | "landed"
   | "aborted";
 export type MissionPattern = "orbit" | "hover" | "grid";
-/** simulated = telemetría generada por la plataforma; device = teléfono/sensor web; api = dron real vía API. */
-export type MissionMode = "simulated" | "device" | "api";
+/** device = teléfono/sensor web; api = dron real vía API. */
+export type MissionMode = "device" | "api";
 
 export interface TelemetryPoint {
   at: string;
@@ -1065,7 +1064,7 @@ export const AddCommInputSchema = z.object({
   speaker: z.string().trim().max(60).default(""),
   channel: z.string().trim().max(40).default(""),
   /** "zello" solo lo acepta la ruta si viene del puente (token interno o modo local abierto). */
-  source: z.enum(["manual", "dictation", "simulated", "import", "zello"]).default("manual"),
+  source: z.enum(["manual", "dictation", "import", "zello"]).default("manual"),
   at: z.string().datetime().optional(),
   /** Ruta devuelta por POST /api/incidents/[id]/comms/audio. */
   audio_path: z.string().max(512).optional(),
@@ -1073,12 +1072,12 @@ export const AddCommInputSchema = z.object({
 export type AddCommInput = z.infer<typeof AddCommInputSchema>;
 
 export const CreateMissionInputSchema = z.object({
-  mode: z.enum(["simulated", "device", "api"]),
+  mode: z.enum(["device", "api"]),
   pattern: z.enum(["orbit", "hover", "grid"]).default("orbit"),
   radius_m: z.number().min(10).max(500).default(60),
   altitude_m: z.number().min(10).max(120).default(45),
   speed_ms: z.number().min(1).max(20).default(8),
-  /** Punto de despegue; por defecto ~300 m al sur del incidente (simulado). */
+  /** Punto de despegue; por defecto ~300 m al sur del incidente. */
   home_lat: z.number().min(-90).max(90).optional(),
   home_lng: z.number().min(-180).max(180).optional(),
 });
@@ -1106,7 +1105,7 @@ export const TelemetryInputSchema = z.object({
 export type TelemetryInput = z.infer<typeof TelemetryInputSchema>;
 
 export const StartReconstructionInputSchema = z.object({
-  /** Medios a usar; por defecto todos los que tienen video o cuadros reales (no demo). */
+  /** Medios a usar; por defecto todos los que tienen video o cuadros. */
   media_ids: z.array(z.string().min(1)).max(50).optional(),
   /** Iteraciones de entrenamiento (más = mejor calidad y más GPU). */
   iterations: z.number().int().min(500).max(30000).optional(),

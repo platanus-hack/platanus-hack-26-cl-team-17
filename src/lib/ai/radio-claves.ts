@@ -7,7 +7,7 @@
  * cualquier otra clave numérica sigue tratándose como no verificada.
  *
  * Lo usan los prompts de radio y de situación (CLAVES_TEXT), el motor de reglas
- * (expandClaves / findClaves) y el simulacro de radio del panel.
+ * (expandClaves / findClaves).
  */
 
 export interface RadioClave {

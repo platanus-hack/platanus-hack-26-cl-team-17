@@ -261,7 +261,7 @@ describe("GET /api/files (modo local, acceso abierto)", () => {
       lat: 0,
       lng: 0,
       description: "",
-      origin: "demo",
+      origin: "command",
       verified: true,
     });
     shareKey = inc.share_key;

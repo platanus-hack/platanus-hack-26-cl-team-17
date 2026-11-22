@@ -47,9 +47,10 @@ SECRET_BRIDGE="${SECRET_BRIDGE:-vigia-bridge-token}"
 CPU="${CPU:-2}"
 MEMORY="${MEMORY:-2Gi}"
 MIN_INSTANCES="${MIN_INSTANCES:-1}"
-# Con db-g1-small (≈50 conexiones) y pool de 8 por instancia, 4 instancias = 32 conexiones.
-MAX_INSTANCES="${MAX_INSTANCES:-4}"
-CONCURRENCY="${CONCURRENCY:-40}"
+# Una sola instancia: el video en vivo, el estado de Zello y el supervisor viven en memoria
+# (tools/README.md). Con más de una, el dron y el tablero pueden caer en instancias distintas.
+MAX_INSTANCES="${MAX_INSTANCES:-1}"
+CONCURRENCY="${CONCURRENCY:-80}"
 TIMEOUT="${TIMEOUT:-900}"
 DATABASE_POOL_MAX="${DATABASE_POOL_MAX:-8}"
 # Zona horaria del proceso (las horas que Vigía dice por radio salen de aquí).
@@ -85,7 +86,7 @@ LIVE3D_REGION="${LIVE3D_REGION:-europe-west1}"
 VIGIA_LIVE3D_URL="${VIGIA_LIVE3D_URL:-}"
 VIGIA_LIVE3D_AUTH="${VIGIA_LIVE3D_AUTH:-}"
 
-# 1 → falla si el secreto de Anthropic no tiene valor (por defecto se despliega con IA simulada).
+# 1 → falla si el secreto de Anthropic no tiene valor (por defecto se despliega sin IA).
 REQUIRE_ANTHROPIC="${REQUIRE_ANTHROPIC:-0}"
 # Build con Cloud Build.
 BUILD_REGION="${BUILD_REGION:-global}"
@@ -391,7 +392,7 @@ if secret_has_version "$SECRET_ANTHROPIC"; then
 elif [[ "$REQUIRE_ANTHROPIC" == "1" ]]; then
   die "El secreto $SECRET_ANTHROPIC no tiene valor. Cárgalo con: printf '%s' \"\$ANTHROPIC_API_KEY\" | gcloud secrets versions add $SECRET_ANTHROPIC --data-file=- --project=$PROJECT"
 else
-  warn "El secreto $SECRET_ANTHROPIC no tiene valor: se despliega SIN llave de Anthropic y la IA funcionará en modo SIMULADO (rotulado así en la interfaz)."
+  warn "El secreto $SECRET_ANTHROPIC no tiene valor: se despliega SIN llave de Anthropic y no habrá análisis de IA (la interfaz muestra «Sin IA»)."
 fi
 BRIDGE_MOUNTED=0
 if secret_has_version "$SECRET_BRIDGE"; then
@@ -526,7 +527,7 @@ cat <<EOF
   URL de la app      $APP_URL
   URL de Cloud Run   ${STATUS_URL:-(no se pudo leer)}
   Imagen             $IMAGE
-  IA                 $([[ "$ANTHROPIC_MOUNTED" == "1" ]] && echo "Claude (llave montada)" || echo "SIMULADA (falta valor en $SECRET_ANTHROPIC)")
+  IA                 $([[ "$ANTHROPIC_MOUNTED" == "1" ]] && echo "Claude (llave montada)" || echo "SIN IA (falta valor en $SECRET_ANTHROPIC)")
   Puente Zello       $([[ "$BRIDGE_MOUNTED" == "1" ]] && echo "token montado ($SECRET_BRIDGE)" || echo "SIN token (falta valor en $SECRET_BRIDGE)")
 
 Próximos pasos:

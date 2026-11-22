@@ -1,7 +1,7 @@
 /**
  * "Hablar con Vigía": el OBAC pregunta por voz y Vigía responde con lo que ya se sabe del
- * incidente (informe, escena, radio). Con Claude configurado responde el modelo; si no
- * (o si falla), un motor de reglas simulado que se rotula como tal en la interfaz.
+ * incidente (informe, escena, radio). Responde Claude; sin credencial de Anthropic la ruta
+ * contesta 503 (no hay respuestas inventadas).
  *
  * Vigía informa, no decide: no dice por dónde entrar, atacar, ventilar o evacuar (lo mismo que
  * el agente de Vigía y el filtro del puente Zello). Nunca dice "no hay": dice "no se ve" o "no se sabe".
@@ -9,6 +9,7 @@
 import { z } from "zod";
 import type { CommEntry, Incident } from "@/lib/domain";
 import { runtimeMode } from "@/lib/config";
+import { HttpError } from "@/lib/http";
 
 export const AskInputSchema = z.object({
   question: z.string().trim().min(1, "Falta la pregunta.").max(500),
@@ -18,7 +19,7 @@ export interface AskAnswer {
   answer: string;
   /** Marcador del mapa al que se refiere la respuesta (P1, H1, V1, post, U:B-4…); null si ninguno. */
   focus: string | null;
-  engine: "claude" | "simulated";
+  engine: "claude";
 }
 
 const AnswerSchema = z.object({
@@ -82,92 +83,21 @@ function contextText(incident: Incident, comms: readonly CommEntry[]): string {
   return JSON.stringify(ctx);
 }
 
-/* ───────────────────────────── Motor simulado ───────────────────────────── */
-
-const CONF = { high: "alta", medium: "media", low: "baja" } as const;
-
-function firstSentences(text: string, maxWords = 40): string {
-  const parts = text.split(/(?<=[.!?])\s+/);
-  let out = "";
-  for (const p of parts) {
-    const next = out ? `${out} ${p}` : p;
-    if (next.split(/\s+/).length > maxWords && out) break;
-    out = next;
-  }
-  return out.trim();
-}
-
-export function simulatedAnswer(incident: Incident, question: string): Omit<AskAnswer, "engine"> {
-  const q = question.toLowerCase();
-  const sit = incident.situation;
-  const scene = incident.scene;
-  const ca = incident.comms_analysis;
-  if (!sit) {
-    return {
-      answer: "Todavía no hay videos analizados de este incidente. Apenas llegue el primero te aviso qué se ve.",
-      focus: null,
-    };
-  }
-  const trappedPin = scene?.people?.find((p) => p.status === "trapped")?.id ?? null;
-
-  if (/atrapad|persona|v[ií]ctima|gente|ocupante|herid|lesionad/.test(q)) {
-    const t = sit.trapped;
-    if (t.status === "no_evidence") {
-      return { answer: "No se ven personas atrapadas en los videos analizados. Eso no lo descarta: falta confirmarlo en el lugar.", focus: null };
-    }
-    if (t.status === "cleared_by_unit") return { answer: "Una unidad en el lugar informó que no quedan atrapados.", focus: null };
-    const n = t.count_max > t.count_min ? `entre ${Math.max(1, t.count_min)} y ${t.count_max}` : String(Math.max(1, t.count_min));
-    const where = t.locations[0] ? t.locations[0].split(/[:;]/)[0] : "lugar sin precisar";
-    const conf = t.status === "confirmed" ? "alta" : t.status === "probable" ? "media" : "baja";
-    const injured = sit.injured.count_estimate > 0 ? ` Además, ${sit.injured.count_estimate} lesionado.` : "";
-    return { answer: `${n} atrapado en ${where}, confianza ${conf}.${injured}`, focus: trappedPin };
-  }
-  if (/riesgo|peligro|gas|combustible|derrame|el[eé]ctric|cable|bater/.test(q)) {
-    const hs = [...sit.hazards].sort((a, b) => (b.severity === "high" ? 1 : 0) - (a.severity === "high" ? 1 : 0)).slice(0, 2);
-    if (!hs.length) return { answer: "No se ven peligros especiales en los videos. Falta confirmarlo en el lugar.", focus: null };
-    const first = scene?.hazards?.find((h) => h.kind === hs[0].kind)?.id ?? null;
-    return { answer: `Riesgos principales: ${hs.map((h) => firstSentences(h.description, 14)).join(" Y ")}`, focus: first };
-  }
-  if (/agua|grifo|hidrante|abastec/.test(q)) {
-    return { answer: firstSentences(sit.access.water_supply || "No se sabe dónde hay agua. La ubicación de grifos se pide con 6-5."), focus: null };
-  }
-  if (/llegar|acceso|entrar|ruta|estacion|posicion|carro/.test(q)) {
-    const stage = sit.access.staging_suggestion ? ` ${firstSentences(sit.access.staging_suggestion, 16)}` : "";
-    return { answer: `${firstSentences(sit.access.best_approach, 22)}${stage}`, focus: "post" };
-  }
-  if (/samu|ambulancia|carabineros|unidad|qui[eé]n|radio|lleg[oó]/.test(q) && ca) {
-    const fire = ca.units.slice(0, 3).map((u) => `${u.name} ${u.status === "on_scene" || u.status === "operating" ? "6-3, en el lugar" : u.status === "en_route" ? "en camino" : "sin informe"}`);
-    return { answer: `${fire.join(". ")}.`, focus: ca.units[0] ? `U:${ca.units[0].name}` : null };
-  }
-  if (/fuego|foco|humo|llama/.test(q)) {
-    if (!sit.fire.present) return { answer: "No se ve fuego en los videos analizados. Eso no lo descarta.", focus: null };
-    return { answer: firstSentences(`${sit.fire.location}. ${sit.fire.spread}`, 30), focus: scene?.fire_zones?.length ? "F0" : null };
-  }
-  if (/qu[eé] hago|sugier|recomiend|prioridad|qu[eé] har/.test(q)) {
-    return { answer: `Eso lo decides tú. Lo que se sabe: ${firstSentences(sit.headline, 28)}`, focus: trappedPin };
-  }
-  return { answer: `${firstSentences(sit.headline, 30)} Confianza ${CONF[sit.overall_confidence]}.`, focus: trappedPin };
-}
-
 /* ───────────────────────────── Entrada ───────────────────────────── */
 
 export async function answerQuestion(incident: Incident, comms: readonly CommEntry[], question: string): Promise<AskAnswer> {
-  if (runtimeMode().ai === "claude") {
-    try {
-      const { callStructured } = await import("@/lib/ai/client");
-      const out = await callStructured({
-        task: "ask",
-        system: SYSTEM,
-        schema: AnswerSchema,
-        maxTokens: 600,
-        content: [{ type: "text", text: `Contexto del incidente (JSON):\n${contextText(incident, comms)}\n\nPregunta del OBAC: ${question}` }],
-      });
-      const valid = new Set(markerList(incident).map((m) => m.split(":").slice(0, m.startsWith("U:") ? 2 : 1).join(":")));
-      const focus = out.focus && valid.has(out.focus) ? out.focus : null;
-      return { answer: out.answer.trim(), focus, engine: "claude" };
-    } catch (err) {
-      console.warn("[vigia-ask] Claude no respondió, se usa el motor simulado:", err);
-    }
+  if (runtimeMode().ai !== "claude") {
+    throw new HttpError(503, "internal", "No hay IA configurada en el servidor: Vigía no puede responder preguntas.");
   }
-  return { ...simulatedAnswer(incident, question), engine: "simulated" };
+  const { callStructured } = await import("@/lib/ai/client");
+  const out = await callStructured({
+    task: "ask",
+    system: SYSTEM,
+    schema: AnswerSchema,
+    maxTokens: 600,
+    content: [{ type: "text", text: `Contexto del incidente (JSON):\n${contextText(incident, comms)}\n\nPregunta del OBAC: ${question}` }],
+  });
+  const valid = new Set(markerList(incident).map((m) => m.split(":").slice(0, m.startsWith("U:") ? 2 : 1).join(":")));
+  const focus = out.focus && valid.has(out.focus) ? out.focus : null;
+  return { answer: out.answer.trim(), focus, engine: "claude" };
 }

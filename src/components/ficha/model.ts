@@ -21,7 +21,7 @@ import type {
 } from "@/lib/domain";
 import type { IncidentSnapshot, LiveInsightView, MediaView } from "@/lib/contract";
 import type { VigiaUtterance } from "@/lib/vigia/types";
-import { destination, toLatLng, type LatLng, type LocalXY } from "@/lib/geo";
+import { toLatLng, type LatLng, type LocalXY } from "@/lib/geo";
 import { houseClearance, houseOutline, houseParts, houseSpec, roofHeightOf, vehicleParts, type HouseSpec, type Part } from "./house";
 
 /* ───────────────────────────── Tipos ───────────────────────────── */
@@ -130,8 +130,8 @@ export interface ChatMessage {
   /** Rótulo chico arriba de la burbuja ("Radio", "Informe", "Alerta"). */
   tag: string | null;
   focus: string | null;
-  /** true si la respuesta viene del motor simulado (se rotula siempre). */
-  simulated?: boolean;
+  /** true si la respuesta es de plantilla, sin IA (se rotula siempre). */
+  template?: boolean;
 }
 
 export type TimelineFilter = "all" | "alerts" | "radio" | "videos";
@@ -150,9 +150,6 @@ export interface FichaHeader {
   code: string;
   startedAt: string;
   status: Incident["status"];
-  demo: boolean;
-  /** El informe o la escena salen del motor de reglas, no de la IA real. */
-  simulated: boolean;
   /** Reporte de vecino que el mando aún no confirma. */
   unverified: boolean;
 }
@@ -490,7 +487,7 @@ export function buildDroneCards(
     title: clipTitle(i.summary),
     location: i.observations[0] ? clipTitle(i.observations[0], 80) : null,
     confidence: null,
-    sources: [`Dron ${droneLabel}`, ...(i.engine === "simulated" ? ["simulado"] : [])],
+    sources: [`Dron ${droneLabel}`],
     unseen: null,
     focus: focusFor(`${i.summary} ${i.observations.join(" ")}`, scene),
   }));
@@ -671,13 +668,6 @@ export function buildMap(
   const route: LngLat[] = [];
   const pathPts = [entry, staging, post].filter((a): a is NonNullable<typeof a> => Boolean(a));
   if (pathPts.length >= 2) {
-    if (incident.origin === "demo" && entry) {
-      // Demo: la unidad viene desde ~900 m más allá del acceso (la ruta por calles la calcula OSRM en el navegador).
-      const e = toLatLng(origin, { x: finite(entry.x), y: finite(entry.y) });
-      const towards = Math.atan2(finite(entry.x), finite(entry.y)) * (180 / Math.PI);
-      const far = destination(e, towards, 900);
-      route.push([far.lng, far.lat]);
-    }
     for (const a of pathPts) route.push(lngLat(origin, { x: finite(a.x), y: finite(a.y) }));
   }
   if (post && !opts.arriving) {
@@ -766,7 +756,7 @@ export function agentMessages(utterances: readonly VigiaUtterance[], scene: Scen
       text: u.text,
       tag: AGENT_KIND[u.kind] ?? null,
       focus: focusFor(u.text, scene) ?? u.evidence.find((e) => /^M\d+$/.test(e)) ?? null,
-      simulated: u.engine === "plantilla",
+      template: u.engine === "plantilla",
     }));
 }
 
@@ -817,8 +807,6 @@ export function buildFicha(snapshot: IncidentSnapshot, opts: { forceArriving?: b
       code: incident.code,
       startedAt: incident.created_at,
       status: incident.status,
-      demo: incident.origin === "demo",
-      simulated: incident.situation_engine === "simulated" || incident.scene_engine === "simulated",
       unverified: !incident.verified,
     },
     arriving,

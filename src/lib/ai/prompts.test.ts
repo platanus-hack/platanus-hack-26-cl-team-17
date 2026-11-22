@@ -388,7 +388,7 @@ function fusionInput(): FusionInput {
     analysis_engine: "claude",
     status: "analyzed",
   });
-  const m2 = makeMedia({ id: "m2", label: "M2", analysis: analysis(), analysis_engine: "simulated", status: "analyzed" });
+  const m2 = makeMedia({ id: "m2", label: "M2", analysis: analysis(), analysis_engine: "claude", status: "analyzed" });
   const m10 = makeMedia({ id: "m10", label: "M10", status: "failed", error: "Fotogramas ilegibles" });
   const kf: KeyFrameImage = {
     idx: 3,
@@ -402,7 +402,7 @@ function fusionInput(): FusionInput {
     incident,
     media: [
       { media: m10, analysis: null, analysis_engine: null },
-      { media: m2, analysis: m2.analysis, analysis_engine: "simulated" },
+      { media: m2, analysis: m2.analysis, analysis_engine: "claude" },
       { media: m1, analysis: m1.analysis, analysis_engine: "claude" },
     ],
     comms: [comm(1, "B-3 en el lugar")],
@@ -422,10 +422,9 @@ test("buildFusionUserContent es determinista y ordena los medios por etiqueta", 
   assert.ok(t.indexOf("## M1") < t.indexOf("## M2") && t.indexOf("## M2") < t.indexOf("## M10"));
 });
 
-test("la fusión marca el análisis simulado, los medios sin análisis y escapa los análisis", () => {
+test("la fusión marca los medios sin análisis y escapa los análisis", () => {
   const t = texts(buildFusionUserContent(fusionInput(), "situation"));
-  assert.ok(t.includes("análisis del motor de reglas (simulado)"));
-  assert.ok(t.includes("NO es evidencia visual"));
+  assert.ok(t.includes("Análisis visual (motor: claude):"));
   assert.ok(t.includes("sin análisis (motor: ninguno; estado del medio: failed — Fotogramas ilegibles)"));
   assert.ok(t.includes('<nota_vecino medio="M1">\nMi vecina está adentro\n</nota_vecino>'));
   // visible_text con "</analisis>" no cierra el bloque: va escapado en JSON.

@@ -4,9 +4,10 @@ import unittest
 import numpy as np
 
 from splat import live3d, live_gs
-from splat.live3d import FakeEstimator, Manager, Session
-from splat.live_gs import FakeSplatTrainer, decode_live_splat, encode_live_splat, init_from_points
+from splat.live3d import Manager, Session
+from splat.live_gs import decode_live_splat, encode_live_splat, init_from_points
 
+from .fakes import FakeEstimator, FakeSplatTrainer
 from .test_live3d import Clock, textured_jpeg
 
 

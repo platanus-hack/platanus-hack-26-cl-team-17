@@ -90,7 +90,7 @@ function newMediaInput(incidentId: string, over: Partial<NewMedia> = {}): NewMed
 function newMissionInput(incidentId: string, over: Partial<NewMission> = {}): NewMission {
   return {
     incident_id: incidentId,
-    mode: "simulated",
+    mode: "device",
     pattern: "orbit",
     radius_m: 60,
     altitude_m: 45,
@@ -277,11 +277,11 @@ export function runStoreContract(label: string, setup: () => Promise<StoreHarnes
         const at = new Date().toISOString();
         const updated = await s().updateIncident(inc.id, {
           situation,
-          situation_engine: "simulated",
+          situation_engine: "claude",
           situation_updated_at: at,
         });
         assert.deepEqual(updated.situation, situation);
-        assert.equal(updated.situation_engine, "simulated");
+        assert.equal(updated.situation_engine, "claude");
         assert.equal(Date.parse(updated.situation_updated_at ?? ""), Date.parse(at));
         assert.deepEqual((await s().getIncident(inc.id))?.situation, situation);
       });
@@ -374,7 +374,7 @@ export function runStoreContract(label: string, setup: () => Promise<StoreHarnes
         assertNoTokenHash(updated, "updateMedia");
         assert.deepEqual(await s().getMedia(created.id), updated);
 
-        const minimal = await s().createMedia({ incident_id: inc.id, source: "demo", kind: "photo" });
+        const minimal = await s().createMedia({ incident_id: inc.id, source: "responder", kind: "photo" });
         assert.equal(minimal.label, "M2");
         assert.equal(minimal.mime, null);
         assert.equal(minimal.lat, null);
@@ -557,7 +557,7 @@ export function runStoreContract(label: string, setup: () => Promise<StoreHarnes
           text: "B-3 6-3",
           speaker: "B-3",
           channel: "5-2",
-          source: "simulated",
+          source: "zello",
           audio_path: audioPath,
         });
         assert.equal(withAudio.audio_path, audioPath);
@@ -573,7 +573,7 @@ export function runStoreContract(label: string, setup: () => Promise<StoreHarnes
         assert.equal(created.label, "D1");
         assert.equal(created.incident_id, inc.id);
         assert.equal(created.status, "planned");
-        assert.equal(created.mode, "simulated");
+        assert.equal(created.mode, "device");
         assert.equal(created.pattern, "orbit");
         assert.equal(created.radius_m, 60);
         assert.equal(created.altitude_m, 45);
@@ -603,7 +603,7 @@ export function runStoreContract(label: string, setup: () => Promise<StoreHarnes
         assert.equal(updated.frames_received, 3);
         assertNoTokenHash(updated, "updateMission");
 
-        const second = await s().createMission(newMissionInput(inc.id, { mode: "device", pattern: "hover" }));
+        const second = await s().createMission(newMissionInput(inc.id, { mode: "api", pattern: "hover" }));
         assert.equal(second.label, "D2");
         const list = await s().listMissions(inc.id);
         assert.deepEqual(

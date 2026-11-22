@@ -63,6 +63,14 @@ before(async () => {
     now: () => clock,
     defer: (t) => void deferred.push(t),
     processMedia: async () => undefined,
+    // Doble del observador (sin IA real): resume cuántos cuadros recibió.
+    analyzeLive: async (input) => ({
+      summary: `${input.frames.length} ${input.frames.length === 1 ? "cuadro" : "cuadros"} del dron ${input.mission.label}`,
+      severity: "info",
+      changed: false,
+      observations: [],
+      engine: "claude",
+    }),
   };
 });
 after(() => {
@@ -145,8 +153,8 @@ test("el observador con detector recibe UN cuadro anotado y cuenta los cuadros q
   }
   const { insights } = live.listLiveInsights(mission.id);
   assert.equal(insights.length, 1);
-  assert.equal(insights[0].engine, "simulated");
-  assert.match(insights[0].summary, /1 cuadro/, "sin IA real igual se arma la entrada con un solo cuadro");
+  assert.equal(insights[0].engine, "claude");
+  assert.match(insights[0].summary, /1 cuadro/, "con detector la entrada lleva un solo cuadro");
   assert.ok(insights[0].frames >= 9, `cuadros con YOLO en la ventana: ${insights[0].frames}`);
   assert.equal(requests.filter((r) => r.annotate).length, 1, "se pide un solo cuadro anotado");
 });

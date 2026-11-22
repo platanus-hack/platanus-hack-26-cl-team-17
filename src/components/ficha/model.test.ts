@@ -67,14 +67,14 @@ test("mapa: vehículo con atrapamiento resaltado, zona de peligro y persona en r
     cameras: [],
     access_points: [],
   } as unknown as SceneModel;
-  const m = buildMap({ lat: -33.51, lng: -70.588, origin: "demo" }, scene, null, [], { arriving: false });
+  const m = buildMap({ lat: -33.51, lng: -70.588, origin: "command" }, scene, null, [], { arriving: false });
   assert.ok(m.parts.some((x) => x.color === "#F76B15"), "vehículo con atrapamiento en naranjo");
   assert.equal(m.zones[0].tone, "red");
   const p = m.pins.find((x) => x.id === "P1");
   assert.equal(p?.text, "1 persona atrapada");
   assert.equal(p?.sub, "confianza alta");
   assert.equal(m.halo?.tone, "red");
-  const arriving = buildMap({ lat: -33.51, lng: -70.588, origin: "demo" }, scene, null, [], { arriving: true });
+  const arriving = buildMap({ lat: -33.51, lng: -70.588, origin: "command" }, scene, null, [], { arriving: true });
   assert.ok(!arriving.pins.some((x) => x.kind === "person"), "llegando: sin hallazgos en el mapa");
 });
 

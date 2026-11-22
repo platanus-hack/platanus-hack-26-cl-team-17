@@ -9,14 +9,13 @@
  *    se ve su estado en una línea, lo que está haciendo y se le puede escribir.
  */
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { Bot, BotOff, CornerDownLeft, FileText, RadioTower, Send, Volume2, VolumeX, X } from "lucide-react";
+import { Bot, BotOff, CornerDownLeft, FileText, Send, Volume2, VolumeX, X } from "lucide-react";
 import { Badge, CopyButton, IconButton, Spinner, useNow } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { errorMessage } from "@/lib/client/api";
 import { formatClock } from "@/lib/format";
 import { PRIORITY_RANK } from "@/lib/vigia/rules";
 import type { VigiaKind, VigiaUtterance, VigiaView } from "@/lib/vigia/types";
-import { runRadioDemo } from "./radio-demo";
 import { sinIA } from "./sin-ia";
 import { useVigia } from "./use-vigia";
 
@@ -128,7 +127,6 @@ export function VigiaDock({ incidentId, className, style }: VigiaDockProps) {
       <div className="pointer-events-auto relative shrink-0">
         {composer ? (
           <Composer
-            incidentId={incidentId}
             view={view}
             replyTo={composer.replyTo}
             sending={sending}
@@ -285,7 +283,6 @@ function BriefCard({ u, more, onClose }: { u: VigiaUtterance; more: number; onCl
 /* ───────────────────────────── Escribirle a Vigía ───────────────────────────── */
 
 function Composer({
-  incidentId,
   view,
   replyTo,
   sending,
@@ -293,7 +290,6 @@ function Composer({
   onClose,
   onSend,
 }: {
-  incidentId: string;
   view: VigiaView | null;
   replyTo: VigiaUtterance | null;
   sending: boolean;
@@ -316,21 +312,6 @@ function Composer({
       setText("");
     } catch (err) {
       setError(errorMessage(err));
-    }
-  };
-
-  const [demo, setDemo] = useState<"idle" | "running">("idle");
-  const startDemo = async () => {
-    if (demo === "running") return;
-    setDemo("running");
-    setError(null);
-    try {
-      await runRadioDemo(incidentId);
-      // Las líneas entran durante ~20 s; el botón vuelve a estar disponible después.
-      setTimeout(() => setDemo("idle"), 20_000);
-    } catch (err) {
-      setError(errorMessage(err));
-      setDemo("idle");
     }
   };
 
@@ -444,16 +425,6 @@ function Composer({
         ))}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
-        <button
-          type="button"
-          onClick={() => void startDemo()}
-          disabled={demo === "running"}
-          className="inline-flex items-center gap-1 text-xs text-faint underline-offset-2 hover:text-muted hover:underline disabled:cursor-wait"
-          title="Reproduce dos radios grabadas a la vez y las registra como simuladas"
-        >
-          <RadioTower aria-hidden className="size-3" />
-          {demo === "running" ? "Demo en curso: dos radios…" : "Demo: dos radios a la vez"}
-        </button>
         {/* Plan B si Claude anda lento o caído: un clic, sin redeploy. */}
         <button
           type="button"

@@ -37,7 +37,6 @@ import {
   Fence,
   Flag,
   Flame,
-  FlaskConical,
   Footprints,
   Fuel,
   Gauge,
@@ -198,7 +197,6 @@ export const incidentStatusTone: Record<IncidentStatus, Tone> = {
 export const incidentOriginLabel: Record<IncidentOrigin, string> = {
   command: "Central",
   citizen: "Reporte de vecino",
-  demo: "Simulacro",
 };
 
 /* ═══════════════════════════ Personas atrapadas ═══════════════════════════ */
@@ -646,7 +644,6 @@ export const commsVictimsStatusTone: Record<CommsVictimsStatus, Tone> = {
 export const commSourceLabel: Record<CommSource, string> = {
   manual: "Ingreso manual",
   dictation: "Dictado",
-  simulated: "Simulada",
   import: "Importada",
   zello: "Zello",
 };
@@ -741,7 +738,6 @@ export const mediaSourceLabel: Record<MediaSource, string> = {
   citizen: "Vecino",
   drone: "Dron",
   responder: "Personal de Bomberos",
-  demo: "Demostración",
 };
 
 /** Ícono por fuente del medio. */
@@ -749,7 +745,6 @@ export const mediaSourceIcon: Record<MediaSource, LucideIcon> = {
   citizen: Smartphone,
   drone: Drone,
   responder: ShieldCheck,
-  demo: FlaskConical,
 };
 
 /** Tipo de medio. */
@@ -829,7 +824,6 @@ export const missionPatternLabel: Record<MissionPattern, string> = {
 
 /** Origen de la telemetría de la misión. */
 export const missionModeLabel: Record<MissionMode, string> = {
-  simulated: "Simulada",
   device: "Teléfono como sensor",
   api: "Dron real (API)",
 };
@@ -910,13 +904,11 @@ export const staffRoleLabel: Record<StaffRole, string> = {
 /** Motor que produjo un análisis. */
 export const analysisEngineLabel: Record<AnalysisEngine, string> = {
   claude: "IA (Claude)",
-  simulated: "Simulado",
 };
 
-/** Tono por motor de análisis; lo simulado siempre se marca. */
+/** Tono por motor de análisis. */
 export const analysisEngineTone: Record<AnalysisEngine, Tone> = {
   claude: "neutral",
-  simulated: "warning",
 };
 
 /** Estado del pipeline de fusión o comunicaciones. */

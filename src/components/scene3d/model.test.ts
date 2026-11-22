@@ -207,7 +207,7 @@ test("drones: traza y posición actual en coordenadas locales", () => {
     return { at: new Date(1_700_000_000_000 + i * 1000).toISOString(), lat: q.lat, lng: q.lng, alt_m: 45, heading_deg: 90, speed_ms: 8, battery_pct: 80 };
   });
   const missions: MissionLike[] = [
-    { id: "m1", label: "D1", status: "on_station", mode: "simulated", last: { ...track[0], lat: p.lat, lng: p.lng }, track },
+    { id: "m1", label: "D1", status: "on_station", mode: "device", last: { ...track[0], lat: p.lat, lng: p.lng }, track },
     { id: "m2", label: "D2", status: "planned", mode: "api", last: null, track: [] },
   ];
   const drones = deriveDrones(missions, ORIGIN);
@@ -217,7 +217,7 @@ test("drones: traza y posición actual en coordenadas locales", () => {
   near(d.x, 0, 0.05);
   assert.equal(d.z, 45);
   assert.equal(d.headingDeg, 90);
-  assert.equal(d.mode, "simulated");
+  assert.equal(d.mode, "device");
   assert.ok(d.track.length <= 241 && d.track.length > 100);
   assert.deepEqual(deriveDrones(missions, { lat: Number.NaN, lng: 0 }), []);
 });

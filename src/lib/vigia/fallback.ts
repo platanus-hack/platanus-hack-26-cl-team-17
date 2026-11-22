@@ -1,6 +1,6 @@
 /**
- * Respaldo sin LLM: plantillas fijas con las claves. Se usa sin llave de Anthropic (modo
- * simulado, rotulado "plantilla" en la mesa de mando) o si Claude falla en una vuelta.
+ * Respaldo sin LLM: plantillas fijas con las claves. Se usa sin llave de Anthropic (rotulado
+ * "plantilla" en la mesa de mando), con «Vigía sin IA» o si Claude falla en una vuelta.
  * Mismas herramientas y mismas reglas duras que el agente.
  */
 import { formatClock } from "@/lib/format";

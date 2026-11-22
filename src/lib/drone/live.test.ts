@@ -1,5 +1,5 @@
 /**
- * Video en vivo del dron contra el store local real (carpeta temporal), sin credencial de IA.
+ * Video en vivo del dron contra el store local real (carpeta temporal), con un doble del observador (sin credencial de IA).
  *   node --import tsx --test src/lib/drone/live.test.ts
  */
 import assert from "node:assert/strict";
@@ -30,6 +30,14 @@ before(async () => {
     now: () => clock,
     defer: (t) => void deferred.push(t),
     processMedia: async () => undefined,
+    // Doble del observador (sin IA real): resume cuántos cuadros recibió.
+    analyzeLive: async (input) => ({
+      summary: `${input.frames.length} ${input.frames.length === 1 ? "cuadro" : "cuadros"} del dron ${input.mission.label}`,
+      severity: "info",
+      changed: false,
+      observations: [],
+      engine: "claude",
+    }),
   };
 });
 after(() => fs.rmSync(dataDir, { recursive: true, force: true }));
@@ -91,8 +99,7 @@ test("cuadros en vivo: el último se sirve, 'unchanged' sin novedad y una observ
   await runDeferred();
   let { insights } = live.listLiveInsights(mission.id);
   assert.equal(insights.length, 1);
-  assert.equal(insights[0].engine, "simulated");
-  assert.match(insights[0].summary, /SIMULADO/);
+  assert.equal(insights[0].engine, "claude");
 
   clock += 5000;
   await live.pushLiveFrame(deps, mission, jpeg(4));

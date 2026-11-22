@@ -271,7 +271,6 @@ const SOURCE_ES: Record<MediaSource, string> = {
   citizen: "vecino",
   drone: "dron",
   responder: "personal de Bomberos",
-  demo: "demostración (simulacro)",
 };
 
 const KIND_ES: Record<MediaKind, string> = {
@@ -283,7 +282,6 @@ const KIND_ES: Record<MediaKind, string> = {
 const COMM_SOURCE_ES: Record<CommSource, string> = {
   manual: "manual",
   dictation: "dictado",
-  simulated: "simulado",
   import: "importado",
   zello: "radio Zello, transcripción automática",
 };
@@ -543,7 +541,6 @@ function mediaHeaderLines(media: Media, origin: LatLng | null, now: string): str
       : `Hora de captura desconocida; recibido ${clock(media.created_at)} (${ago(media.created_at, now)})`,
   );
   lines.push(...positionLines(media, origin));
-  if (media.source === "demo") lines.push("Material del simulacro de demostración (no es una emergencia real).");
   return lines;
 }
 
@@ -673,11 +670,7 @@ function fusionMediaBlock(fm: FusionMedia, origin: LatLng | null, now: string): 
     const err = m.error ? ` — ${inline(m.error, 200)}` : "";
     lines.push(`Análisis: sin análisis (motor: ${fm.analysis_engine ?? "ninguno"}; estado del medio: ${m.status}${err})`);
   } else {
-    lines.push(
-      fm.analysis_engine === "simulated"
-        ? "ATENCIÓN: análisis del motor de reglas (simulado). No vio las imágenes: NO es evidencia visual; refleja solo la nota y el tipo de incidente."
-        : `Análisis visual (motor: ${fm.analysis_engine ?? "desconocido"}):`,
-    );
+    lines.push(`Análisis visual (motor: ${fm.analysis_engine ?? "desconocido"}):`);
     lines.push(`<analisis medio="${label}">\n${dataJson(fm.analysis)}\n</analisis>`);
   }
   return lines.join("\n");

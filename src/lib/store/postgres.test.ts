@@ -163,7 +163,7 @@ if (!TEST_DATABASE_URL) {
           missionId = (
             await store.createMission({
               incident_id: inc.id,
-              mode: "simulated",
+              mode: "device",
               pattern: "orbit",
               radius_m: 50,
               altitude_m: 40,

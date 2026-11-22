@@ -112,12 +112,11 @@ test("splitUnverifiedCitizen: solo ciudadanos sin verificar y no cerrados", () =
     inc({ id: "cit-ok", origin: "citizen", verified: true }),
     inc({ id: "cit-closed", origin: "citizen", verified: false, status: "closed" }),
     inc({ id: "cit-ctrl", origin: "citizen", verified: false, status: "controlled" }),
-    inc({ id: "demo", origin: "demo", verified: false }),
     inc({ id: "cmd", origin: "command" }),
   ];
   const { unverified, rest } = splitUnverifiedCitizen(list);
   assert.deepEqual(ids(unverified), ["cit", "cit-ctrl"]);
-  assert.deepEqual(ids(rest), ["cit-ok", "cit-closed", "demo", "cmd"]);
+  assert.deepEqual(ids(rest), ["cit-ok", "cit-closed", "cmd"]);
 });
 
 test("dashboardCounts", () => {

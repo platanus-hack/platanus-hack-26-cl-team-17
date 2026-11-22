@@ -52,7 +52,7 @@ Sesión = id de la misión (`[A-Za-z0-9_-]{1,64}`). Todo JSON salvo los puntos.
 
 | Método y ruta | Cuerpo / respuesta |
 |---|---|
-| `GET /health` | `{ok: true, ready: bool, engine: "vggt"\|"fake", gpu: string\|null, sessions: n}` |
+| `GET /health` | `{ok: true, ready: bool, engine: "vggt", gpu: string\|null, sessions: n}` |
 | `POST /sessions/{sid}/frames?t=<ms>` | cuerpo JPEG → `202 {accepted: bool, reason: string\|null, keyframes, pending}` |
 | `GET /sessions/{sid}/status` | `Live3DStatus` (abajo); `404` si la sesión no existe |
 | `GET /sessions/{sid}/points?from=<k>&max=<m>` | binario (abajo) con los trozos `[from, to)`; `max` ≤ 16 (por defecto 8) |
@@ -63,7 +63,7 @@ Sesión = id de la misión (`[A-Za-z0-9_-]{1,64}`). Todo JSON salvo los puntos.
 ```jsonc
 {
   "session": "m_123",
-  "engine": "vggt",            // "fake" = simulado (sin GPU, solo para desarrollo)
+  "engine": "vggt",
   "ready": true,               // modelo cargado
   "state": "waiting" | "running" | "lost",  // lost = la última ventana no encajó
   "message": "string|null",    // aviso en español para mostrar tal cual
@@ -78,7 +78,7 @@ Sesión = id de la misión (`[A-Za-z0-9_-]{1,64}`). Todo JSON salvo los puntos.
   "display": [16 números],     // matriz 4x4 por filas: mundo → vista (Y arriba, centrada, ~unidades de escena = 1)
   "cameras": [[12 números], …], // c2w 3x4 por filas (mundo, OpenCV: x derecha, y abajo, z adelante) de cada cuadro clave, en orden
   "splat": {                   // Gaussian splatting en vivo
-    "engine": "gsplat" | "fake" | null, // null = desactivado (LIVE3D_SPLAT=0)
+    "engine": "gsplat" | null, // null = desactivado (LIVE3D_SPLAT=0)
     "active": false,           // entrenando (alguien pidió /splat hace menos de 20 s)
     "version": 0,              // última instantánea (0 = ninguna)
     "gaussians": 0,            // en la instantánea
@@ -115,8 +115,7 @@ u8[n*4]      rotación w,x,y,z como q·128 + 128 (igual que .splat)
 
 ## Variables
 
-`PORT` (8080), `LIVE3D_FAKE=1` (motor simulado sin torch, para desarrollo de la interfaz; los
-splats son las gaussianas iniciales sin entrenar), `LIVE3D_SPLAT=0` (sin Gaussian splatting en
+`PORT` (8080), `LIVE3D_SPLAT=0` (sin Gaussian splatting en
 vivo), `LIVE3D_SPLAT_EXPORT_MAX` (250000), `VGGT_WEIGHTS` (`/opt/models/vggt/model.safetensors`).
 
 ## Desplegar y probar
@@ -137,7 +136,6 @@ Prueba de punta a punta sin la app (mismo camino que los cuadros del dron):
 ```bash
 cd gpu/splat
 .venv/bin/python tools/live3d_replay.py --url "$(gcloud run services describe vigia-live3d --region=europe-west1 --project=platanus-515411 --format='value(status.url)')" --gcp VIDEO.mp4 --out out/live3d/prueba
-LIVE3D_FAKE=1 PORT=8790 .venv/bin/python -m splat.live3d_server       # motor simulado local, sin GPU
 .venv/bin/python tools/live3d_replay.py --url … --gcp --splat VIDEO.mp4   # además entrena y guarda splats.splat
-.venv/bin/python -m unittest tests.test_live3d tests.test_live_gs     # pruebas sin GPU (el entrenador, con un rasterizador de juguete en CPU)
+.venv/bin/python -m unittest tests.test_live3d tests.test_live_gs     # pruebas sin GPU (dobles en tests/fakes.py; el entrenador, con un rasterizador de juguete en CPU)
 ```

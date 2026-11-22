@@ -26,7 +26,7 @@ Son reglas duras: el agente no puede saltárselas y el código las hace cumplir.
 3. **Cita su fuente**: cada hallazgo dice si sale del video M1, la radio C5 o el dron D1.
 4. **«No se ve» no es «no hay»**: sin evidencia no descarta víctimas.
 5. **Habla poco**: un mensaje por radio cada ~20 s, salvo que haya una persona en riesgo.
-6. **Nada simulado pasa por real**: sin IA configurada funciona igual, y todo queda rotulado como simulado.
+6. **Nada inventado**: sin IA configurada no hay análisis, y nada se presenta como si viniera de los videos.
 
 ## Tecnología
 

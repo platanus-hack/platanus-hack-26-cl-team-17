@@ -20,6 +20,7 @@ import type { LiveFrameAck, LiveInsightView } from "@/lib/contract";
 import { LIMITS, type DroneMission } from "@/lib/domain";
 import { errors } from "@/lib/http";
 import { incidentTypeLabel } from "@/lib/labels";
+import { aiEngineKind } from "@/lib/config";
 import { recordServerError } from "@/lib/server/diagnostics";
 import {
   analyzeLiveFrames,
@@ -233,6 +234,9 @@ async function detectorWindow(
 }
 
 async function runInsight(deps: DroneDeps, mission: DroneMission, s: LiveState): Promise<void> {
+  // Sin IA configurada no hay observador: el video en vivo igual llega al puesto de mando.
+  const analyze = deps.analyzeLive ?? (aiEngineKind() === "claude" ? analyzeLiveFrames : null);
+  if (!analyze) return;
   const { store } = deps;
   // Otra instancia puede estar recibiendo el mismo sensor: una sola observación por ventana.
   const lock = `drone-live:${mission.id}`;
@@ -267,7 +271,7 @@ async function runInsight(deps: DroneDeps, mission: DroneMission, s: LiveState):
     let result: LiveInsightResult;
     const t0 = Date.now();
     try {
-      result = await analyzeLiveFrames(input);
+      result = await analyze(input);
       if (det) {
         console.info("[vigia-yolo] observador en vivo con detector", {
           mission: mission.id,

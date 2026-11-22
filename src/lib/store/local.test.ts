@@ -81,7 +81,7 @@ describe("store local: persistencia", () => {
     await store.addComm({ incident_id: inc.id, text: "uno", speaker: "", channel: "", source: "manual" });
     await store.createMission({
       incident_id: inc.id,
-      mode: "simulated",
+      mode: "device",
       pattern: "orbit",
       radius_m: 60,
       altitude_m: 45,
@@ -111,7 +111,7 @@ describe("store local: persistencia", () => {
     assert.deepEqual(again, await store.getIncident(inc.id));
     assert.equal(again?.rev, inc.rev + 3);
     assert.equal(await reloaded.verifyUploadToken(media.id, sha256Hex("tok")), true);
-    const m2 = await reloaded.createMedia({ incident_id: inc.id, source: "demo", kind: "photo" });
+    const m2 = await reloaded.createMedia({ incident_id: inc.id, source: "responder", kind: "photo" });
     assert.equal(m2.label, "M2");
     const c2 = await reloaded.addComm({ incident_id: inc.id, text: "dos", speaker: "", channel: "", source: "manual" });
     assert.equal(c2.seq, 2);
@@ -156,7 +156,7 @@ describe("store local: persistencia", () => {
       lat: 0,
       lng: 0,
       description: "",
-      origin: "demo",
+      origin: "command",
       verified: false,
     });
     const hostile = { title: "y", id: "otro", code: "VG-XXXX", share_key: "k", rev: 999 } as unknown as Parameters<
@@ -180,7 +180,7 @@ describe("store local: persistencia", () => {
       lat: 0,
       lng: 0,
       description: "",
-      origin: "demo",
+      origin: "command",
       verified: false,
     });
     inc.title = "cambiado";

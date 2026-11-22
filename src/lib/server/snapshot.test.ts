@@ -24,7 +24,7 @@ before(async () => {
 });
 after(() => rmSync(dir, { recursive: true, force: true }));
 
-const MODE: RuntimeMode = { store: "local", files: "local", ai: "simulated", auth: "open", model: null };
+const MODE: RuntimeMode = { store: "local", files: "local", ai: "off", auth: "open", model: null };
 const BY = { name: "Oficial Pérez", demo: false };
 const NOW = new Date("2026-11-21T15:00:00.000Z");
 

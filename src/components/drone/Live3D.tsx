@@ -15,7 +15,7 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
 import { Box, Maximize2, RotateCcw, Sparkles, TriangleAlert, X } from "lucide-react";
-import { Badge, Button, IconButton, Spinner, useNow } from "@/components/ui";
+import { Button, IconButton, Spinner, useNow } from "@/components/ui";
 import { ViewerErrorBoundary } from "@/components/scene3d/error-boundary";
 import { cn } from "@/lib/cn";
 import { formatNumber, timeAgo } from "@/lib/format";
@@ -351,11 +351,6 @@ function Live3DView({
             <Box aria-hidden="true" className="size-3.5 shrink-0" />
             Reconstrucción 3D en vivo
           </span>
-          {status?.engine === "fake" && (
-            <Badge tone="warning" size="sm" variant="solid" title="Motor simulado, sin GPU: la nube no viene del video">
-              Simulado
-            </Badge>
-          )}
           {canSplat && onModeChange && <ModeToggle mode={splatMode ? "splat" : "points"} onChange={onModeChange} />}
         </div>
         <div className="pointer-events-auto flex items-center gap-1.5">

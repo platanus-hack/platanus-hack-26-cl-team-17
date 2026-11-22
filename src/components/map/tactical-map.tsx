@@ -509,7 +509,7 @@ export default function TacticalMapCanvas({
             tone="drone"
             shape="square"
             size="sm"
-            tip={{ title: `Despegue de ${m.label}`, lines: [m.mode === "simulated" ? "Misión simulada" : ""] }}
+            tip={{ title: `Despegue de ${m.label}`, lines: [] }}
           />
         </MapMarker>
       ))}
@@ -518,17 +518,15 @@ export default function TacticalMapCanvas({
           const last = m.last;
           if (!last || !isValidLatLng(last.lat, last.lng)) return null;
           const heading = validHeading(last.heading_deg) ?? 0;
-          const simulated = m.mode === "simulated";
           return (
             <MapMarker key={`drone-${m.id}`} map={map} position={last} zIndex={30}>
               <DroneMarker
                 label={m.label}
                 headingDeg={heading}
                 altitudeM={Number.isFinite(last.alt_m) ? last.alt_m : null}
-                simulated={simulated}
                 active={isMissionActive(m.status)}
                 tip={{
-                  title: `Dron ${m.label}${simulated ? " (simulado)" : ""}`,
+                  title: `Dron ${m.label}`,
                   lines: [
                     MISSION_STATUS_LABEL[m.status],
                     `Altura ${Math.round(last.alt_m)} m, rumbo ${formatBearing(heading)}`,

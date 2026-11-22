@@ -175,14 +175,12 @@ export function DroneMarker({
   label,
   headingDeg,
   altitudeM,
-  simulated,
   active,
   tip,
 }: {
   label: string;
   headingDeg: number;
   altitudeM: number | null;
-  simulated: boolean;
   active: boolean;
   tip: TipContent;
 }) {
@@ -212,7 +210,6 @@ export function DroneMarker({
       >
         {label}
         {altitudeM !== null && <span className="text-text">· {Math.round(altitudeM)} m</span>}
-        {simulated && <span className="rounded-sm bg-warning px-0.5 text-on-solid">SIM</span>}
       </span>
       <MarkerTip open={open}>
         <TipBody tip={tip} />

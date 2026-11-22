@@ -293,14 +293,6 @@ export function autoReadText(changes: readonly BriefingChange[], next: BriefingS
 
 /* ─────────────────────────── Varios ─────────────────────────── */
 
-/** true si algo de lo mostrado viene (o vendrá) del motor simulado. */
-export function isSimulated(snapshot: BriefingSnapshot): boolean {
-  const { incident, situation, mode } = snapshot;
-  if (incident.situation_engine === "simulated" || incident.scene_engine === "simulated") return true;
-  // Sin análisis todavía: si la instancia simula, el que llegue también lo será.
-  return !situation && mode.ai === "simulated";
-}
-
 function coord(n: number): string {
   return Number.isFinite(n) ? String(Math.round(n * 1e6) / 1e6) : "0";
 }

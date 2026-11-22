@@ -118,7 +118,6 @@ export const MEDIA_SOURCE_LABEL: Record<MediaSource, string> = {
   citizen: "de vecino",
   drone: "de dron",
   responder: "de bomberos",
-  demo: "de demostración",
 };
 
 export const MEDIA_KIND_LABEL: Record<MediaKind, string> = {

@@ -1,7 +1,7 @@
 "use client";
 /**
  * Marco común del visor (3D y planta 2D): barra con insignias de honestidad
- * (simulada, confianza, antigüedad, actualizando), vistas rápidas, capas,
+ * (confianza, antigüedad, actualizando), vistas rápidas, capas,
  * simbología, supuestos, cambio 2D/3D, leyenda fija e inspector.
  */
 import { useState, type KeyboardEvent, type ReactNode } from "react";
@@ -10,7 +10,6 @@ import {
   ChevronDown,
   Clock,
   Eye,
-  FlaskConical,
   Info,
   Layers,
   ListChecks,
@@ -20,7 +19,6 @@ import {
   Shapes,
   X,
 } from "lucide-react";
-import type { AnalysisEngine } from "@/lib/domain";
 import { VIEW_PRESETS, type ViewPreset } from "./geometry";
 import { findEntity, type SceneView } from "./model";
 import { LAYERS, type LayerKey, type LayerState } from "./layers";
@@ -36,7 +34,6 @@ type PanelKey = "layers" | "legend" | "assumptions";
 
 export interface SceneFrameProps {
   view: SceneView | null;
-  engine: AnalysisEngine | null;
   updatedAt: string | null;
   updating: boolean;
   compact: boolean;
@@ -378,7 +375,6 @@ export function SceneEmpty({ updating }: { updating: boolean }) {
 export function SceneFrame(props: SceneFrameProps) {
   const {
     view,
-    engine,
     updatedAt,
     updating,
     compact,
@@ -435,15 +431,6 @@ export function SceneFrame(props: SceneFrameProps) {
       {/* Barra en una sola fila: insignias de honestidad a la izquierda, herramientas como íconos a la derecha. */}
       <div className="@container/bar [position:var(--scene-chrome-pos,relative)] top-[var(--scene-safe-t,0px)] right-[var(--scene-safe-r,0px)] left-[var(--scene-safe-l,0px)] z-30 flex h-10 flex-nowrap items-center gap-1.5 rounded-[var(--scene-chrome-radius,0px)] border-b border-line bg-surface px-2 shadow-[var(--scene-chrome-shadow,none)]">
         <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1.5 overflow-hidden">
-          {engine === "simulated" && (
-            <span
-              className={cx("inline-flex h-6 shrink-0 items-center gap-1 rounded-full border px-2 text-[11px] font-bold", TONE_BADGE.warning)}
-              title="Escena generada por el motor de reglas, sin IA real: solo para demostración. No proviene del análisis de los videos."
-            >
-              <FlaskConical className="size-3.5" aria-hidden="true" />
-              <span className="hidden @2xl/bar:inline">ESCENA </span>SIMULADA
-            </span>
-          )}
           {confidence && (
             <span className={cx("inline-flex h-6 shrink-0 items-center rounded-full border px-2 text-[11px] font-semibold", TONE_BADGE[CONFIDENCE_TONE[confidence]])}>
               Confianza {CONFIDENCE_LABEL[confidence]}

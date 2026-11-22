@@ -1,15 +1,14 @@
 import type { ReactNode } from "react";
-import { CircleCheck, KeyRound, Link2Off, FlaskConical, Smartphone, type LucideIcon } from "lucide-react";
+import { CircleCheck, KeyRound, Link2Off, Smartphone, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/brand";
 import { cn } from "@/lib/cn";
 
 /** Pantallas del modo sensor que no llegan a encender sensores (enlace incompleto, token inválido…). */
-export type SensorGateKind = "no_token" | "invalid" | "simulated" | "ended";
+export type SensorGateKind = "no_token" | "invalid" | "ended";
 
 const GATE: Record<SensorGateKind, { icon: LucideIcon; tone: "critical" | "warning" | "info" | "ok"; title: string }> = {
   no_token: { icon: KeyRound, tone: "warning", title: "Falta el código de acceso del enlace" },
   invalid: { icon: Link2Off, tone: "critical", title: "Este enlace no es válido" },
-  simulated: { icon: FlaskConical, tone: "warning", title: "Esta misión es simulada" },
   ended: { icon: CircleCheck, tone: "info", title: "La misión ya terminó" },
 };
 
@@ -61,12 +60,6 @@ const MESSAGE: Record<SensorGateKind, ReactNode> = {
     <p>
       El código de acceso no corresponde a esta misión, o la misión no existe. El código solo se muestra una vez al
       desplegar el dron: pide al puesto de mando que despliegue uno nuevo y escanea el nuevo código QR.
-    </p>
-  ),
-  simulated: (
-    <p>
-      Su telemetría la genera la plataforma y no recibe datos de un teléfono. Para usar este teléfono como sensor, pide
-      al puesto de mando un dron en modo «Teléfono como sensor».
     </p>
   ),
   ended: (

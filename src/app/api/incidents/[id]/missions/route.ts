@@ -1,6 +1,6 @@
 /**
  * POST /api/incidents/[id]/missions  CreateMissionInput → CreateMissionResponse
- * Despliega un dron (simulado, teléfono como sensor o dron real por API).
+ * Despliega un dron (teléfono como sensor o dron real por API).
  * El token de ingesta se entrega solo en esta respuesta.
  */
 import { requireStaff } from "@/lib/auth";

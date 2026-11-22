@@ -178,7 +178,6 @@ export const MEDIA_SOURCE_LABEL: Record<MediaSource, string> = {
   citizen: "Vecino",
   drone: "Dron",
   responder: "Personal",
-  demo: "Demostración",
 };
 
 export const MISSION_STATUS_LABEL: Record<MissionStatus, string> = {
@@ -192,7 +191,6 @@ export const MISSION_STATUS_LABEL: Record<MissionStatus, string> = {
 };
 
 export const MISSION_MODE_LABEL: Record<MissionMode, string> = {
-  simulated: "Simulado",
   device: "Teléfono como sensor",
   api: "Dron real",
 };
@@ -274,11 +272,9 @@ export function vehicleCaption(v: Pick<NVehicle, "kind" | "state" | "burning">):
   return parts.join(" · ");
 }
 
-/** "D1 · 45 m" (y "simulado" si la misión no es un dron real). */
-export function droneCaption(d: Pick<NDrone, "label" | "z" | "mode">): string {
-  const parts = [d.label, `${Math.round(d.z)} m`];
-  if (d.mode === "simulated") parts.push("simulado");
-  return parts.join(" · ");
+/** "D1 · 45 m". */
+export function droneCaption(d: Pick<NDrone, "label" | "z">): string {
+  return [d.label, `${Math.round(d.z)} m`].join(" · ");
 }
 
 /** "≈ 8 m" con un decimal si es pequeño. */

@@ -25,7 +25,7 @@ before(async () => {
 });
 after(() => rmSync(dir, { recursive: true, force: true }));
 
-const MODE: RuntimeMode = { store: "local", files: "local", ai: "simulated", auth: "open", model: null };
+const MODE: RuntimeMode = { store: "local", files: "local", ai: "off", auth: "open", model: null };
 const yes = async () => true;
 const no = async () => false;
 
@@ -99,10 +99,10 @@ describe("loadBriefing", () => {
     await store.addFrames(m.id, [
       { idx: 0, t_s: 0, width: 10, height: 10, storage_path: `incidents/${inc.id}/media/${m.id}/frames/000.jpg`, lat: null, lng: null, alt_m: null, heading_deg: null },
     ]);
-    await store.updateMedia(m.id, { status: "analyzed", analysis: analysis([{ frame: 0, caption: "Fachada" }]), analysis_engine: "simulated" });
+    await store.updateMedia(m.id, { status: "analyzed", analysis: analysis([{ frame: 0, caption: "Fachada" }]), analysis_engine: "claude" });
     return store.updateIncident(inc.id, {
       situation: situation({ trapped: { status: "possible", evidence: [ev(m.label, 0, "Vecino informa persona adentro")] } }),
-      situation_engine: "simulated",
+      situation_engine: "claude",
     });
   }
 
@@ -111,7 +111,7 @@ describe("loadBriefing", () => {
     const r = await B.loadBriefing(store, inc.id, { key: inc.share_key, rev: null, hasStaffSession: no, mode: MODE });
     assert.ok(!isUnchanged(r));
     assert.equal(r.incident.id, inc.id);
-    assert.equal(r.incident.situation_engine, "simulated");
+    assert.equal(r.incident.situation_engine, "claude");
     assert.equal(r.situation?.trapped.status, "possible");
     assert.equal(r.media_count, 1);
     assert.equal(r.key_frames.length, 1);

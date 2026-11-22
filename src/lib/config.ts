@@ -9,8 +9,8 @@
  *    .data/ y acceso abierto (demo).
  *  - GCS_BUCKET definido → videos y fotogramas en Cloud Storage con URLs
  *    firmadas. Si no → archivos locales en .data/files.
- *  - Credencial de Anthropic → análisis real con Claude. Si no → motor
- *    simulado, siempre rotulado como tal en la UI.
+ *  - Credencial de Anthropic → análisis real con Claude. Si no → sin análisis
+ *    de IA (los medios quedan sin analizar y la UI lo indica).
  */
 import type { RuntimeMode } from "./contract";
 
@@ -192,10 +192,6 @@ export const config = {
   get aiFast() {
     return env("VIGIA_AI_FAST") === "1";
   },
-  /** VIGIA_AI=simulated fuerza el motor simulado aunque haya credencial. */
-  get forceSimulated() {
-    return env("VIGIA_AI").toLowerCase() === "simulated";
-  },
   /** Ejecutable de ffmpeg (Cloud Run lo trae en la imagen). Vacío = sin extracción en el servidor. */
   get ffmpegPath() {
     return env("FFMPEG_PATH") || "ffmpeg";
@@ -238,7 +234,7 @@ export function isGcsConfigured(): boolean {
 }
 
 export function aiEngineKind(): RuntimeMode["ai"] {
-  return config.hasAnthropic && !config.forceSimulated ? "claude" : "simulated";
+  return config.hasAnthropic ? "claude" : "off";
 }
 
 export function runtimeMode(): RuntimeMode {

@@ -22,7 +22,6 @@ import { findMediaByLabel, type MediaViewerTarget } from "@/components/mando/inc
 import { Scene3D, type SceneSelection } from "@/components/scene3d";
 import { Live3DStage, useLive3dEnabled } from "@/components/drone/Live3D";
 import { LiveVideo, useLiveInsights } from "@/components/drone/LiveFeed";
-import { useSimulatedMissionTicker } from "@/components/drone/use-mission-ticker";
 import { pickLiveMission } from "@/lib/drone/plan";
 import { useToast } from "@/components/ui/Toast";
 import { VigiaDock, useVigia } from "@/components/vigia";
@@ -84,13 +83,6 @@ const MINI_PADDING = { top: 0, right: 0, bottom: 0, left: 0 };
 
 export function FichaView({ id, demoState = null }: { id: string; demoState?: FichaDemoState }) {
   const { snapshot, error, refresh, stale, lastUpdatedAt } = useIncidentSnapshot(id);
-  const refreshNow = useCallback(() => {
-    refresh().catch(() => {
-      /* el error queda en el estado del sondeo */
-    });
-  }, [refresh]);
-  // Las misiones simuladas (p. ej. el dron del simulacro) vuelan también con la ficha abierta.
-  useSimulatedMissionTicker(snapshot?.missions ?? NO_MISSIONS, refreshNow);
   const agent = useVigia(id);
   const now = useNow(2000);
   const toast = useToast();
@@ -279,7 +271,6 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
             incident={incident}
             media={snapshot.media}
             missions={snapshot.missions}
-            engine={incident.scene_engine}
             updatedAt={incident.scene_updated_at}
             updating={incident.pipeline?.fusion_status === "running"}
             selection={schemeSel ?? selectionFor(focus, incident.scene)}
@@ -409,8 +400,6 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
         target={viewer}
         onClose={() => setViewer(null)}
         onChanged={refresh}
-        mode={snapshot.mode}
-        demo={snapshot.incident.origin === "demo"}
       />
     </div>
   );

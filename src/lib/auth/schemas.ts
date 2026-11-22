@@ -20,12 +20,13 @@ const emailField = z
   .min(1, "Ingresa tu correo.")
   .max(254, "El correo es demasiado largo.");
 
+/**
+ * Login de maqueta (demo): correo y contraseña son opcionales y pueden venir vacíos; la
+ * ruta deja entrar igual. Solo se acota el largo (scrypt sobre cuerpos enormes).
+ */
 export const LoginSchema = z.object({
-  email: emailField,
-  password: z
-    .string({ error: "Ingresa tu contraseña." })
-    .min(1, "Ingresa tu contraseña.")
-    .max(MAX_PASSWORD_LENGTH, "La contraseña es demasiado larga."),
+  email: z.string().trim().toLowerCase().max(254, "El correo es demasiado largo.").default(""),
+  password: z.string().max(MAX_PASSWORD_LENGTH, "La contraseña es demasiado larga.").default(""),
 });
 
 export const CreateStaffSchema = z.object({

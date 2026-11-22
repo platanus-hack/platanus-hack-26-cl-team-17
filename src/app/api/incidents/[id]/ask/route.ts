@@ -2,7 +2,7 @@
  * POST /api/incidents/[id]/ask   { question } → { answer, focus, engine }
  *
  * "Hablar con Vigía": responde la pregunta del OBAC con lo que ya se sabe del incidente.
- * engine = "simulated" cuando no hay Claude configurado (la interfaz lo rotula).
+ * Sin Claude configurado responde 503.
  * Acceso: sesión del personal o el puente Zello con su token.
  */
 import { errors, ok, readJson, route } from "@/lib/http";

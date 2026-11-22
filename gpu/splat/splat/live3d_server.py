@@ -1,7 +1,6 @@
 """Servidor HTTP de la reconstrucción 3D en vivo (contrato en LIVE3D.md). Solo biblioteca estándar.
 
     PORT=8080 python -m splat.live3d_server              # VGGT en GPU (imagen de Cloud Run)
-    LIVE3D_FAKE=1 PORT=8790 python -m splat.live3d_server # motor simulado, sin GPU (desarrollo)
     LIVE3D_SPLAT=0 …                                      # sin Gaussian splatting en vivo
 
 El servidor responde de inmediato (Cloud Run exige que escuche pronto); el modelo se carga en el
@@ -18,8 +17,7 @@ import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-from .live3d import FakeEstimator, Manager
-from .live_gs import FakeSplatTrainer
+from .live3d import Manager
 
 MAX_BODY = 3 * 1024 * 1024
 SID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
@@ -32,14 +30,6 @@ def log(msg: str) -> None:
 
 def build_manager() -> Manager:
     splat = os.environ.get("LIVE3D_SPLAT", "1") != "0"
-    if os.environ.get("LIVE3D_FAKE") == "1":
-        return Manager(
-            lambda: FakeEstimator(),
-            "fake",
-            log,
-            make_trainer=(lambda: FakeSplatTrainer(log)) if splat else None,
-            splat_engine="fake",
-        )
     weights = os.environ.get("VGGT_WEIGHTS", "/opt/models/vggt/model.safetensors")
 
     def make():

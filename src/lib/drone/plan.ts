@@ -58,7 +58,7 @@ export function isMissionActive(m: Pick<DroneMission, "status">): boolean {
 }
 
 /**
- * El dron real en vuelo cuyo video conviene mostrar: entre las misiones activas no simuladas,
+ * El dron real en vuelo cuyo video conviene mostrar: entre las misiones activas,
  * primero las que ya dieron señales de vida (telemetría, cuadros o ya despegaron) y, entre
  * ellas, la de actividad más reciente. Una misión recién creada que todavía no vuela ni
  * transmite no le quita el lugar a la que sí lo hace.
@@ -68,7 +68,7 @@ export function pickLiveMission(missions: readonly DroneMission[]): DroneMission
   const activity = (m: DroneMission) => m.last?.at ?? m.started_at ?? m.created_at;
   let best: DroneMission | null = null;
   for (const m of missions) {
-    if (m.mode === "simulated" || !isMissionActive(m)) continue;
+    if (!isMissionActive(m)) continue;
     if (!best) {
       best = m;
       continue;

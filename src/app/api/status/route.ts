@@ -1,7 +1,7 @@
 /**
  * GET /api/status → { mode: RuntimeMode }
  * Público: la UI (vecinos incluidos) lo usa para mostrar siempre el modo de la
- * instancia (local, IA simulada, acceso abierto). No revela secretos.
+ * instancia (local, sin IA, acceso abierto). No revela secretos.
  */
 import type { RuntimeMode } from "@/lib/contract";
 import { runtimeMode } from "@/lib/config";

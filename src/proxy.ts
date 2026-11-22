@@ -1,11 +1,11 @@
 /**
  * Proxy (ex middleware) de Next 16.
  *
- * Modo staff (DATABASE_URL definido): quien entra a /mando/** sin una cookie de sesión
- * válida (firma HMAC + vencimiento, sin consultar la base) va a /login?next=<ruta>.
+ * MAQUETA PARA LA DEMO: solo decide si se muestra la pantalla de login, no protege nada
+ * (ver src/lib/auth.ts). En modo staff (DATABASE_URL definido), quien entra a /mando/** sin
+ * una cookie de sesión vigente (firma HMAC + vencimiento, sin consultar la base) pasa por
+ * /login?next=<ruta>, donde cualquier dato lo deja entrar como administrador.
  * Modo open: deja pasar todo.
- *
- * No es la barrera de seguridad: las rutas /api y las páginas llaman requireStaff().
  */
 import { NextResponse, type NextRequest } from "next/server";
 import { config as appConfig } from "@/lib/config";
@@ -17,12 +17,13 @@ export async function proxy(request: NextRequest) {
 
   const secret = appConfig.sessionSecret;
   if (!secret) {
-    // Sin secreto no puede existir una sesión válida; el login muestra el error de configuración.
-    console.error("[proxy] Falta VIGIA_SESSION_SECRET con DATABASE_URL definido.");
-  } else {
-    const token = request.cookies.get(SESSION_COOKIE)?.value;
-    if (await verifySessionToken(token, secret)) return NextResponse.next();
+    // Sin secreto el login no puede emitir la cookie: redirigir dejaría a todos dando vueltas
+    // entre /mando y /login. Se deja pasar; getStaff() entrega la sesión de demostración.
+    console.error("[proxy] Falta VIGIA_SESSION_SECRET con DATABASE_URL definido: /mando queda sin pantalla de login.");
+    return NextResponse.next();
   }
+  const token = request.cookies.get(SESSION_COOKIE)?.value;
+  if (await verifySessionToken(token, secret)) return NextResponse.next();
 
   const { pathname, search } = request.nextUrl;
   const url = request.nextUrl.clone();

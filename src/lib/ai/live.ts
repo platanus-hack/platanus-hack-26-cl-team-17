@@ -6,7 +6,7 @@
  * anterior, y el modelo responde una frase con lo que importa o lo que cambió. Con detector
  * YOLO va el texto de las detecciones de la ventana y UN cuadro anotado en vez de 3 cuadros.
  * Con Claude usa config.aiLiveModel (Opus con effort bajo y modo rápido por defecto); sin
- * credencial responde el motor simulado, rotulado como tal.
+ * credencial no hay observador.
  */
 import { z } from "zod";
 import { aiEngineKind, config } from "@/lib/config";
@@ -48,7 +48,7 @@ export interface LiveDetectionWindow {
 }
 
 export interface LiveInsightResult extends LiveInsightAI {
-  engine: "claude" | "simulated";
+  engine: "claude";
 }
 
 export const LIVE_SYSTEM_PROMPT = `Eres el observador en vivo de un dron de Bomberos sobre una emergencia activa.
@@ -145,16 +145,6 @@ function trimInsight(r: LiveInsightAI): LiveInsightAI {
   };
 }
 
-/** Sin IA real: no mira las imágenes, solo confirma que llega video. */
-function simulatedInsight(input: LiveInsightInput): LiveInsightAI {
-  return {
-    summary: `SIMULADO — llegan ${input.frames.length} ${input.frames.length === 1 ? "cuadro" : "cuadros"} del dron ${input.mission.label}; sin IA real no se analiza la imagen.`,
-    severity: "info",
-    changed: false,
-    observations: [],
-  };
-}
-
 /** El modo rápido solo existe en Opus y Haiku no tiene respaldo del servidor ante un rechazo. */
 export function liveModelSettings(): ModelSettings {
   const model = config.aiLiveModel;
@@ -167,7 +157,7 @@ export function liveModelSettings(): ModelSettings {
 }
 
 export async function analyzeLiveFrames(input: LiveInsightInput): Promise<LiveInsightResult> {
-  if (aiEngineKind() !== "claude") return { ...simulatedInsight(input), engine: "simulated" };
+  if (aiEngineKind() !== "claude") throw new Error("No hay IA configurada (falta la credencial de Anthropic).");
   const raw = await callStructured(
     {
       task: "live",

@@ -5,7 +5,7 @@
  *   three.x =  scene.x (Este)      three.y = scene.z (altura)      three.z = -scene.y (Norte hacia -Z)
  * Rumbos: 0 = Norte, sentido horario.
  */
-import type { AnalysisEngine, DroneMission, Incident, SceneModel } from "@/lib/domain";
+import type { DroneMission, Incident, SceneModel } from "@/lib/domain";
 import type { MediaView } from "@/lib/contract";
 
 export type SceneEntityKind =
@@ -33,8 +33,6 @@ export interface Scene3DProps {
   media: MediaView[];
   /** Traza y posición actual de los drones (lat/lng → local con toLocal). */
   missions: DroneMission[];
-  /** Motor que produjo la escena; si es "simulated" el visor lo rotula de forma permanente. */
-  engine: AnalysisEngine | null;
   updatedAt: string | null;
   /** true mientras el pipeline está recalculando la escena. */
   updating?: boolean;

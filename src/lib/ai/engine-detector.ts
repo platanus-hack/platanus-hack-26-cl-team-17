@@ -443,7 +443,7 @@ export function createDetectorEngine(inner: Engine, deps: DetectorEngineDeps = {
   async function prepareFusionInner(input: FusionInput): Promise<PreparedFusion | null> {
     if (!configured()) return null;
     const files = await getFiles();
-    const candidates = input.media.filter((fm) => fm.media.source !== "demo" && fm.analysis);
+    const candidates = input.media.filter((fm) => fm.analysis);
     const loaded = await Promise.all(
       candidates.map(async (fm) => ({ fm, d: await loadMediaDetections(files, fm.media.incident_id, fm.media.id) })),
     );

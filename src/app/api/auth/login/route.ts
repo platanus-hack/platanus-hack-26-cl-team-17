@@ -1,44 +1,41 @@
 /**
  * POST /api/auth/login   LoginRequest → { staff: StaffPublic }
  *
- * Modo staff: valida credenciales contra la tabla staff y deja la cookie de sesión.
- * Modo open (sin base de datos): no hay cuentas; responde la sesión de demostración
- * para que el cliente siga a su destino.
+ * MAQUETA PARA LA DEMO: nunca rechaza. Si el correo y la contraseña son los de una cuenta
+ * real, la sesión queda a su nombre; con cualquier otro dato (o sin datos) entra la cuenta
+ * administradora de demostración. No hay límite de intentos: el jurado puede compartir una
+ * misma IP y nadie debe quedar bloqueado.
+ *
+ * Modo open (sin base de datos): no hay cuentas ni cookie; responde la sesión de demostración.
  */
 import { DEMO_STAFF } from "@/lib/auth";
-import { assertLoginAllowed, clearLoginFailures, recordLoginFailure } from "@/lib/auth/login-throttle";
 import { LoginSchema } from "@/lib/auth/schemas";
-import { SESSION_COOKIE, createSessionToken, getSessionSecret, sessionCookieOptions } from "@/lib/auth/session";
-import { authenticate, toStaffPublic } from "@/lib/auth/staff-db";
+import { SESSION_COOKIE, createSessionToken, sessionCookieOptions } from "@/lib/auth/session";
+import { authenticate, toStaffPublic, type StaffRecord } from "@/lib/auth/staff-db";
 import type { StaffPublic } from "@/lib/contract";
-import { isPostgresConfigured } from "@/lib/config";
-import { clientIp, errors, ok, rateLimit, readJson, route } from "@/lib/http";
+import { config, isPostgresConfigured } from "@/lib/config";
+import { ok, readJson, route } from "@/lib/http";
 
 export const runtime = "nodejs";
 
-const WINDOW_MS = 15 * 60 * 1000;
-
 export const POST = route(async (req) => {
-  if (!isPostgresConfigured()) {
-    await readJson(req, LoginSchema);
-    return ok<{ staff: StaffPublic }>({ staff: { ...DEMO_STAFF } });
-  }
-  // Falla con un error claro si falta VIGIA_SESSION_SECRET, antes de tocar la base.
-  const secret = getSessionSecret();
-  rateLimit(`login:ip:${clientIp(req)}`, 30, WINDOW_MS);
   const body = await readJson(req, LoginSchema);
-  // Por correo solo cuentan los fallos: entrar bien no acerca a nadie al bloqueo.
-  assertLoginAllowed(body.email);
+  if (!isPostgresConfigured()) return ok<{ staff: StaffPublic }>({ staff: { ...DEMO_STAFF } });
 
-  const account = await authenticate(body.email, body.password);
-  if (!account) {
-    recordLoginFailure(body.email);
-    throw errors.unauthorized("Correo o contraseña incorrectos.");
+  let account: StaffRecord | null = null;
+  if (body.email && body.password) {
+    try {
+      account = await authenticate(body.email, body.password);
+    } catch (err) {
+      console.warn("[auth] no se pudo consultar la cuenta; entra como demostración:", err);
+    }
   }
-  clearLoginFailures(body.email);
 
-  const token = await createSessionToken(account.id, secret);
-  const res = ok<{ staff: StaffPublic }>({ staff: toStaffPublic(account) });
-  res.cookies.set(SESSION_COOKIE, token, sessionCookieOptions(req));
+  const staff: StaffPublic = account ? toStaffPublic(account) : { ...DEMO_STAFF };
+  const res = ok<{ staff: StaffPublic }>({ staff });
+  // La cookie solo evita volver a mostrar el login (src/proxy.ts). Sin secreto no se emite
+  // y el proxy deja pasar igual.
+  const secret = config.sessionSecret;
+  if (secret) res.cookies.set(SESSION_COOKIE, await createSessionToken(staff.id, secret), sessionCookieOptions(req));
   return res;
 });

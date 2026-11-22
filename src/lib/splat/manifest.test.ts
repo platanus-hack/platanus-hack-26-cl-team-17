@@ -32,7 +32,6 @@ const drone = media("m2", {
     frame("m2", 1, { lat: -33.4502, lng: -70.6602, alt_m: 46, heading_deg: 20 }),
   ],
 });
-const demo = media("m3", { label: "M3", source: "demo", frames: [frame("m3", 0)] });
 const svgPosters = media("m4", {
   label: "M4",
   source: "drone",
@@ -40,18 +39,17 @@ const svgPosters = media("m4", {
 });
 const videoUploading = media("m5", { label: "M5", video_path: videoPath, video_status: "uploading" });
 
-test("elegibilidad: excluye demo, pósters SVG y videos que no terminaron de subir", () => {
+test("elegibilidad: excluye cuadros que no son JPEG y videos que no terminaron de subir", () => {
   assert.equal(isReconstructionEligible(citizen), true);
   assert.equal(isReconstructionEligible(drone), true);
-  assert.equal(isReconstructionEligible(demo), false);
   assert.equal(isReconstructionEligible(svgPosters), false);
   assert.equal(isReconstructionEligible(videoUploading), false);
 });
 
 test("selección: todos los elegibles o solo los pedidos", () => {
-  const all = [citizen, drone, demo, svgPosters, videoUploading];
+  const all = [citizen, drone, svgPosters, videoUploading];
   assert.deepEqual(selectReconstructionMedia(all).map((m) => m.id), ["m1", "m2"]);
-  assert.deepEqual(selectReconstructionMedia(all, ["m2", "m3", "nope"]).map((m) => m.id), ["m2"]);
+  assert.deepEqual(selectReconstructionMedia(all, ["m2", "m4", "nope"]).map((m) => m.id), ["m2"]);
   assert.deepEqual(selectReconstructionMedia(all, []).map((m) => m.id), ["m1", "m2"]);
 });
 
@@ -59,7 +57,7 @@ test("manifiesto: video original preferido, cuadros ordenados y posición por cu
   const manifest = buildSplatManifest({
     incident: { id: INCIDENT_ID, lat: -33.45, lng: -70.66 },
     reconstructionId: REC_ID,
-    media: [citizen, drone, demo],
+    media: [citizen, drone],
     bucket: "mi-bucket",
     callbackUrl: callbackUrlFor("https://vigia.example/", INCIDENT_ID),
     iterations: 7000,
@@ -73,7 +71,7 @@ test("manifiesto: video original preferido, cuadros ordenados y posición por cu
   assert.equal(manifest.callback_url, `https://vigia.example/api/internal/reconstruction/${INCIDENT_ID}`);
   assert.equal(manifest.max_frames, LIMITS.SPLAT_MAX_FRAMES);
   assert.equal(manifest.sample_fps, LIMITS.SPLAT_SAMPLE_FPS);
-  assert.equal(manifest.media.length, 2, "el medio demo no entra");
+  assert.equal(manifest.media.length, 2);
 
   const [m1, m2] = manifest.media;
   assert.equal(m1.source, "citizen");
