@@ -19,6 +19,7 @@ import { cn } from "@/lib/cn";
 import type { FichaMap as FichaMapModel, LngLat, MapPin } from "../model";
 import { TONE_HEX } from "../tones";
 import { createMap, type MapHandle } from "./engine";
+import { enableOrbitDrag } from "./orbit-drag";
 import type { HouseLayer } from "./houses3d";
 import { MapHud } from "./hud";
 import { Halo, PinView } from "./pins";
@@ -282,6 +283,9 @@ export default function FichaMap(props: FichaMapProps) {
         h.map.on("error", (e) => console.warn("[ficha] mapa:", e?.error?.message ?? e));
         h.map.on("rotate", () => setBearing(h.map.getBearing()));
         h.map.on("click", () => onOpenCameraRef.current(null));
+        // Clic izquierdo y arrastrar gira la vista en vez de desplazarla.
+        const stopOrbit = enableOrbitDrag(h.map);
+        h.map.once("remove", stopOrbit);
         const ro = new ResizeObserver(() => h.map.resize());
         ro.observe(el);
         h.map.once("remove", () => ro.disconnect());

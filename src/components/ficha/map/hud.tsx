@@ -1,7 +1,7 @@
 "use client";
 /**
- * HUD técnico sobre el mapa 3D (el mismo lenguaje del esquema): retícula en el centro del
- * hueco entre paneles, cinta de rumbo arriba y caja de norte y escala abajo a la izquierda.
+ * HUD técnico sobre el mapa 3D (el mismo lenguaje del esquema): cinta de rumbo arriba y
+ * caja de norte y escala arriba a la derecha del hueco entre paneles.
  * Se actualiza con cada movimiento del mapa escribiendo el DOM directo, sin re-render.
  */
 import { useEffect, useRef } from "react";
@@ -56,27 +56,12 @@ export function MapHud({ map, padding }: { map: MlMap | null; padding: Padding }
     };
   }, [map]);
 
-  const reticle = 120;
-  const line = `calc(50% - ${reticle / 2 + 18}px)`;
   return (
     <div
       aria-hidden="true"
       className="@container pointer-events-none absolute z-[1]"
       style={{ top: padding.top, right: padding.right, bottom: padding.bottom, left: padding.left }}
     >
-      {/* Retícula: el centro del hueco es el centro de la vista */}
-      <div className="absolute top-1/2 left-0 h-px bg-f-ink/12" style={{ width: line }} />
-      <div className="absolute top-1/2 right-0 h-px bg-f-ink/12" style={{ width: line }} />
-      <div className="absolute top-0 left-1/2 w-px bg-f-ink/12" style={{ height: line }} />
-      <div className="absolute bottom-0 left-1/2 w-px bg-f-ink/12" style={{ height: line }} />
-      <div className="absolute top-1/2 left-1/2 -translate-1/2" style={{ width: reticle, height: reticle }}>
-        <span className="absolute top-0 left-0 size-4 border-t border-l border-f-ink/45" />
-        <span className="absolute top-0 right-0 size-4 border-t border-r border-f-ink/45" />
-        <span className="absolute bottom-0 left-0 size-4 border-b border-l border-f-ink/45" />
-        <span className="absolute right-0 bottom-0 size-4 border-r border-b border-f-ink/45" />
-        <span className="absolute inset-[30%] rounded-full border border-dashed border-f-ink/25" />
-      </div>
-
       {/* Cinta de rumbo (hacia dónde mira el mapa) */}
       <div className="absolute top-1 left-1/2 hidden -translate-x-1/2 flex-col items-center text-f-ink/70 @min-[30rem]:flex">
         <div className="relative h-6 w-[220px] overflow-hidden [mask-image:linear-gradient(90deg,transparent,#000_20%,#000_80%,transparent)]">
