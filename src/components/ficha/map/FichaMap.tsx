@@ -532,7 +532,15 @@ export default function FichaMap(props: FichaMapProps) {
 
   return (
     <div className="absolute inset-0 isolate">
-      <div ref={containerRef} className="absolute inset-0" aria-label="Mapa 3D del incidente" role="region" />
+      {/* Estilo en línea: maplibre-gl.css fija `position: relative` en .maplibregl-map y le gana a
+          `absolute inset-0` de Tailwind; el contenedor quedaba en 0 px de alto y el mapa en blanco. */}
+      <div
+        ref={containerRef}
+        className="absolute inset-0"
+        style={{ position: "absolute", inset: 0 }}
+        aria-label="Mapa 3D del incidente"
+        role="region"
+      />
       {failed && (
         <div className="absolute inset-0 grid place-items-center bg-f-wash text-[15px] text-f-muted">Mapa no disponible sin conexión</div>
       )}
