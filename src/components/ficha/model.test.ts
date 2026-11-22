@@ -1,7 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { SceneModel, SituationReport } from "@/lib/domain";
-import { buildCards, buildMap, shortPlace, sourceChip } from "./model";
+import type { LiveInsightView } from "@/lib/contract";
+import { buildCards, buildDroneCards, buildMap, shortPlace, sourceChip, withDroneCards, type CriticalCard } from "./model";
 
 const trapped = (status: SituationReport["trapped"]["status"], min = 1, max = 2): SituationReport["trapped"] => ({
   status,
@@ -75,4 +76,65 @@ test("mapa: vehículo con atrapamiento resaltado, zona de peligro y persona en r
   assert.equal(m.halo?.tone, "red");
   const arriving = buildMap({ lat: -33.51, lng: -70.588, origin: "demo" }, scene, null, [], { arriving: true });
   assert.ok(!arriving.pins.some((x) => x.kind === "person"), "llegando: sin hallazgos en el mapa");
+});
+
+const NOW = Date.parse("2026-11-22T12:00:00Z");
+const ins = (id: string, secAgo: number, severity: LiveInsightView["severity"], summary: string, extra: Partial<LiveInsightView> = {}): LiveInsightView => ({
+  id,
+  at: new Date(NOW - secAgo * 1000).toISOString(),
+  summary,
+  severity,
+  changed: true,
+  observations: [],
+  engine: "claude",
+  frames: 4,
+  ...extra,
+});
+const card = (id: string, tone: CriticalCard["tone"] = "amber"): CriticalCard => ({
+  id,
+  tone,
+  icon: "hazard",
+  title: id,
+  location: null,
+  confidence: null,
+  sources: [],
+  unseen: null,
+  focus: null,
+});
+
+test("dron en «Lo crítico»: la crítica y la advertencia más recientes, sin lo informativo ni lo viejo", () => {
+  const cards = buildDroneCards(
+    [
+      ins("a", 20, "critical", "Persona en la ventana del 2º piso", { observations: ["Lado Bravo, agita los brazos"] }),
+      ins("b", 50, "critical", "Persona en el techo"),
+      ins("c", 10, "warning", "Humo negro saliendo por el techo"),
+      ins("d", 5, "info", "Sin cambios"),
+      ins("e", 600, "critical", "Llamas en la cocina"),
+      ins("f", 2, "warning", "Fallo", { engine: "error" }),
+    ],
+    "D1",
+    NOW,
+    null,
+  );
+  assert.deepEqual(
+    cards.map((c) => [c.id, c.tone, c.icon, c.title, c.location]),
+    [
+      ["D:a", "red", "person", "Persona en la ventana del 2º piso", "Lado Bravo, agita los brazos"],
+      ["D:c", "amber", "fire", "Humo negro saliendo por el techo", null],
+    ],
+  );
+  assert.deepEqual(cards[0].sources, ["Dron D1"]);
+});
+
+test("dron en «Lo crítico»: una advertencia más vieja que la crítica no se repite", () => {
+  const cards = buildDroneCards([ins("a", 10, "critical", "Persona"), ins("b", 30, "warning", "Humo")], "D1", NOW, null);
+  assert.deepEqual(cards.map((c) => c.id), ["D:a"]);
+});
+
+test("dron en «Lo crítico»: lo crítico del dron va después de atrapados y no se recorta", () => {
+  const base = [card("trapped", "red"), card("fire", "orange"), card("I:x")];
+  const merged = withDroneCards(base, [card("D:a", "red"), card("D:c")]);
+  assert.deepEqual(merged.map((c) => c.id), ["trapped", "D:a", "fire", "D:c"]);
+  assert.deepEqual(withDroneCards(base, []).map((c) => c.id), ["trapped", "fire", "I:x"]);
+  assert.deepEqual(withDroneCards([card("I:x")], [card("D:a", "red")]).map((c) => c.id), ["D:a", "I:x"]);
 });

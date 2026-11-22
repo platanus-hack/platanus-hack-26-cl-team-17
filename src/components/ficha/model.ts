@@ -19,7 +19,7 @@ import type {
   SituationReport,
   TimelineEvent,
 } from "@/lib/domain";
-import type { IncidentSnapshot, MediaView } from "@/lib/contract";
+import type { IncidentSnapshot, LiveInsightView, MediaView } from "@/lib/contract";
 import type { VigiaUtterance } from "@/lib/vigia/types";
 import { destination, toLatLng, type LatLng, type LocalXY } from "@/lib/geo";
 import { houseClearance, houseOutline, houseParts, houseSpec, roofHeightOf, vehicleParts, type HouseSpec, type Part } from "./house";
@@ -440,6 +440,79 @@ export function buildCards(
     focus: focusFor(ins.title, scene),
   }));
   return { cards: cards.slice(0, 3), findings };
+}
+
+/* ───────────────────────── Lo crítico: dron en vivo ───────────────────────── */
+
+/** Una observación del dron cuenta para «Lo crítico» mientras es de los últimos 5 minutos. */
+export const DRONE_CARD_MAX_AGE_MS = 5 * 60_000;
+/** Como mucho dos tarjetas del dron, para no tapar lo que viene de la radio y los videos. */
+const DRONE_CARDS_MAX = 2;
+
+function droneIcon(text: string): CardIcon {
+  const t = text.toLowerCase();
+  if (/persona|atrapad|ocupante|v[ií]ctima|herid|lesionad/.test(t)) return "person";
+  if (/fuego|llama|humo|incendi|foco/.test(t)) return "fire";
+  if (/auto|veh[ií]culo|cami[oó]n|moto/.test(t)) return "vehicle";
+  return "hazard";
+}
+
+function clipTitle(text: string, max = 90): string {
+  const t = text.trim().replace(/\s+/g, " ");
+  return t.length <= max ? t : `${t.slice(0, max - 1).trimEnd()}…`;
+}
+
+/**
+ * Tarjetas de «Lo crítico» con lo importante que vio el dron: la observación crítica más
+ * reciente y la de advertencia más reciente (si no repite la crítica), de los últimos minutos.
+ * Lo informativo se queda en el video y en el historial de Vigía.
+ */
+export function buildDroneCards(
+  insights: readonly LiveInsightView[],
+  droneLabel: string,
+  nowMs: number,
+  scene: SceneModel | null,
+): CriticalCard[] {
+  const recent = insights
+    .filter((i) => i.engine !== "error" && i.summary.trim() !== "")
+    .filter((i) => i.severity === "critical" || i.severity === "warning")
+    .filter((i) => nowMs - Date.parse(i.at) <= DRONE_CARD_MAX_AGE_MS)
+    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+  const picked: LiveInsightView[] = [];
+  const critical = recent.find((i) => i.severity === "critical");
+  if (critical) picked.push(critical);
+  const warning = recent.find((i) => i.severity === "warning");
+  if (warning && (!critical || Date.parse(warning.at) > Date.parse(critical.at))) picked.push(warning);
+  return picked.slice(0, DRONE_CARDS_MAX).map((i) => ({
+    id: `D:${i.id}`,
+    tone: i.severity === "critical" ? "red" : "amber",
+    icon: droneIcon(i.summary),
+    title: clipTitle(i.summary),
+    location: i.observations[0] ? clipTitle(i.observations[0], 80) : null,
+    confidence: null,
+    sources: [`Dron ${droneLabel}`, ...(i.engine === "simulated" ? ["simulado"] : [])],
+    unseen: null,
+    focus: focusFor(`${i.summary} ${i.observations.join(" ")}`, scene),
+  }));
+}
+
+/**
+ * Suma las tarjetas del dron a «Lo crítico»: las críticas van después de la de atrapados (que
+ * siempre va primero), las de advertencia al final. Hasta 4 tarjetas en total.
+ */
+export function withDroneCards(cards: readonly CriticalCard[], drone: readonly CriticalCard[]): CriticalCard[] {
+  if (drone.length === 0) return [...cards];
+  const red = drone.filter((c) => c.tone === "red");
+  const rest = drone.filter((c) => c.tone !== "red");
+  const head = cards[0]?.id === "trapped" ? [cards[0]] : [];
+  const tail = cards.slice(head.length);
+  const merged = [...head, ...red, ...tail, ...rest];
+  // Lo que viene del dron no se corta: se recortan primero las tarjetas de más abajo de la radio/videos.
+  const max = 4;
+  if (merged.length <= max) return merged;
+  const keepOthers = max - drone.length;
+  const others = [...head, ...tail].slice(0, Math.max(keepOthers, 0));
+  return [...others.slice(0, head.length), ...red, ...others.slice(head.length), ...rest].slice(0, max);
 }
 
 /* ───────────────────────────── Mapa ───────────────────────────── */

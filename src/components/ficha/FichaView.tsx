@@ -21,12 +21,12 @@ import { MediaViewer } from "@/components/mando/incident/MediaViewer";
 import { findMediaByLabel, type MediaViewerTarget } from "@/components/mando/incident/types";
 import { Scene3D, type SceneSelection } from "@/components/scene3d";
 import { Live3DStage, useLive3dEnabled } from "@/components/drone/Live3D";
-import { LiveVideo } from "@/components/drone/LiveFeed";
+import { LiveVideo, useLiveInsights } from "@/components/drone/LiveFeed";
 import { useSimulatedMissionTicker } from "@/components/drone/use-mission-ticker";
 import { pickLiveMission } from "@/lib/drone/plan";
 import { useToast } from "@/components/ui/Toast";
 import { VigiaDock, useVigia } from "@/components/vigia";
-import { agentMessages, buildFicha, type ChatMessage, type LngLat } from "./model";
+import { agentMessages, buildDroneCards, buildFicha, withDroneCards, type ChatMessage, type LngLat } from "./model";
 import { placeUnitsOnRoute, useStreetRoute } from "./street-route";
 import { FichaHealth } from "./health";
 import { CriticalPanel, GLASS, MediaGridPanel, TopBar, VigiaPanel, useNow } from "./parts";
@@ -125,6 +125,17 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
   const [floatHidden, setFloatHidden] = useState(false);
 
   const ficha = useMemo(() => (snapshot ? buildFicha(snapshot, { forceArriving: demoState === "llegando" }) : null), [snapshot, demoState]);
+  // Lo importante que ve el dron en vivo (crítico o advertencia, reciente) entra a «Lo crítico».
+  const liveInsights = useLiveInsights(liveMissionId ?? "", liveMissionId !== null);
+  const droneCards = useMemo(() => {
+    if (!snapshot || !liveMissionId || !liveInsights || now === null) return [];
+    const label = snapshot.missions.find((m) => m.id === liveMissionId)?.label ?? "";
+    return buildDroneCards(liveInsights.insights, label, now, snapshot.incident.scene ?? null);
+  }, [snapshot, liveMissionId, liveInsights, now]);
+  const criticalCards = useMemo(
+    () => (ficha ? (ficha.arriving ? droneCards : withDroneCards(ficha.cards, droneCards)) : []),
+    [ficha, droneCards],
+  );
   // Historial del agente; sin mensajes del agente todavía, el resumen de radio y el informe.
   const agentChat = useMemo(
     () => agentMessages(agent.view?.utterances ?? [], snapshot?.incident.scene ?? null),
@@ -320,7 +331,7 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
       </div>
 
       <CriticalPanel
-        cards={ficha.cards}
+        cards={criticalCards}
         findings={ficha.findings}
         arriving={ficha.arriving}
         focus={focus}

@@ -30,6 +30,9 @@ const FRAME_RETRY_MS = 2000;
 const INSIGHTS_POLL_MS = 3000;
 /** Sin cuadro nuevo por más que esto, el video se marca como detenido. */
 const STALE_MS = 4000;
+/** La observación nueva de la IA se ve unos segundos en pantalla completa, en una franja bajo el cuadro. */
+const CAPTION_MS = 8000;
+const CAPTION_H = 64;
 /** Detecciones YOLO del video en vivo: consulta frecuente con detector; muy espaciada sin él. */
 const DETECTIONS_POLL_MS = 150;
 const DETECTIONS_IDLE_MS = 10_000;
@@ -124,7 +127,8 @@ function useLiveFrame(missionId: string, enabled: boolean): FeedState {
   return feed;
 }
 
-function useLiveInsights(missionId: string, enabled: boolean): LiveInsightsResponse | null {
+/** Observaciones de la IA sobre el video en vivo del dron (cada ~15 s); null hasta la primera respuesta. */
+export function useLiveInsights(missionId: string, enabled: boolean): LiveInsightsResponse | null {
   const [data, setData] = useState<LiveInsightsResponse | null>(null);
   useEffect(() => {
     if (!enabled) return;
@@ -300,7 +304,7 @@ interface LiveVideoViewProps {
   label: string;
   /** Miniatura (ventana flotante): rótulos chicos, sin conteo del detector ni pantalla completa. */
   compact?: boolean;
-  /** Texto abajo en pantalla completa (la última observación de la IA). */
+  /** Texto bajo el cuadro en pantalla completa, unos segundos cuando cambia (la última observación de la IA). */
   caption?: string | null;
   className?: string;
 }
@@ -310,6 +314,10 @@ function LiveVideoView({ feed, detections, label, compact = false, caption = nul
   const now = useNow(1000);
   const boxRef = useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
+  // Cuándo apareció la observación actual (hora del navegador): se muestra CAPTION_MS y se va.
+  const [captionSeen, setCaptionSeen] = useState<{ text: string; at: number } | null>(null);
+  if (caption && now !== null && captionSeen?.text !== caption) setCaptionSeen({ text: caption, at: now });
+  const captionOn = fullscreen && !!caption && captionSeen?.text === caption && now !== null && now - captionSeen.at < CAPTION_MS;
 
   useEffect(() => {
     const onChange = () => setFullscreen(document.fullscreenElement === boxRef.current);
@@ -333,12 +341,18 @@ function LiveVideoView({ feed, detections, label, compact = false, caption = nul
   return (
     <div ref={boxRef} className={cn("relative overflow-hidden bg-black", className)}>
       {feed.kind === "frame" ? (
-        // eslint-disable-next-line @next/next/no-img-element -- cuadro local (blob:) que cambia varias veces por segundo
-        <img
-          src={feed.url}
-          alt={`Video en vivo del dron ${label}`}
-          className={cn("size-full object-contain", stale && "opacity-60 grayscale")}
-        />
+        // Con la observación a la vista, el cuadro se achica para que el texto no lo tape.
+        <div className="absolute inset-x-0 top-0" style={{ bottom: captionOn ? CAPTION_H : 0 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element -- cuadro local (blob:) que cambia varias veces por segundo */}
+          <img
+            src={feed.url}
+            alt={`Video en vivo del dron ${label}`}
+            className={cn("size-full object-contain", stale && "opacity-60 grayscale")}
+          />
+          {shownDetection && (
+            <DetectionOverlay width={shownDetection.result.width} height={shownDetection.result.height} detections={boxes} />
+          )}
+        </div>
       ) : (
         <div
           className={cn(
@@ -358,10 +372,6 @@ function LiveVideoView({ feed, detections, label, compact = false, caption = nul
             </>
           )}
         </div>
-      )}
-
-      {shownDetection && (
-        <DetectionOverlay width={shownDetection.result.width} height={shownDetection.result.height} detections={boxes} />
       )}
 
       <div
@@ -408,8 +418,11 @@ function LiveVideoView({ feed, detections, label, compact = false, caption = nul
         </div>
       )}
 
-      {fullscreen && caption && (
-        <p className="absolute inset-x-0 bottom-0 bg-black/70 px-4 py-3 pr-14 font-display text-lg leading-snug font-semibold text-white">
+      {captionOn && (
+        <p
+          className="absolute inset-x-0 bottom-0 line-clamp-2 bg-black px-4 py-2 pr-14 font-display text-lg leading-snug font-semibold text-white"
+          style={{ height: CAPTION_H }}
+        >
           {caption}
         </p>
       )}

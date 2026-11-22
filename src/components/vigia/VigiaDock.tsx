@@ -40,6 +40,18 @@ const FRESH_ON_OPEN_MS = 90_000;
 const SHOW_MS: Record<string, number> = { propuesta: 30_000, default: 15_000 };
 /** El círculo late este tiempo después de un mensaje hablado. */
 const SPEAKING_MS = 8_000;
+/** Lo que Vigía comenta del video del dron: una línea, unos segundos (el detalle queda en su historial). */
+const BRIEF_MS = 6_000;
+
+/**
+ * Mensaje sobre lo que ve el dron (cita su evidencia D1, D2… o lo nombra). Va en una sola línea
+ * y dura poco: así no tapa el video, y lo importante ya queda en «Lo crítico». Una respuesta al
+ * OBAC o una propuesta con claves se muestran completas.
+ */
+export function isBriefDroneMessage(u: Pick<VigiaUtterance, "evidence" | "text" | "kind">): boolean {
+  if (u.kind === "respuesta" || u.kind === "propuesta") return false;
+  return u.evidence.some((ref) => /^D\d+$/i.test(ref.trim())) || /\bdron(es)?\b/i.test(u.text);
+}
 
 function rank(u: VigiaUtterance): number {
   if (u.priority === "persona") return 0;
@@ -85,7 +97,9 @@ export function VigiaDock({ incidentId, className, style }: VigiaDockProps) {
   useEffect(() => {
     if (!current || current.priority === "persona") return;
     // El detalle de la mesa puede ser largo: ~0,4 s por palabra, con el mínimo del tipo.
-    const ms = Math.max(SHOW_MS[current.kind] ?? SHOW_MS.default, current.text.split(/\s+/).length * 400);
+    const ms = isBriefDroneMessage(current)
+      ? BRIEF_MS
+      : Math.max(SHOW_MS[current.kind] ?? SHOW_MS.default, current.text.split(/\s+/).length * 400);
     const t = setTimeout(() => dismiss(current.seq), ms);
     return () => clearTimeout(t);
   }, [current, dismiss]);
@@ -97,7 +111,9 @@ export function VigiaDock({ incidentId, className, style }: VigiaDockProps) {
   return (
     <div className={cn("pointer-events-none flex items-end gap-3", className)} style={style}>
       <div className="min-w-0 flex-1">
-        {current ? (
+        {current && isBriefDroneMessage(current) ? (
+          <BriefCard key={current.seq} u={current} more={queue.length - 1} onClose={() => dismiss(current.seq)} />
+        ) : current ? (
           <MessageCard
             key={current.seq}
             u={current}
@@ -240,6 +256,28 @@ function MessageCard({
           {u.rules.includes("ausencia") ? <span title="Regla dura aplicada">· «no hay» cambiado por «no veo»</span> : null}
         </div>
       ) : null}
+    </article>
+  );
+}
+
+/** Una línea: lo que Vigía comenta del dron, sin tapar el video (el texto completo, al pasar el mouse y en su historial). */
+function BriefCard({ u, more, onClose }: { u: VigiaUtterance; more: number; onClose: () => void }) {
+  const person = u.priority === "persona";
+  return (
+    <article
+      role={person ? "alert" : "status"}
+      aria-label={`Vigía sobre el dron: ${u.text}`}
+      title={u.text}
+      className={cn(
+        "pointer-events-auto flex max-w-[720px] animate-enter items-center gap-2 rounded-full border bg-surface/97 py-1 pr-1 pl-3 text-[15px] shadow-[0_8px_24px_rgb(0_0_0/0.16)] backdrop-blur",
+        person ? "border-critical" : "border-line-strong",
+      )}
+    >
+      <span aria-hidden className={cn("size-2.5 shrink-0 rounded-full bg-f-orange", u.speak && "animate-pulse")} />
+      <span className={cn("shrink-0 font-bold", person ? "text-critical" : "text-text")}>{person ? "Posible persona" : "Vigía · dron"}</span>
+      <span className="min-w-0 flex-1 truncate font-medium text-text">{u.text}</span>
+      {more > 0 ? <span className="shrink-0 text-xs font-semibold text-muted">+{more}</span> : null}
+      <IconButton icon={X} label="Cerrar mensaje" size="sm" onClick={onClose} />
     </article>
   );
 }
