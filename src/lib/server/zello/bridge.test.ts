@@ -67,7 +67,7 @@ class FakeRadio implements RadioPort {
   }
 }
 
-function setup(opts: { voice?: boolean; obac?: string; pinned?: string | null } = {}) {
+function setup(opts: { voice?: boolean; obac?: string; pinned?: string | null; waitMs?: number } = {}) {
   let now = Date.parse("2026-11-21T18:00:10.000Z");
   const vigia = new FakeVigia();
   const radio = new FakeRadio();
@@ -90,7 +90,7 @@ function setup(opts: { voice?: boolean; obac?: string; pinned?: string | null } 
           },
     log: (m) => logs.push(m),
     now: () => now,
-    transcriptionWaitMs: { unseen: 5, seen: 50 },
+    transcriptionWaitMs: opts.waitMs === undefined ? { unseen: 5, seen: 50 } : { unseen: opts.waitMs, seen: opts.waitMs },
     floorWaitMs: 0,
   });
   return { bridge, vigia, radio, spoken, logs, advance: (ms: number) => (now += ms) };
@@ -122,12 +122,76 @@ test("con --incident solo va a esa emergencia (por id o por código)", async () 
   );
 });
 
-test("usa on_transcription de Zello si llega, y si no, la transcripción propia", async () => {
-  const { bridge, vigia } = setup();
-  const job = bridge.onStream(stream("B-5", 20, 42));
-  bridge.onTranscription({ streamId: 42, text: "B-5 llegando", sender: "B-5", confidence: 0.9, truncated: false });
+type Transcribe = (ogg: Uint8Array) => Promise<string | null>;
+const setTranscribe = (bridge: ZelloBridge, fn: Transcribe) => ((bridge as unknown as { d: { transcribe: Transcribe } }).d.transcribe = fn);
+const zelloSaid = (streamId: number, text: string) => ({ streamId, text, sender: "x", confidence: 0.9, truncated: false });
+
+test("vale la primera transcripción con texto: la propia parte al soltar el PTT y no espera la de Zello", async () => {
+  // La de Zello llega mientras la propia sigue en curso: se usa la de Zello.
+  const a = setup();
+  setTranscribe(a.bridge, () => new Promise(() => undefined));
+  const job = a.bridge.onStream(stream("B-5", 20, 42));
+  a.bridge.onTranscription(zelloSaid(42, "B-5 llegando"));
   await job;
-  assert.equal(vigia.comms[0].comm.text, "B-5 llegando");
+  assert.equal(a.vigia.comms[0].comm.text, "B-5 llegando");
+
+  // La de Zello ya estaba al terminar la transmisión: se usa y no se transcribe.
+  const b = setup();
+  let calls = 0;
+  setTranscribe(b.bridge, async () => (calls++, "propia"));
+  b.bridge.onTranscription(zelloSaid(7, "Q-8 en el lugar"));
+  await b.bridge.onStream(stream("Q-8", 20, 7));
+  assert.equal(b.vigia.comms[0].comm.text, "Q-8 en el lugar");
+  assert.equal(calls, 0);
+
+  // La propia llega primero: se registra sin esperar la ventana de Zello (aquí, un minuto).
+  const c = setup({ waitMs: 60_000 });
+  await c.bridge.onStream(stream("B-3", 20, 9));
+  assert.equal(c.vigia.comms[0].comm.text, "B-3 en 6-3, fuego en segundo piso");
+  assert.match(c.logs.join("\n"), /texto en 0\.0 s/);
+
+  // La propia falla: vale la de Zello si llega dentro de la espera.
+  const d = setup({ waitMs: 60_000 });
+  setTranscribe(d.bridge, async () => null);
+  const late = d.bridge.onStream(stream("B-12", 20, 11));
+  await new Promise((r) => setTimeout(r, 5));
+  d.bridge.onTranscription(zelloSaid(11, "B-12 en ruta"));
+  await late;
+  assert.equal(d.vigia.comms[0].comm.text, "B-12 en ruta");
+});
+
+test("varias transmisiones se transcriben a la vez y se registran en el orden en que se dijeron", async () => {
+  const { bridge, vigia } = setup();
+  const pending: ((text: string) => void)[] = [];
+  setTranscribe(bridge, () => new Promise((resolve) => pending.push(resolve)));
+  const first = bridge.onStream(stream("B-3", 20, 1));
+  const second = bridge.onStream(stream("B-5", 20, 2));
+  assert.equal(pending.length, 2); // la segunda no espera a que se registre la primera
+  pending[1]("B-5 llegando");
+  pending[0]("B-3 en el lugar");
+  await Promise.all([first, second]);
+  assert.deepEqual(
+    vigia.comms.map((c) => c.comm.text),
+    ["B-3 en el lugar", "B-5 llegando"],
+  );
+  // La grabación subió mientras se transcribía: una sola subida por transmisión.
+  assert.deepEqual(vigia.uploads, ["inc-2", "inc-2"]);
+  assert.ok(vigia.comms.every((c) => c.comm.audio_path));
+});
+
+test("si la subida anticipada del audio falla, se vuelve a subir al registrar", async () => {
+  const { bridge, vigia } = setup();
+  const upload = vigia.uploadAudio.bind(vigia);
+  let failed = false;
+  vigia.uploadAudio = async (id, ogg) => {
+    if (!failed) {
+      failed = true;
+      throw new Error("503");
+    }
+    return upload(id, ogg);
+  };
+  await bridge.onStream(stream("B-3", 20));
+  assert.equal(vigia.comms[0].comm.audio_path, "incidents/inc-2/comms/a.ogg");
 });
 
 test("toques cortos del PTT no se registran; sin texto queda «sin transcribir» con la grabación", async () => {

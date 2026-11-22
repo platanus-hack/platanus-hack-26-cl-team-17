@@ -16,6 +16,7 @@ import { isCommAudioPathOf, recordComm } from "@/lib/server/comms";
 import { isVigiaVoiceComm } from "@/lib/server/zello/channels";
 import { INCIDENT_NOT_FOUND } from "@/lib/server/snapshot";
 import { getFiles, getStore } from "@/lib/store";
+import { wakeVigia } from "@/lib/vigia/supervisor";
 
 export const runtime = "nodejs";
 // El análisis de comunicaciones corre en after().
@@ -46,6 +47,10 @@ export const POST = route<{ id: string }>(async (req, ctx) => {
     audio_path: audioPath,
   });
   // Lo que dijo Vigía por Zello queda anotado, pero no es tráfico de las compañías: no se analiza.
-  if (!isVigiaVoiceComm(entry)) after(() => requestCommsAnalysis(id));
+  if (!isVigiaVoiceComm(entry)) {
+    // Vigía mira la radio nueva ahora, sin esperar la próxima vuelta del reloj (hasta 2 s).
+    wakeVigia(id);
+    after(() => requestCommsAnalysis(id));
+  }
   return ok<{ entry: CommEntry }>({ entry }, { status: 201 });
 });

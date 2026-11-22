@@ -3,9 +3,10 @@
  * Zello, API de Vigía, transcripción, voz, reglas) y las conecta. Probado en
  * bridge.test.ts; el proceso real lo arma tools/zello-bridge/main.mts.
  *
- * Entrada: cada transmisión del canal → Ogg Opus → texto (on_transcription si
- * llega, si no ElevenLabs) → bitácora de TODAS las emergencias abiertas, con
- * speaker = usuario de Zello, channel = canal y source "zello".
+ * Entrada: cada transmisión del canal → Ogg Opus → texto (ElevenLabs desde que se
+ * suelta el PTT, o on_transcription si llega antes) → bitácora de la emergencia que
+ * atiende Vigía, con speaker = usuario de Zello, channel = canal y source "zello".
+ * La grabación sube mientras se transcribe.
  *
  * Salida: los mensajes del agente con speak = true (GET …/vigia/salida) se dicen
  * en el canal. Reglas duras, como última barrera antes del audio:
@@ -67,7 +68,19 @@ const SPEECH_TTL_MS = 45_000;
 /** Al empezar a leer la salida de una emergencia, solo se dice lo de los últimos segundos. */
 const FRESH_MS = 30_000;
 const INCIDENTS_TTL_MS = 10_000;
+/** Una transcripción de Zello que nadie usó se olvida pasado este tiempo. */
+const STALE_TRANSCRIPT_MS = 60_000;
 const PRIORITY_ORDER: SpeechPriority[] = ["persona", "riesgo", "recursos", "resto"];
+
+/** Una transmisión ya oída: su texto y, si es de voz, la grabación (subiéndose o ya subida). */
+interface Heard {
+  text: string;
+  from: string;
+  at: string;
+  ogg: Uint8Array | null;
+  /** Rutas de la grabación por emergencia (id → audio_path); lo que falte se sube al registrar. */
+  uploaded?: Promise<Map<string, string>>;
+}
 
 interface QueuedSpeech {
   text: string;
@@ -98,7 +111,7 @@ export class ZelloBridge {
   private readonly floorWaitMs: number;
   private transcriptionsSeen = false;
   private readonly transcripts = new Map<number, { text: string; at: number }>();
-  private readonly waiters = new Map<number, (text: string) => void>();
+  private readonly waiters = new Map<number, (text: string | null) => void>();
   private incidentsCache: { at: number; list: OpenIncident[] } | null = null;
   private readonly cursors = new Map<string, number>();
   /** null = no se sabe; true = el servidor no tiene la salida del agente (se usa /ask). */
@@ -128,16 +141,14 @@ export class ZelloBridge {
     if (t.truncated) return; // la parcial (al minuto) la reemplaza la final
     this.transcriptionsSeen = true;
     const waiter = this.waiters.get(t.streamId);
-    if (waiter) waiter(t.text);
-    else this.transcripts.set(t.streamId, { text: t.text, at: this.now() });
+    if (waiter) return waiter(t.text);
+    const now = this.now();
+    // Las que llegan tarde (ya se usó la transcripción propia) no se acumulan.
+    for (const [id, old] of this.transcripts) if (now - old.at > STALE_TRANSCRIPT_MS) this.transcripts.delete(id);
+    this.transcripts.set(t.streamId, { text: t.text, at: now });
   }
 
   private waitTranscription(streamId: number): Promise<string | null> {
-    const ready = this.transcripts.get(streamId);
-    if (ready) {
-      this.transcripts.delete(streamId);
-      return Promise.resolve(ready.text);
-    }
     const ms = this.transcriptionsSeen ? this.wait.seen : this.wait.unseen;
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
@@ -152,9 +163,65 @@ export class ZelloBridge {
     });
   }
 
-  /** Una transmisión terminó. Devuelve la promesa de su registro (para pruebas). */
+  /**
+   * Texto de una transmisión. La transcripción propia parte al soltar el PTT, sin esperar la
+   * de Zello (que casi nunca llega): vale la primera que traiga texto. Si la de Zello ya
+   * estaba, se usa esa y no se transcribe.
+   */
+  private async transcribeStream(streamId: number, ogg: Uint8Array): Promise<{ text: string | null; zello: boolean }> {
+    const ready = this.transcripts.get(streamId);
+    if (ready) {
+      this.transcripts.delete(streamId);
+      return { text: ready.text, zello: true };
+    }
+    const own = this.d.transcribe(ogg);
+    const zello = this.waitTranscription(streamId);
+    const first = await Promise.race([
+      own.then((text) => ({ text, zello: false })),
+      zello.then((text) => ({ text, zello: true })),
+    ]);
+    if (first.text) {
+      if (!first.zello) this.waiters.get(streamId)?.(null); // ya hay texto: no se sigue esperando a Zello
+      return first;
+    }
+    // La primera llegó vacía (falló o venció la espera): vale la otra.
+    return first.zello ? { text: await own, zello: false } : { text: await zello, zello: true };
+  }
+
+  /** Sube la grabación a las emergencias que la van a recibir, mientras se transcribe. Nunca lanza. */
+  private async uploadEarly(ogg: Uint8Array): Promise<Map<string, string>> {
+    const paths = new Map<string, string>();
+    try {
+      const targets = await this.openIncidents();
+      await Promise.all(
+        targets.map(async (inc) => {
+          try {
+            paths.set(inc.id, await this.d.vigia.uploadAudio(inc.id, ogg));
+          } catch {
+            // se vuelve a intentar al registrar
+          }
+        }),
+      );
+    } catch {
+      // sin lista de emergencias: se sube al registrar
+    }
+    return paths;
+  }
+
+  /**
+   * Una transmisión terminó. La transcripción y la subida del audio parten de inmediato
+   * (varias transmisiones a la vez); el registro en la bitácora sigue en el orden en que
+   * se dijeron. Devuelve la promesa de su registro (para pruebas).
+   */
   onStream(stream: IncomingStream): Promise<void> {
-    const job = this.chain.then(() => this.handleStream(stream)).catch((err) => this.d.log(`no se pudo registrar la transmisión de ${stream.from}: ${String(err)}`));
+    const heard = this.hearStream(stream);
+    heard.catch(() => undefined); // el error se informa en la cadena
+    const job = this.chain
+      .then(async () => {
+        const t = await heard;
+        if (t) await this.record(t);
+      })
+      .catch((err) => this.d.log(`no se pudo registrar la transmisión de ${stream.from}: ${String(err)}`));
     this.chain = job;
     return job;
   }
@@ -167,30 +234,35 @@ export class ZelloBridge {
     return job;
   }
 
-  private async handleStream(s: IncomingStream): Promise<void> {
+  /** Transcribe una transmisión y sube su grabación, las dos cosas a la vez. null = toque del PTT. */
+  private async hearStream(s: IncomingStream): Promise<Heard | null> {
+    const endedAt = this.now();
     const fallbackSamples = s.codec.frameSizeMs * 48 * s.codec.framesPerPacket;
     const seconds = opusDurationSeconds(s.packets, fallbackSamples);
     if (s.packets.length === 0 || seconds < MIN_TRANSMISSION_S) {
       this.d.log(`transmisión de ${s.from} de ${seconds.toFixed(1)} s: se ignora (toque del PTT)`);
-      return;
+      return null;
     }
     const ogg = buildOggOpus(s.packets, { sampleRate: s.codec.sampleRate, fallbackSamples });
-    const zelloText = await this.waitTranscription(s.streamId);
-    const text = zelloText ?? (await this.d.transcribe(ogg));
-    this.d.log(`${s.from} (${seconds.toFixed(1)} s): ${text ?? "[sin transcribir]"}${zelloText ? " · transcripción de Zello" : ""}`);
-    await this.record({ text: text ?? "", from: s.from, at: s.startedAt.toISOString(), ogg });
+    const uploaded = this.uploadEarly(ogg);
+    const { text, zello } = await this.transcribeStream(s.streamId, ogg);
+    // El tiempo desde que soltó el PTT queda en el registro: es lo que se mide al afinar la latencia.
+    const took = ((this.now() - endedAt) / 1000).toFixed(1);
+    this.d.log(`${s.from} (${seconds.toFixed(1)} s): ${text ?? "[sin transcribir]"} · texto en ${took} s${zello ? " · transcripción de Zello" : ""}`);
+    return { text: text ?? "", from: s.from, at: s.startedAt.toISOString(), ogg, uploaded };
   }
 
-  private async record(t: { text: string; from: string; at: string; ogg: Uint8Array | null }): Promise<void> {
+  private async record(t: Heard): Promise<void> {
     const targets = await this.openIncidents();
     this.lastTransmission = { at: t.at, from: t.from, text: clip(t.text || UNTRANSCRIBED_COMM_TEXT, 300) };
     if (targets.length === 0) {
       this.d.log(`no hay emergencias abiertas: la transmisión de ${t.from} no se registra`);
       return;
     }
+    const uploaded = t.uploaded ? await t.uploaded : null;
     for (const inc of targets) {
       try {
-        const audio_path = t.ogg ? await this.d.vigia.uploadAudio(inc.id, t.ogg) : undefined;
+        const audio_path = t.ogg ? (uploaded?.get(inc.id) ?? (await this.d.vigia.uploadAudio(inc.id, t.ogg))) : undefined;
         await this.d.vigia.addComm(inc.id, {
           text: clip((t.text || UNTRANSCRIBED_COMM_TEXT).trim(), 2000),
           speaker: clip(t.from, 60),

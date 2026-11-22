@@ -27,7 +27,8 @@ import { listServerErrors, recordServerError } from "@/lib/server/diagnostics";
 import { transcribeAudio } from "@/lib/server/transcribe";
 import { sanitizeForObac, speechAllowed } from "@/lib/vigia/rules";
 
-const POLL_MS = 1_500;
+/** Cada cuánto se lee la salida del agente: es espera pura antes de que Vigía hable. */
+const POLL_MS = 500;
 const SPEAK_TICK_MS = 500;
 const HEARTBEAT_MS = 10_000;
 
@@ -157,7 +158,11 @@ function main(): number | void {
   const pollTimer = setInterval(() => {
     if (polling || !bridge) return;
     polling = true;
-    void bridge.pollSalida().finally(() => (polling = false));
+    // Lo que llegó se dice ya, sin esperar el reloj de la voz.
+    void bridge
+      .pollSalida()
+      .then(() => bridge?.speakNext())
+      .finally(() => (polling = false));
   }, POLL_MS);
   const speakTimer = setInterval(() => void bridge?.speakNext(), SPEAK_TICK_MS);
   const beatTimer = setInterval(() => void heartbeat(), HEARTBEAT_MS);
