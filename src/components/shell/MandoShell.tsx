@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/brand/Logo";
 import { LiveClock } from "@/components/ui/time";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import type { RuntimeMode, StaffPublic } from "@/lib/contract";
 import { staffRoleLabel } from "@/lib/labels";
 import { cn } from "@/lib/cn";
@@ -154,6 +155,8 @@ export function MandoShell({
         <div className="hidden shrink-0 text-sm text-muted lg:block">
           <LiveClock />
         </div>
+
+        <ThemeToggle />
 
         {mode ? (
           <div className="shrink-0">

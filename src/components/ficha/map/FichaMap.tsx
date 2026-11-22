@@ -589,7 +589,7 @@ export default function FichaMap(props: FichaMapProps) {
       {/* Controles mínimos: zoom, brújula, recentrar */}
       {!mini && (
         <div
-          className="absolute z-10 flex flex-col overflow-hidden rounded-2xl bg-white/92 shadow-[0_8px_30px_rgb(33_32_28/0.12)] backdrop-blur-md"
+          className="absolute z-10 flex flex-col overflow-hidden rounded-2xl bg-paper/92 shadow-[0_8px_30px_rgb(33_32_28/0.12)] backdrop-blur-md"
           // Sobre el círculo de Vigía (VigiaDock), que va abajo a la derecha del hueco.
           style={{ right: padding.right + 16, bottom: 96 }}
         >

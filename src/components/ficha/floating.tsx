@@ -10,7 +10,7 @@ import { cn } from "@/lib/cn";
 import { GLASS } from "./parts";
 
 const ROUND =
-  "grid size-8 place-items-center rounded-full bg-white/92 text-f-ink shadow-[0_2px_8px_rgb(0_0_0/0.25)] backdrop-blur-md transition-colors hover:bg-white";
+  "grid size-8 place-items-center rounded-full bg-paper/92 text-f-ink shadow-[0_2px_8px_rgb(0_0_0/0.25)] backdrop-blur-md transition-colors hover:bg-paper";
 
 export function FloatingControls({
   style,
@@ -37,7 +37,7 @@ export function FloatingControls({
         className="absolute inset-0 rounded-xl ring-inset transition-shadow hover:ring-2 hover:ring-white/80 focus-visible:ring-2 focus-visible:ring-f-orange focus-visible:outline-none"
       >
         {badge && (
-          <span className="absolute top-2 left-2 rounded-md bg-white/92 px-2 py-1 text-[12px] font-semibold text-f-ink shadow-[0_2px_8px_rgb(0_0_0/0.18)]">
+          <span className="absolute top-2 left-2 rounded-md bg-paper/92 px-2 py-1 text-[12px] font-semibold text-f-ink shadow-[0_2px_8px_rgb(0_0_0/0.18)]">
             {badge}
           </span>
         )}
@@ -67,7 +67,7 @@ export function FloatingPill({
     <button
       type="button"
       onClick={onShow}
-      className={cn(GLASS, "absolute z-[26] inline-flex h-10 items-center gap-2 rounded-xl px-3 text-[14px] font-semibold text-f-ink hover:bg-white")}
+      className={cn(GLASS, "absolute z-[26] inline-flex h-10 items-center gap-2 rounded-xl px-3 text-[14px] font-semibold text-f-ink hover:bg-paper")}
       style={style}
     >
       <Icon className="size-4" aria-hidden="true" />

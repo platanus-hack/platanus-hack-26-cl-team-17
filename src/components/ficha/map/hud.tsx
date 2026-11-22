@@ -80,7 +80,7 @@ export function MapHud({ map, padding }: { map: MlMap | null; padding: Padding }
       </div>
 
       {/* Norte y escala: arriba a la derecha del hueco (abajo están el botón de Vigía y el zoom) */}
-      <div className="absolute top-0 right-0 flex items-end gap-3 rounded-lg bg-white/85 px-2.5 py-1.5 font-mono text-[11px] text-f-muted shadow-[0_2px_10px_rgb(33_32_28/0.10)] backdrop-blur-md">
+      <div className="absolute top-0 right-0 flex items-end gap-3 rounded-lg bg-paper/85 px-2.5 py-1.5 font-mono text-[11px] text-f-muted shadow-[0_2px_10px_rgb(33_32_28/0.10)] backdrop-blur-md">
         <div className="flex flex-col items-center leading-none">
           <div ref={northRef} className="grid size-5 place-items-center">
             <svg width="12" height="16" viewBox="0 0 12 16">

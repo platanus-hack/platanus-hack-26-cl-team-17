@@ -34,7 +34,7 @@ function Cta({ href, icon: Icon, children, variant }: { href: string; icon: Luci
       href={href}
       className={cn(
         "inline-flex h-12 items-center justify-center gap-2 rounded-full px-6 text-[15px] font-bold transition-colors sm:h-14 sm:px-7 sm:text-[17px]",
-        variant === "light" ? "bg-white text-text hover:bg-white/90" : "border border-white/35 bg-white/10 text-white backdrop-blur-md hover:bg-white/20",
+        variant === "light" ? "bg-white text-brand-carbon hover:bg-white/90" : "border border-white/35 bg-white/10 text-white backdrop-blur-md hover:bg-white/20",
       )}
     >
       <Icon className="size-4 sm:size-5" aria-hidden="true" />

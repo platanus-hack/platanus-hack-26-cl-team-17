@@ -84,7 +84,7 @@ export function PinView({
       data-hidden="false"
       data-side="right"
       className={cn(
-        "absolute top-0 left-4 flex -translate-y-1/2 data-[side=left]:right-4 data-[side=left]:left-auto items-baseline gap-1.5 rounded-lg bg-white px-2.5 py-1.5 whitespace-nowrap shadow-[0_2px_12px_rgb(33_32_28/0.16)] transition-opacity duration-200",
+        "absolute top-0 left-4 flex -translate-y-1/2 data-[side=left]:right-4 data-[side=left]:left-auto items-baseline gap-1.5 rounded-lg bg-paper px-2.5 py-1.5 whitespace-nowrap shadow-[0_2px_12px_rgb(33_32_28/0.16)] transition-opacity duration-200",
         "data-[hidden=true]:pointer-events-none data-[hidden=true]:opacity-0",
         pin.kind === "camera" ? "text-[13px] font-semibold text-f-ink" : "text-[15px] font-semibold text-f-ink",
         pulsing && "ring-2 ring-f-ink/80",
@@ -136,14 +136,14 @@ function CameraPeek({ media, onOpen }: { media: MediaView; onOpen: () => void })
   const thumb = media.urls.poster ?? media.urls.frames[0]?.url ?? null;
   const at = clock(media.captured_at ?? media.created_at);
   return (
-    <div className="absolute bottom-6 left-0 w-64 -translate-x-1/2 overflow-hidden rounded-2xl bg-white shadow-[0_12px_40px_rgb(33_32_28/0.22)]">
+    <div className="absolute bottom-6 left-0 w-64 -translate-x-1/2 overflow-hidden rounded-2xl bg-paper shadow-[0_12px_40px_rgb(33_32_28/0.22)]">
       <button type="button" onClick={onOpen} className="group relative block aspect-video w-full bg-f-wash" aria-label={`Ver video ${media.label}`}>
         {thumb ? (
           // eslint-disable-next-line @next/next/no-img-element -- miniatura servida por la API de archivos
           <img src={thumb} alt="" className="size-full object-cover" />
         ) : null}
         <span className="absolute inset-0 grid place-items-center">
-          <span className="grid size-11 place-items-center rounded-full bg-white/92 shadow-md transition-transform group-hover:scale-105">
+          <span className="grid size-11 place-items-center rounded-full bg-paper/92 shadow-md transition-transform group-hover:scale-105">
             <Play className="size-5 translate-x-px fill-f-ink text-f-ink" aria-hidden="true" />
           </span>
         </span>

@@ -10,7 +10,7 @@ export function FichaShowcase({ className }: { className?: string }) {
   return (
     <div className={className}>
       <figure>
-        <div className="rounded-[22px] border border-line bg-white p-2 shadow-[0_50px_120px_-40px_rgb(21_26_33/0.35)] sm:p-2.5">
+        <div className="rounded-[22px] border border-line bg-surface p-2 shadow-[0_50px_120px_-40px_rgb(21_26_33/0.35)] sm:p-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element -- captura estática en WebP con versión 2x */}
           <img
             src="/portada/ficha.webp"

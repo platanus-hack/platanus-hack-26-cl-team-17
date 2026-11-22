@@ -52,16 +52,21 @@
   /* Ficha del incidente (mapa 3D claro): colores de marca con significado y grises cálidos. */
   --color-f-red: #e8362f;
   --color-f-orange: #f76b15;
-  --color-f-orange-ink: #cc4e00;
+  --color-f-orange-ink: var(--v-f-orange-ink);
   --color-f-amber: #ffb020;
-  --color-f-amber-ink: #8f5a12;
+  --color-f-amber-ink: var(--v-f-amber-ink);
   --color-f-blue: #0090ff;
   --color-f-green: #30a46c;
-  --color-f-ink: #151a21;
-  --color-f-muted: #5f6168;
-  --color-f-faint: #8c8e94;
-  --color-f-line: #e8e4dd;
-  --color-f-wash: #f4f1ec;
+  --color-f-ink: var(--v-f-ink);
+  --color-f-muted: var(--v-f-muted);
+  --color-f-faint: var(--v-f-faint);
+  --color-f-line: var(--v-f-line);
+  --color-f-wash: var(--v-f-wash);
+  /* Papel de la ficha (paneles y globos sobre el mapa): blanco en claro, carbón en oscuro. */
+  --color-paper: var(--v-paper);
+  /* Botón principal: Carbón en claro, Rojo Bombero en oscuro. */
+  --color-primary: var(--v-primary);
+  --color-on-primary: var(--v-on-primary);
 
   --font-display: var(--font-inter), -apple-system, "Segoe UI", ui-sans-serif, sans-serif;
   --font-sans: var(--font-inter), -apple-system, "Segoe UI", ui-sans-serif, sans-serif;
@@ -100,6 +105,53 @@
   --v-fire: #ea580c;
   --v-soft: 8%;
   --v-scrollbar: #d6d0c6;
+  --v-primary: #151a21;
+  --v-on-primary: #ffffff;
+  --v-paper: #ffffff;
+  --v-f-ink: #151a21;
+  --v-f-muted: #5f6168;
+  --v-f-faint: #8c8e94;
+  --v-f-line: #e8e4dd;
+  --v-f-wash: #f4f1ec;
+  --v-f-orange-ink: #cc4e00;
+  --v-f-amber-ink: #8f5a12;
+}
+
+/*
+ * Modo oscuro (data-modo="oscuro" en <html>): los carbones de la portada (#141C26, #18212C, #1A2430),
+ * texto en Humo y Rojo Bombero en los botones principales. Gana sobre data-theme por especificidad.
+ */
+html[data-modo="oscuro"],
+html[data-modo="oscuro"] [data-theme] {
+  color-scheme: dark;
+  --v-bg: #141c26;
+  --v-surface: #18212c;
+  --v-surface-2: #1f2935;
+  --v-line: #29333f;
+  --v-line-strong: #3a4654;
+  --v-text: #f4f1ec;
+  --v-muted: #a6afba;
+  --v-faint: #75808d;
+  --v-on-solid: #ffffff;
+  --v-accent: #ffb020;
+  --v-critical: #ff5a52;
+  --v-warning: #f79a3e;
+  --v-ok: #3dd68c;
+  --v-info: #ffc350;
+  --v-drone: #a08bff;
+  --v-fire: #fb7a3c;
+  --v-soft: 16%;
+  --v-scrollbar: #3a4654;
+  --v-primary: #e8362f;
+  --v-on-primary: #ffffff;
+  --v-paper: #18212c;
+  --v-f-ink: #f4f1ec;
+  --v-f-muted: #a6afba;
+  --v-f-faint: #75808d;
+  --v-f-line: #29333f;
+  --v-f-wash: #1f2935;
+  --v-f-orange-ink: #ff8a3d;
+  --v-f-amber-ink: #ffc350;
 }
 
 [data-theme="vecino"] {

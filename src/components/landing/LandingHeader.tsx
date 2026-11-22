@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Menu, MonitorDot, Video, X } from "lucide-react";
 import { Wordmark } from "@/components/brand/Wordmark";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/cn";
 
 const SECTIONS = [
@@ -31,8 +32,8 @@ export function LandingHeader() {
       <nav
         aria-label="Principal"
         className={cn(
-          "mx-auto flex h-12 w-full max-w-6xl items-center gap-3 rounded-full sm:h-14 border border-white/40 pr-1.5 pl-4 backdrop-blur-xl sm:pr-2 sm:pl-5 transition-[background-color,box-shadow] duration-300",
-          scrolled ? "bg-white/85 shadow-[0_8px_30px_rgb(21_26_33/0.14)]" : "bg-white/70 shadow-[0_8px_30px_rgb(21_26_33/0.25)]",
+          "mx-auto flex h-12 w-full max-w-6xl items-center gap-3 rounded-full sm:h-14 border border-line/60 pr-1.5 pl-4 backdrop-blur-xl sm:pr-2 sm:pl-5 transition-[background-color,box-shadow] duration-300",
+          scrolled ? "bg-surface/85 shadow-[0_8px_30px_rgb(21_26_33/0.14)]" : "bg-surface/70 shadow-[0_8px_30px_rgb(21_26_33/0.25)]",
         )}
       >
         <Wordmark size="sm" href="/" />
@@ -58,9 +59,10 @@ export function LandingHeader() {
             <Video className="size-4" aria-hidden="true" />
             Soy vecino
           </Link>
+          <ThemeToggle />
           <Link
             href="/mando"
-            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-text px-3.5 text-[13px] font-bold text-white transition-colors hover:bg-text/85 sm:h-10 sm:px-4 sm:text-[14px]"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-primary px-3.5 text-[13px] font-bold text-on-primary transition-colors hover:bg-primary/85 sm:h-10 sm:px-4 sm:text-[14px]"
           >
             <MonitorDot className="size-4" aria-hidden="true" />
             Puesto de mando
@@ -78,7 +80,7 @@ export function LandingHeader() {
       </nav>
 
       {open && (
-        <div className="mx-auto mt-2 w-full max-w-6xl rounded-3xl bg-white/90 p-2 backdrop-blur-xl shadow-[0_8px_30px_rgb(21_26_33/0.18)] md:hidden">
+        <div className="mx-auto mt-2 w-full max-w-6xl rounded-3xl bg-surface/90 p-2 backdrop-blur-xl shadow-[0_8px_30px_rgb(21_26_33/0.18)] md:hidden">
           {[...SECTIONS, { href: "/reportar", label: "Soy vecino: enviar video" }].map((s) => (
             <a
               key={s.href}

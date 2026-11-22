@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import { ToastProvider } from "@/components/ui/Toast";
+import { MODO_SCRIPT } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/cn";
 import "./globals.css";
 
@@ -35,7 +36,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
-  colorScheme: "light",
+  colorScheme: "light dark",
 };
 
 /** Layout raíz: fuentes, tema "mando" por defecto y proveedor de avisos (toasts). */
@@ -44,8 +45,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     <html
       lang="es-CL"
       data-theme="mando"
+      suppressHydrationWarning
       className={cn(inter.variable, jetbrainsMono.variable)}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: MODO_SCRIPT }} />
+      </head>
       <body className="min-h-dvh bg-bg font-sans text-text antialiased">
         <ToastProvider>{children}</ToastProvider>
       </body>

@@ -38,7 +38,7 @@ import {
 } from "./model";
 import { TONE_DOT, TONE_TEXT, TONE_WASH } from "./tones";
 
-export const GLASS = "bg-white/92 backdrop-blur-xl shadow-[0_12px_40px_rgb(33_32_28/0.12)] rounded-2xl";
+export const GLASS = "bg-paper/92 backdrop-blur-xl shadow-[0_12px_40px_rgb(33_32_28/0.12)] rounded-2xl";
 
 /* ───────────────────────────── Utilidades ───────────────────────────── */
 
@@ -136,7 +136,7 @@ export function TopBar({
               onClick={() => !on && onStatus(s.key)}
               className={cn(
                 "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[14px] font-semibold transition-colors disabled:opacity-60",
-                on ? "bg-white text-f-ink shadow-[0_1px_3px_rgb(33_32_28/0.14)]" : "text-f-muted hover:text-f-ink",
+                on ? "bg-paper text-f-ink shadow-[0_1px_3px_rgb(33_32_28/0.14)]" : "text-f-muted hover:text-f-ink",
               )}
             >
               {on && <span className={cn("size-2 rounded-full", s.dot)} aria-hidden="true" />}

@@ -12,7 +12,7 @@ export type ButtonSize = "sm" | "md" | "lg" | "xl";
 
 /** Clases de color por variante (fondo, borde, texto y hover), reutilizables por otros controles. */
 export const buttonVariantClasses: Record<ButtonVariant, string> = {
-  primary: "border-transparent bg-text text-bg hover:bg-text/85 active:bg-text/75",
+  primary: "border-transparent bg-primary text-on-primary hover:bg-primary/85 active:bg-primary/75",
   secondary:
     "border-line bg-surface-2 text-text hover:border-line-strong hover:bg-line/50 active:bg-line/70",
   ghost: "border-transparent bg-transparent text-muted hover:bg-surface-2 hover:text-text active:bg-line/50",

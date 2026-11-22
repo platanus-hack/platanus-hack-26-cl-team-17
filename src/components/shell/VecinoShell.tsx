@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Wordmark } from "@/components/brand/Wordmark";
+import { ThemeToggle } from "@/components/ui/ThemeToggle";
 import { cn } from "@/lib/cn";
 
 /** Props del marco de las pantallas para vecinos. */
@@ -8,13 +9,14 @@ export interface VecinoShellProps {
   className?: string;
 }
 
-/** Marco claro para vecinos: encabezado mínimo y contenido en una columna. */
+/** Marco para vecinos: encabezado mínimo y contenido en una columna. */
 export function VecinoShell({ children, className }: VecinoShellProps) {
   return (
     <div data-theme="vecino" className={cn("flex min-h-dvh flex-col bg-bg text-text", className)}>
       <header className="border-b border-line bg-surface pt-[env(safe-area-inset-top)]">
-        <div className="mx-auto flex h-14 max-w-xl items-center px-4">
+        <div className="mx-auto flex h-14 max-w-xl items-center justify-between px-4">
           <Wordmark size="sm" />
+          <ThemeToggle />
         </div>
       </header>
 
