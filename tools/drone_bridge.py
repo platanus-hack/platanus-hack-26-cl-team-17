@@ -864,7 +864,7 @@ class VigiaAccount:
             raise Fatal(f"No se pudo iniciar sesión ({status}): {_error_message(body)}")
         for c in cookies:
             pair = c.split(";", 1)[0].strip()
-            if pair.startswith("vigia_session="):
+            if pair.startswith(("__session=", "vigia_session=")):  # vigia_session: app anterior
                 self.cookie = pair
         log(f"Sesión iniciada como {self.email}.")
 

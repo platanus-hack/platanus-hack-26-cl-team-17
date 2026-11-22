@@ -1,7 +1,18 @@
 [
   {
-    "origin": ["https://REEMPLAZA-CON-TU-ORIGEN", "https://vigia-hrbozo3p6q-tl.a.run.app"],
-    "method": ["PUT", "GET", "HEAD"],
+    "origin": [
+      "https://REEMPLAZA-CON-TU-ORIGEN",
+      "https://vigia-hrbozo3p6q-tl.a.run.app",
+      "https://vigilia.live",
+      "https://www.vigilia.live",
+      "https://platanus-515411.web.app",
+      "https://platanus-515411.firebaseapp.com"
+    ],
+    "method": [
+      "PUT",
+      "GET",
+      "HEAD"
+    ],
     "responseHeader": [
       "Content-Type",
       "Content-Length",

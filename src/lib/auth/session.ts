@@ -1,5 +1,8 @@
 /**
- * Cookie de sesión del personal: `vigia_session = base64url(payload).base64url(HMAC-SHA256)`.
+ * Cookie de sesión del personal: `__session = base64url(payload).base64url(HMAC-SHA256)`.
+ *
+ * Se llama `__session` porque Firebase Hosting (vigilia.live) borra todas las demás cookies
+ * antes de reenviar la petición a Cloud Run.
  *
  * Usa solo Web Crypto (crypto.subtle), TextEncoder y btoa/atob, para que sirva igual
  * en los route handlers (Node) y en src/proxy.ts, sin depender de node:crypto ni Buffer.
@@ -8,7 +11,7 @@
  */
 import { config } from "@/lib/config";
 
-export const SESSION_COOKIE = "vigia_session";
+export const SESSION_COOKIE = "__session";
 export const SESSION_VERSION = 1;
 /** 12 horas: un turno largo. */
 export const SESSION_TTL_MS = 12 * 60 * 60 * 1000;

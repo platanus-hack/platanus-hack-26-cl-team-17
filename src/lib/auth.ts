@@ -5,7 +5,7 @@
  *   requireAdmin(): Promise<StaffPublic>   → lanza errors.forbidden()
  *
  * Modo open (sin DATABASE_URL): siempre la sesión de demostración.
- * Modo staff: cookie `vigia_session` firmada + cuenta activa en la tabla staff.
+ * Modo staff: cookie `__session` firmada + cuenta activa en la tabla staff.
  */
 import { cache } from "react";
 import { cookies } from "next/headers";

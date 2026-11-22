@@ -491,6 +491,34 @@ gc run deploy "$SERVICE" \
 STATUS_URL="$(gc run services describe "$SERVICE" --region="$REGION" --format='value(status.url)' 2>/dev/null || true)"
 
 # ---------------------------------------------------------------------------
+# Firebase Hosting (vigilia.live → este servicio). Su CDN guarda el HTML de Next hasta un
+# año (s-maxage=31536000) y ese HTML apunta a los chunks del build anterior, que la
+# revisión nueva ya no tiene. Publicar una versión nueva (misma config) vacía la caché;
+# volver a publicar la activa no se puede (400).
+# FIREBASE_SITE= (vacío) lo salta.
+# ---------------------------------------------------------------------------
+FIREBASE_SITE="${FIREBASE_SITE-$PROJECT}"
+if [[ -n "$FIREBASE_SITE" ]]; then
+  fb_base="https://firebasehosting.googleapis.com/v1beta1"
+  fb_api="$fb_base/sites/$FIREBASE_SITE"
+  fb_auth=(-H "Authorization: Bearer $(gcloud auth print-access-token)" -H "x-goog-user-project: $PROJECT" -H "Content-Type: application/json")
+  fb_config="$(curl -fsS "${fb_auth[@]}" "$fb_api/channels/live" 2>/dev/null \
+    | python3 -c 'import sys,json; c=json.load(sys.stdin)["release"]["version"]["config"]; print(json.dumps({"config": c}))' 2>/dev/null || true)"
+  fb_version=""
+  if [[ -n "$fb_config" ]]; then
+    fb_version="$(curl -fsS "${fb_auth[@]}" -X POST -d "$fb_config" "$fb_api/versions" 2>/dev/null \
+      | python3 -c 'import sys,json; print(json.load(sys.stdin)["name"])' 2>/dev/null || true)"
+  fi
+  if [[ -n "$fb_version" ]] \
+    && curl -fsS -o /dev/null "${fb_auth[@]}" -X PATCH -d '{"status":"FINALIZED"}' "$fb_base/$fb_version?update_mask=status" \
+    && curl -fsS -o /dev/null "${fb_auth[@]}" -X POST -d '{}' "$fb_api/releases?versionName=$fb_version"; then
+    info "Firebase Hosting ($FIREBASE_SITE): caché vaciada"
+  else
+    warn "No se pudo vaciar la caché de Firebase Hosting ($FIREBASE_SITE). Si vigilia.live muestra la versión anterior, vuelve a publicar la versión actual desde la consola de Firebase."
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Resumen y próximos pasos
 # ---------------------------------------------------------------------------
 info "Listo"
