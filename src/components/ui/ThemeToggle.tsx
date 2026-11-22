@@ -32,6 +32,8 @@ export function ThemeToggle({ className }: { className?: string }) {
     } catch {
       /* sin almacenamiento: el cambio dura hasta recargar */
     }
+    // Los mapas toman su paleta al crearse: si hay uno en pantalla, se recarga para redibujarlo.
+    if (document.querySelector(".maplibregl-map, .mapboxgl-map")) location.reload();
   };
   const Icon = oscuro ? Sun : Moon;
   const label = oscuro ? "Cambiar a modo claro" : "Cambiar a modo oscuro";

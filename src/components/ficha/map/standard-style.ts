@@ -54,7 +54,46 @@ const TRUNK = ["motorway", "trunk"];
 const MAJOR = ["primary", "secondary"];
 const MINOR = ["tertiary", "minor", "service", "street", "residential", "unclassified"];
 
+
+/** Paleta nocturna (modo oscuro): carbones de la portada, calles gris pizarra y agua azul profundo. */
+export const FICHA_MAP_DARK: { [K in keyof typeof FICHA_MAP]: string } = {
+  land: "#141C26",
+  residential: "#172030",
+  commercial: "#1A2230",
+  industrial: "#192029",
+  school: "#1A2229",
+  hospital: "#22202A",
+  park: "#16281F",
+  wood: "#142519",
+  pitch: "#17291F",
+  water: "#0C2236",
+  road: "#2A3542",
+  roadMajor: "#34414F",
+  roadTrunk: "#4A3A2A",
+  casing: "#1E2732",
+  casingTrunk: "#5A4430",
+  rail: "#2A333D",
+  building: "#222C38",
+  buildingFlat: "#202A35",
+  label: "#9AA4AF",
+  labelHalo: "#141C26",
+  place: "#C3CAD2",
+};
+const BUILDING_TONES_DARK = ["#232D39", "#26303C", "#212B36", "#283240", "#242E3A", "#2A3442", "#202A35"];
+const WARM_TONES_DARK = ["#262C34", "#2A2F36", "#252B33", "#282E35", "#23292F"];
+const TALL_TONES_DARK = ["#2E3A48", "#33404E", "#2B3644"];
+
+/** ¿La app está en modo oscuro? (atributo data-modo en <html>). */
+export function isModoOscuro(): boolean {
+  return typeof document !== "undefined" && document.documentElement.dataset.modo === "oscuro";
+}
+
 export function standardLikeStyle(): StyleSpecification {
+  const dark = isModoOscuro();
+  const P = dark ? FICHA_MAP_DARK : FICHA_MAP;
+  const BT = dark ? BUILDING_TONES_DARK : BUILDING_TONES;
+  const WT = dark ? WARM_TONES_DARK : WARM_TONES;
+  const TT = dark ? TALL_TONES_DARK : TALL_TONES;
   return {
     version: 8,
     name: "Vigía · ficha (estilo claro)",
@@ -78,7 +117,7 @@ export function standardLikeStyle(): StyleSpecification {
     // Luz baja desde el noroeste: caras de los edificios con sombreado suave.
     light: { anchor: "viewport", color: "#FFFFFF", intensity: 0.28, position: [1.4, 210, 35] },
     layers: [
-      { id: "land", type: "background", paint: { "background-color": FICHA_MAP.land } },
+      { id: "land", type: "background", paint: { "background-color": P.land } },
       {
         id: "relief",
         type: "raster",
@@ -96,7 +135,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "landuse",
         filter: ["in", ["get", "class"], ["literal", ["residential", "suburb", "neighbourhood"]]],
-        paint: { "fill-color": FICHA_MAP.residential },
+        paint: { "fill-color": P.residential },
       },
       {
         id: "landuse-commercial",
@@ -104,7 +143,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "landuse",
         filter: ["in", ["get", "class"], ["literal", ["commercial", "retail"]]],
-        paint: { "fill-color": FICHA_MAP.commercial },
+        paint: { "fill-color": P.commercial },
       },
       {
         id: "landuse-industrial",
@@ -112,7 +151,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "landuse",
         filter: ["in", ["get", "class"], ["literal", ["industrial", "railway", "garages"]]],
-        paint: { "fill-color": FICHA_MAP.industrial },
+        paint: { "fill-color": P.industrial },
       },
       {
         id: "landuse-school",
@@ -120,7 +159,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "landuse",
         filter: ["in", ["get", "class"], ["literal", ["school", "university", "college", "kindergarten"]]],
-        paint: { "fill-color": FICHA_MAP.school },
+        paint: { "fill-color": P.school },
       },
       {
         id: "landuse-hospital",
@@ -128,7 +167,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "landuse",
         filter: ["==", ["get", "class"], "hospital"],
-        paint: { "fill-color": FICHA_MAP.hospital },
+        paint: { "fill-color": P.hospital },
       },
       {
         id: "wood",
@@ -136,7 +175,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "landcover",
         filter: ["in", ["get", "class"], ["literal", ["wood", "forest"]]],
-        paint: { "fill-color": FICHA_MAP.wood },
+        paint: { "fill-color": P.wood },
       },
       {
         id: "grass",
@@ -144,14 +183,14 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "landcover",
         filter: ["in", ["get", "class"], ["literal", ["grass", "farmland", "scrub"]]],
-        paint: { "fill-color": FICHA_MAP.park, "fill-opacity": 0.8 },
+        paint: { "fill-color": P.park, "fill-opacity": 0.8 },
       },
       {
         id: "park",
         type: "fill",
         source: SOURCE,
         "source-layer": "park",
-        paint: { "fill-color": FICHA_MAP.park },
+        paint: { "fill-color": P.park },
       },
       {
         id: "pitch",
@@ -159,7 +198,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "landuse",
         filter: ["in", ["get", "class"], ["literal", ["pitch", "playground", "cemetery", "stadium"]]],
-        paint: { "fill-color": FICHA_MAP.pitch },
+        paint: { "fill-color": P.pitch },
       },
       {
         id: "water",
@@ -167,14 +206,14 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "water",
         filter: ["!=", ["get", "brunnel"], "tunnel"],
-        paint: { "fill-color": FICHA_MAP.water },
+        paint: { "fill-color": P.water },
       },
       {
         id: "waterway",
         type: "line",
         source: SOURCE,
         "source-layer": "waterway",
-        paint: { "line-color": FICHA_MAP.water, "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1, 18, 6] },
+        paint: { "line-color": P.water, "line-width": ["interpolate", ["linear"], ["zoom"], 12, 1, 18, 6] },
       },
       {
         id: "road-casing-minor",
@@ -183,7 +222,7 @@ export function standardLikeStyle(): StyleSpecification {
         "source-layer": "transportation",
         filter: ["all", ["in", ["get", "class"], ["literal", MINOR]], ["!=", ["get", "brunnel"], "tunnel"]],
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": FICHA_MAP.casing, "line-gap-width": roadWidth(0.6), "line-width": 1 },
+        paint: { "line-color": P.casing, "line-gap-width": roadWidth(0.6), "line-width": 1 },
       },
       {
         id: "road-casing-trunk",
@@ -192,7 +231,7 @@ export function standardLikeStyle(): StyleSpecification {
         "source-layer": "transportation",
         filter: ["all", ["in", ["get", "class"], ["literal", TRUNK]], ["!=", ["get", "brunnel"], "tunnel"]],
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": FICHA_MAP.casingTrunk, "line-gap-width": roadWidth(1.3), "line-width": 1.2 },
+        paint: { "line-color": P.casingTrunk, "line-gap-width": roadWidth(1.3), "line-width": 1.2 },
       },
       {
         id: "road-casing-major",
@@ -201,7 +240,7 @@ export function standardLikeStyle(): StyleSpecification {
         "source-layer": "transportation",
         filter: ["all", ["in", ["get", "class"], ["literal", MAJOR]], ["!=", ["get", "brunnel"], "tunnel"]],
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": FICHA_MAP.casing, "line-gap-width": roadWidth(1.1), "line-width": 1.2 },
+        paint: { "line-color": P.casing, "line-gap-width": roadWidth(1.1), "line-width": 1.2 },
       },
       {
         id: "road-minor",
@@ -210,7 +249,7 @@ export function standardLikeStyle(): StyleSpecification {
         "source-layer": "transportation",
         filter: ["all", ["in", ["get", "class"], ["literal", MINOR]], ["!=", ["get", "brunnel"], "tunnel"]],
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": FICHA_MAP.road, "line-width": roadWidth(0.6) },
+        paint: { "line-color": P.road, "line-width": roadWidth(0.6) },
       },
       {
         id: "road-major",
@@ -219,7 +258,7 @@ export function standardLikeStyle(): StyleSpecification {
         "source-layer": "transportation",
         filter: ["all", ["in", ["get", "class"], ["literal", MAJOR]], ["!=", ["get", "brunnel"], "tunnel"]],
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": FICHA_MAP.roadMajor, "line-width": roadWidth(1.1) },
+        paint: { "line-color": P.roadMajor, "line-width": roadWidth(1.1) },
       },
       {
         id: "road-trunk",
@@ -228,7 +267,7 @@ export function standardLikeStyle(): StyleSpecification {
         "source-layer": "transportation",
         filter: ["all", ["in", ["get", "class"], ["literal", TRUNK]], ["!=", ["get", "brunnel"], "tunnel"]],
         layout: { "line-cap": "round", "line-join": "round" },
-        paint: { "line-color": FICHA_MAP.roadTrunk, "line-width": roadWidth(1.3) },
+        paint: { "line-color": P.roadTrunk, "line-width": roadWidth(1.3) },
       },
       {
         id: "path",
@@ -236,7 +275,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "transportation",
         filter: ["==", ["get", "class"], "path"],
-        paint: { "line-color": "#E4DED4", "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.6, 19, 2.5], "line-dasharray": [2, 1.5] },
+        paint: { "line-color": dark ? "#2A3542" : "#E4DED4", "line-width": ["interpolate", ["linear"], ["zoom"], 15, 0.6, 19, 2.5], "line-dasharray": [2, 1.5] },
       },
       {
         id: "rail",
@@ -244,7 +283,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "transportation",
         filter: ["==", ["get", "class"], "rail"],
-        paint: { "line-color": FICHA_MAP.rail, "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1, 18, 3] },
+        paint: { "line-color": P.rail, "line-width": ["interpolate", ["linear"], ["zoom"], 13, 1, 18, 3] },
       },
       {
         id: "building-flat",
@@ -252,7 +291,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "building",
         maxzoom: 15,
-        paint: { "fill-color": FICHA_MAP.buildingFlat },
+        paint: { "fill-color": P.buildingFlat },
       },
       {
         id: "building-3d",
@@ -266,11 +305,11 @@ export function standardLikeStyle(): StyleSpecification {
           "fill-extrusion-color": [
             "case",
             [">", ["coalesce", ["get", "render_height"], 0], 25],
-            ["match", ["%", ["abs", ["to-number", ["id"], 0]], 3], 0, TALL_TONES[0], 1, TALL_TONES[1], TALL_TONES[2]],
+            ["match", ["%", ["abs", ["to-number", ["id"], 0]], 3], 0, TT[0], 1, TT[1], TT[2]],
             // Bajos o sin altura (a menudo bloques grandes): solo tonos piedra.
             ["<=", ["coalesce", ["get", "render_height"], 0], 4],
-            ["match", ["%", ["abs", ["to-number", ["id"], 0]], WARM_TONES.length], ...WARM_TONES.slice(1).flatMap((c, i) => [i + 1, c]), WARM_TONES[0]],
-            ["match", ["%", ["abs", ["to-number", ["id"], 0]], BUILDING_TONES.length], ...BUILDING_TONES.slice(1).flatMap((c, i) => [i + 1, c]), BUILDING_TONES[0]],
+            ["match", ["%", ["abs", ["to-number", ["id"], 0]], WT.length], ...WT.slice(1).flatMap((c, i) => [i + 1, c]), WT[0]],
+            ["match", ["%", ["abs", ["to-number", ["id"], 0]], BT.length], ...BT.slice(1).flatMap((c, i) => [i + 1, c]), BT[0]],
           ] as unknown as string,
           // Sin altura conocida: 2 pisos (6 m), lo típico en la ciudad.
           "fill-extrusion-height": ["coalesce", ["get", "render_height"], 6],
@@ -285,7 +324,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "boundary",
         filter: ["all", ["==", ["get", "admin_level"], 4], ["!=", ["get", "maritime"], 1]],
-        paint: { "line-color": "#B7B2A8", "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.5, 10, 1.2], "line-dasharray": [3, 2] },
+        paint: { "line-color": dark ? "#3A4654" : "#B7B2A8", "line-width": ["interpolate", ["linear"], ["zoom"], 4, 0.5, 10, 1.2], "line-dasharray": [3, 2] },
       },
       {
         id: "boundary-country",
@@ -293,7 +332,7 @@ export function standardLikeStyle(): StyleSpecification {
         source: SOURCE,
         "source-layer": "boundary",
         filter: ["all", ["==", ["get", "admin_level"], 2], ["!=", ["get", "maritime"], 1]],
-        paint: { "line-color": "#9A958B", "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.8, 10, 2] },
+        paint: { "line-color": dark ? "#4A5664" : "#9A958B", "line-width": ["interpolate", ["linear"], ["zoom"], 3, 0.8, 10, 2] },
       },
       {
         id: "street-names",
@@ -312,7 +351,7 @@ export function standardLikeStyle(): StyleSpecification {
           "symbol-spacing": 320,
           "text-padding": 6,
         },
-        paint: { "text-color": FICHA_MAP.label, "text-halo-color": FICHA_MAP.labelHalo, "text-halo-width": 1.4 },
+        paint: { "text-color": P.label, "text-halo-color": P.labelHalo, "text-halo-width": 1.4 },
       },
       {
         id: "place-names",
@@ -327,7 +366,7 @@ export function standardLikeStyle(): StyleSpecification {
           "text-size": 11,
           "text-letter-spacing": 0.25,
         },
-        paint: { "text-color": FICHA_MAP.place, "text-halo-color": FICHA_MAP.labelHalo, "text-halo-width": 1.2 },
+        paint: { "text-color": P.place, "text-halo-color": P.labelHalo, "text-halo-width": 1.2 },
       },
       {
         id: "city-names",
@@ -342,7 +381,7 @@ export function standardLikeStyle(): StyleSpecification {
           "text-size": ["interpolate", ["linear"], ["zoom"], 4, ["match", ["get", "class"], "city", 12, 10], 10, ["match", ["get", "class"], "city", 17, 13]],
           "symbol-sort-key": ["coalesce", ["get", "rank"], 99],
         },
-        paint: { "text-color": "#4D4B46", "text-halo-color": FICHA_MAP.labelHalo, "text-halo-width": 1.4 },
+        paint: { "text-color": dark ? "#D4DAE0" : "#4D4B46", "text-halo-color": P.labelHalo, "text-halo-width": 1.4 },
       },
       {
         id: "country-names",
@@ -357,7 +396,7 @@ export function standardLikeStyle(): StyleSpecification {
           "text-size": 12,
           "text-letter-spacing": 0.3,
         },
-        paint: { "text-color": "#7D7A74", "text-halo-color": FICHA_MAP.labelHalo, "text-halo-width": 1.2 },
+        paint: { "text-color": dark ? "#9AA4AF" : "#7D7A74", "text-halo-color": P.labelHalo, "text-halo-width": 1.2 },
       },
     ],
   };
