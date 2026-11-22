@@ -132,7 +132,7 @@ export interface CreateStaffRequest {
   email: string;
   name: string;
   role: StaffRole;
-  /** Contraseña inicial (mín. 10 caracteres). */
+  /** Contraseña inicial. */
   password: string;
 }
 

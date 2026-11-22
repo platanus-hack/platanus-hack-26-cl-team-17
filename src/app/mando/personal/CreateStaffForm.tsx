@@ -8,7 +8,6 @@ import { api, isApiClientError } from "@/lib/client/api";
 import type { CreateStaffRequest, StaffRole } from "@/lib/contract";
 import { staffRoleLabel } from "@/lib/labels";
 
-const MIN_PASSWORD = 10;
 const ROLES: StaffRole[] = ["officer", "operator", "admin"];
 const ROLE_OPTIONS = ROLES.map((r) => ({ value: r, label: staffRoleLabel[r] }));
 
@@ -28,7 +27,7 @@ function validate(v: CreateStaffRequest): FieldErrors {
   const e: FieldErrors = {};
   if (!v.name.trim()) e.name = "Ingresa el nombre.";
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.email.trim())) e.email = "Ingresa un correo válido.";
-  if (v.password.length < MIN_PASSWORD) e.password = `Usa al menos ${MIN_PASSWORD} caracteres.`;
+  if (!v.password) e.password = "Ingresa una contraseña inicial.";
   return e;
 }
 
@@ -196,7 +195,7 @@ export function CreateStaffForm() {
           label="Contraseña inicial"
           htmlFor={id("password")}
           error={errors.password}
-          hint={`Mínimo ${MIN_PASSWORD} caracteres. Se muestra una vez al crear la cuenta.`}
+          hint="Se muestra una vez al crear la cuenta."
           required
         >
           <div className="flex gap-2">

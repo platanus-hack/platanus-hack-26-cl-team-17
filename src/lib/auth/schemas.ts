@@ -5,7 +5,6 @@ import { z } from "zod";
 import type { CreateStaffRequest, LoginRequest, StaffRole } from "@/lib/contract";
 
 export const STAFF_ROLES = ["admin", "officer", "operator"] as const satisfies readonly StaffRole[];
-export const MIN_PASSWORD_LENGTH = 10;
 /** Tope de largo: evita gastar CPU de scrypt en cuerpos enormes. */
 export const MAX_PASSWORD_LENGTH = 256;
 
@@ -39,7 +38,7 @@ export const CreateStaffSchema = z.object({
   role: z.enum(STAFF_ROLES, { error: "Elige un rol: admin, officer u operator." }),
   password: z
     .string({ error: "Ingresa una contraseña inicial." })
-    .min(MIN_PASSWORD_LENGTH, `La contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres.`)
+    .min(1, "Ingresa una contraseña inicial.")
     .max(MAX_PASSWORD_LENGTH, "La contraseña es demasiado larga."),
 });
 
