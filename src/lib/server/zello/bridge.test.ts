@@ -96,13 +96,13 @@ function setup(opts: { voice?: boolean; obac?: string; pinned?: string | null } 
   return { bridge, vigia, radio, spoken, logs, advance: (ms: number) => (now += ms) };
 }
 
-test("una transmisión entra a la bitácora de todas las emergencias abiertas, con su grabación", async () => {
+test("una transmisión entra solo a la bitácora de la emergencia abierta más nueva, con su grabación", async () => {
   const { bridge, vigia } = setup();
   await bridge.onStream(stream("B-3", 20));
-  assert.deepEqual(vigia.uploads, ["inc-2", "inc-1"]);
+  assert.deepEqual(vigia.uploads, ["inc-2"]);
   assert.deepEqual(
     vigia.comms.map((c) => c.incident),
-    ["inc-2", "inc-1"],
+    ["inc-2"],
   );
   const c = vigia.comms[0].comm;
   assert.equal(c.speaker, "B-3");
@@ -269,7 +269,7 @@ test("una respuesta lenta de /ask no atrasa el registro de la transmisión sigui
   await bridge.onStream(stream("B-5", 20, 2));
   assert.deepEqual(
     vigia.comms.map((c) => c.comm.text),
-    ["Vigía, ¿qué tenemos?", "Vigía, ¿qué tenemos?", "B-5 llegando", "B-5 llegando"],
+    ["Vigía, ¿qué tenemos?", "B-5 llegando"],
   );
   release();
   await bridge.idle();
@@ -278,7 +278,7 @@ test("una respuesta lenta de /ask no atrasa el registro de la transmisión sigui
 test("avisa cuando hay varias emergencias abiertas y no hay --incident; el latido de cierre dice detenido", async () => {
   const { bridge, logs } = setup();
   await bridge.openIncidents();
-  assert.ok(logs.some((l) => /hay 2 emergencias abiertas.*VG-BBBB.*--incident/.test(l)));
+  assert.ok(logs.some((l) => /hay 2 emergencias abiertas.*solo en la más nueva \(VG-BBBB\).*--incident/.test(l)));
   const st = bridge.status(false, true);
   assert.equal(st.stopped, true);
   assert.equal(st.connected, false);

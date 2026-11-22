@@ -18,7 +18,11 @@ const LIST_EVERY_MS = 10_000;
 const IDLE_CHECK_MS = 5_000;
 /** Solo emergencias activas tocadas en las últimas horas (las viejas de demo no gastan). */
 const RECENT_MS = 12 * 3600_000;
-const MAX_INCIDENTS = 6;
+/**
+ * Vigía se centra en una emergencia a la vez: la abierta más nueva (mismo criterio que el
+ * puente Zello y el puente del dron). Para atender otra, se cierran las más nuevas.
+ */
+const MAX_INCIDENTS = 1;
 const LOCK_TTL_S = 90;
 
 interface Watch {
@@ -49,7 +53,7 @@ async function listWatched(): Promise<string[]> {
   const incidents = await getStore().listIncidents({ status: ["active", "controlled"] });
   return incidents
     .filter((i) => now - Date.parse(i.updated_at) <= RECENT_MS)
-    .sort((a, b) => b.updated_at.localeCompare(a.updated_at))
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
     .slice(0, MAX_INCIDENTS)
     .map((i) => i.id);
 }

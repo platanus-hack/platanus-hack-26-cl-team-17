@@ -6,7 +6,7 @@
  *
  * Lee la configuración de .env.local (ZELLO_*, ELEVENLABS_*, VIGIA_BRIDGE_TOKEN) o del entorno.
  * - Escucha el canal ZELLO_CHANNEL y registra cada transmisión, transcrita, en la
- *   bitácora de todas las emergencias abiertas (o solo la de --incident).
+ *   bitácora de la emergencia abierta más nueva (o solo la de --incident).
  * - Dice en el canal lo que el agente marca para hablar, con las reglas duras de
  *   src/lib/vigia/rules.ts (20 s entre mensajes salvo persona, filtro de «no hay
  *   nadie», sin órdenes a las unidades).
@@ -42,7 +42,7 @@ Uso: npm run zello -- [opciones]
 
   --url URL        URL base de Vigía (por defecto VIGIA_URL o http://localhost:3000)
   --incident ID    Registrar solo en esta emergencia (id o código VG-XXXX).
-                   Por defecto: todas las emergencias abiertas.
+                   Por defecto: la emergencia abierta más nueva.
   --listen-only    Solo escuchar: Vigía no habla en el canal.
   --channel NOMBRE Canal de Zello (por defecto ZELLO_CHANNEL o demo-platanus).
   --force          Arrancar aunque ese Vigía ya tenga otro puente conectado.
@@ -180,7 +180,7 @@ function main(): number | void {
         process.exit(2);
       }
     }
-    log(`puente Zello → ${url} · canal «${channel}» como ${config.zelloUsername}${listenOnly ? " · solo escucha" : ""}${values.incident ? ` · solo ${values.incident}` : " · todas las emergencias abiertas"}`);
+    log(`puente Zello → ${url} · canal «${channel}» como ${config.zelloUsername}${listenOnly ? " · solo escucha" : ""}${values.incident ? ` · solo ${values.incident}` : " · la emergencia abierta más nueva"}`);
     client.start();
     void heartbeat();
   })();

@@ -231,15 +231,20 @@ export class ZelloBridge {
     if (this.incidentsCache && now - this.incidentsCache.at < INCIDENTS_TTL_MS) return this.incidentsCache.list;
     let list = await this.d.vigia.openIncidents();
     const pin = this.d.pinnedIncident?.trim().toUpperCase();
-    if (pin) list = list.filter((i) => i.id.toUpperCase() === pin || i.code.toUpperCase() === pin);
+    if (pin) {
+      list = list.filter((i) => i.id.toUpperCase() === pin || i.code.toUpperCase() === pin);
+    } else {
+      // Vigía se centra en una emergencia a la vez: la abierta más nueva (la lista viene así ordenada).
+      if (list.length > 1 && list.length !== this.warnedMulti) {
+        this.warnedMulti = list.length;
+        this.d.log(
+          `hay ${list.length} emergencias abiertas: Vigía escucha y habla solo en la más nueva (${list[0].code}). Usa --incident para fijar otra.`,
+        );
+      }
+      list = list.slice(0, 1);
+    }
     this.incidentsCache = { at: now, list };
     this.incidentCodes = list.map((i) => i.code);
-    if (!pin && list.length > 1 && list.length !== this.warnedMulti) {
-      this.warnedMulti = list.length;
-      this.d.log(
-        `hay ${list.length} emergencias abiertas: cada transmisión entra a todas y las preguntas del OBAC se responden con la más reciente (${list[0].code}). Usa --incident para fijar una.`,
-      );
-    }
     return list;
   }
 
