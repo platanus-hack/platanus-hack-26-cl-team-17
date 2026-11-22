@@ -108,7 +108,6 @@ function main(): number | void {
         heartbeatSoon = setTimeout(() => void heartbeat(), 300);
       },
       onStream: (s) => void bridge?.onStream(s),
-      onTranscription: (t) => bridge?.onTranscription(t),
       onText: (m) => void bridge?.onText(m),
     },
   });

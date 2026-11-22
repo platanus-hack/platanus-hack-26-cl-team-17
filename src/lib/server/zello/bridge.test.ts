@@ -67,7 +67,7 @@ class FakeRadio implements RadioPort {
   }
 }
 
-function setup(opts: { voice?: boolean; obac?: string; pinned?: string | null; waitMs?: number } = {}) {
+function setup(opts: { voice?: boolean; obac?: string; pinned?: string | null } = {}) {
   let now = Date.parse("2026-11-21T18:00:10.000Z");
   const vigia = new FakeVigia();
   const radio = new FakeRadio();
@@ -90,7 +90,6 @@ function setup(opts: { voice?: boolean; obac?: string; pinned?: string | null; w
           },
     log: (m) => logs.push(m),
     now: () => now,
-    transcriptionWaitMs: opts.waitMs === undefined ? { unseen: 5, seen: 50 } : { unseen: opts.waitMs, seen: opts.waitMs },
     floorWaitMs: 0,
   });
   return { bridge, vigia, radio, spoken, logs, advance: (ms: number) => (now += ms) };
@@ -124,40 +123,15 @@ test("con --incident solo va a esa emergencia (por id o por código)", async () 
 
 type Transcribe = (ogg: Uint8Array) => Promise<string | null>;
 const setTranscribe = (bridge: ZelloBridge, fn: Transcribe) => ((bridge as unknown as { d: { transcribe: Transcribe } }).d.transcribe = fn);
-const zelloSaid = (streamId: number, text: string) => ({ streamId, text, sender: "x", confidence: 0.9, truncated: false });
-
-test("vale la primera transcripción con texto: la propia parte al soltar el PTT y no espera la de Zello", async () => {
-  // La de Zello llega mientras la propia sigue en curso: se usa la de Zello.
+test("el texto es siempre el de ElevenLabs, que parte al soltar el PTT", async () => {
   const a = setup();
-  setTranscribe(a.bridge, () => new Promise(() => undefined));
-  const job = a.bridge.onStream(stream("B-5", 20, 42));
-  a.bridge.onTranscription(zelloSaid(42, "B-5 llegando"));
-  await job;
-  assert.equal(a.vigia.comms[0].comm.text, "B-5 llegando");
-
-  // La de Zello ya estaba al terminar la transmisión: se usa y no se transcribe.
-  const b = setup();
   let calls = 0;
-  setTranscribe(b.bridge, async () => (calls++, "propia"));
-  b.bridge.onTranscription(zelloSaid(7, "Q-8 en el lugar"));
-  await b.bridge.onStream(stream("Q-8", 20, 7));
-  assert.equal(b.vigia.comms[0].comm.text, "Q-8 en el lugar");
-  assert.equal(calls, 0);
-
-  // La propia llega primero: se registra sin esperar la ventana de Zello (aquí, un minuto).
-  const c = setup({ waitMs: 60_000 });
-  await c.bridge.onStream(stream("B-3", 20, 9));
-  assert.equal(c.vigia.comms[0].comm.text, "B-3 en 6-3, fuego en segundo piso");
-  assert.match(c.logs.join("\n"), /texto en 0\.0 s/);
-
-  // La propia falla: vale la de Zello si llega dentro de la espera.
-  const d = setup({ waitMs: 60_000 });
-  setTranscribe(d.bridge, async () => null);
-  const late = d.bridge.onStream(stream("B-12", 20, 11));
-  await new Promise((r) => setTimeout(r, 5));
-  d.bridge.onTranscription(zelloSaid(11, "B-12 en ruta"));
-  await late;
-  assert.equal(d.vigia.comms[0].comm.text, "B-12 en ruta");
+  setTranscribe(a.bridge, async () => (calls++, "B-5 llegando"));
+  await a.bridge.onStream(stream("B-5", 20, 42));
+  assert.equal(calls, 1);
+  assert.equal(a.vigia.comms[0].comm.text, "B-5 llegando");
+  assert.match(a.logs.join("\n"), /texto en 0\.0 s/);
+  assert.equal("onTranscription" in a.bridge, false);
 });
 
 test("varias transmisiones se transcriben a la vez y se registran en el orden en que se dijeron", async () => {

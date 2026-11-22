@@ -37,14 +37,6 @@ export interface IncomingStream {
   packets: Uint8Array[];
 }
 
-export interface ZelloTranscription {
-  streamId: number;
-  text: string;
-  sender: string;
-  confidence: number | null;
-  truncated: boolean;
-}
-
 export interface ZelloTextMessage {
   channel: string;
   from: string;
@@ -64,7 +56,6 @@ export interface ZelloHandlers {
   onState?(state: ZelloChannelState): void;
   /** Una transmisión terminó (o se cortó): trae todos sus paquetes. */
   onStream?(stream: IncomingStream): void;
-  onTranscription?(t: ZelloTranscription): void;
   onText?(m: ZelloTextMessage): void;
 }
 
@@ -78,8 +69,6 @@ export interface ZelloClientOptions {
   handlers: ZelloHandlers;
   createSocket?: (url: string) => WebSocketLike;
   log?: (msg: string) => void;
-  /** Pide on_transcription en el logon (si Zello no lo acepta, se reintenta sin pedirlo). */
-  transcriptions?: boolean;
   baseBackoffMs?: number;
   maxBackoffMs?: number;
   commandTimeoutMs?: number;
@@ -137,7 +126,6 @@ export class ZelloClient {
   private readonly pending = new Map<number, Pending>();
   private readonly streams = new Map<number, { stream: IncomingStream; lastAt: number }>();
   private refreshToken: string | null = null;
-  private useFeatures: boolean;
   private attempt = 0;
   private lastErrorCode: string | null = null;
   private stopped = true;
@@ -151,7 +139,6 @@ export class ZelloClient {
   constructor(opts: ZelloClientOptions) {
     this.o = {
       createSocket: (url) => new WebSocket(url) as unknown as WebSocketLike,
-      transcriptions: true,
       baseBackoffMs: 1_000,
       maxBackoffMs: 30_000,
       commandTimeoutMs: 10_000,
@@ -160,7 +147,6 @@ export class ZelloClient {
       kickWindowMs: 5 * 60_000,
       ...opts,
     };
-    this.useFeatures = this.o.transcriptions;
   }
 
   get state(): ZelloChannelState {
@@ -244,7 +230,7 @@ export class ZelloClient {
       this.setState({ online: false, usersOnline: null, error: err instanceof Error ? err.message : String(err) });
       return;
     }
-    if (this.useFeatures) body.features = { transcriptions: true };
+    // Sin features.transcriptions: el texto lo pone siempre ElevenLabs, nunca Zello.
 
     this.command(body)
       .then((res) => {
@@ -256,7 +242,6 @@ export class ZelloClient {
         const code = err.message;
         this.lastErrorCode = code;
         if (usedRefresh) this.refreshToken = null; // la próxima vez, con auth_token
-        else if (code !== "not authorized" && this.useFeatures) this.useFeatures = false; // quizá no acepta features
         this.log(`Zello rechazó el inicio de sesión: ${code}`);
         this.setState({ online: false, usersOnline: null, error: describeZelloError(code) });
         if (this.ws === ws) ws.close(1000, "logon");
@@ -346,17 +331,6 @@ export class ZelloClient {
       }
       case "on_stream_stop":
         this.finishStream(Number(msg.stream_id));
-        break;
-      case "on_transcription":
-        if (typeof msg.text === "string" && !sameUser(String(msg.sender ?? ""), this.o.username)) {
-          this.o.handlers.onTranscription?.({
-            streamId: Number(msg.stream_id),
-            text: msg.text,
-            sender: String(msg.sender ?? ""),
-            confidence: typeof msg.confidence === "number" ? msg.confidence : null,
-            truncated: msg.truncated === true,
-          });
-        }
         break;
       case "on_text_message":
         if (typeof msg.text === "string" && !sameUser(String(msg.from ?? ""), this.o.username)) {

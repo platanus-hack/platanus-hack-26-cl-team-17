@@ -121,8 +121,8 @@ npm run zello -- --listen-only                   # Vigía no habla
   y expulsa al puente («otra sesión con la misma cuenta de Zello tomó la conexión»).
 
 ### Qué hace
-- **Escucha** el canal: cada transmisión (Opus → Ogg, sin decodificar) se transcribe con
-  `on_transcription` si Zello la manda, o con ElevenLabs, y entra a la bitácora de **la emergencia
+- **Escucha** el canal: cada transmisión (Opus → Ogg, sin decodificar) se transcribe
+  siempre con ElevenLabs (la transcripción de Zello no se pide ni se usa) y entra a la bitácora de **la emergencia
   que atiende Vigía** (la elegida en el tablero o la abierta más nueva; o la de `--incident`) con su grabación (speaker = usuario de Zello, source `zello`).
 - **Pregunta del OBAC**: lo que dice `ZELLO_OBAC_USERNAME`, o lo que empieza con «Vigía, …». La
   responde el agente; mientras la salida del agente no exista, el puente usa `POST …/ask`.

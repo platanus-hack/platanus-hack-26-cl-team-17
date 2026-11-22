@@ -3,8 +3,8 @@
  * Zello, API de Vigía, transcripción, voz, reglas) y las conecta. Probado en
  * bridge.test.ts; el proceso real lo arma tools/zello-bridge/main.mts.
  *
- * Entrada: cada transmisión del canal → Ogg Opus → texto (ElevenLabs desde que se
- * suelta el PTT, o on_transcription si llega antes) → bitácora de la emergencia que
+ * Entrada: cada transmisión del canal → Ogg Opus → texto (siempre ElevenLabs, desde que
+ * se suelta el PTT; la transcripción de Zello no se usa) → bitácora de la emergencia que
  * atiende Vigía, con speaker = usuario de Zello, channel = canal y source "zello".
  * La grabación sube mientras se transcribe.
  *
@@ -19,7 +19,7 @@
  */
 import type { ZelloBridgeStatus } from "@/lib/contract";
 import { UNTRANSCRIBED_COMM_TEXT } from "@/lib/labels";
-import type { IncomingStream, ZelloChannelState, ZelloTranscription, ZelloTextMessage } from "./client";
+import type { IncomingStream, ZelloChannelState, ZelloTextMessage } from "./client";
 import { isObacCommWith, VIGIA_SPEAKER } from "./channels";
 import { buildOggOpus, opusDurationSeconds } from "./protocol";
 import type { VoicePackets } from "./voice";
@@ -55,8 +55,6 @@ export interface BridgeDeps {
   voice: ((text: string) => Promise<VoicePackets>) | null;
   log: (msg: string) => void;
   now?: () => number;
-  /** Espera de on_transcription tras el fin de la transmisión: si aún no llegó ninguna / si ya llegaron. */
-  transcriptionWaitMs?: { unseen: number; seen: number };
   /** Tiempo máximo esperando que alguien suelte el PTT antes de hablar. */
   floorWaitMs?: number;
 }
@@ -68,8 +66,6 @@ const SPEECH_TTL_MS = 45_000;
 /** Al empezar a leer la salida de una emergencia, solo se dice lo de los últimos segundos. */
 const FRESH_MS = 30_000;
 const INCIDENTS_TTL_MS = 10_000;
-/** Una transcripción de Zello que nadie usó se olvida pasado este tiempo. */
-const STALE_TRANSCRIPT_MS = 60_000;
 const PRIORITY_ORDER: SpeechPriority[] = ["persona", "riesgo", "recursos", "resto"];
 
 /** Una transmisión ya oída: su texto y, si es de voz, la grabación (subiéndose o ya subida). */
@@ -107,11 +103,7 @@ const clip = (s: string, n: number) => (s.length <= n ? s : `${s.slice(0, n - 1)
 
 export class ZelloBridge {
   private readonly now: () => number;
-  private readonly wait: { unseen: number; seen: number };
   private readonly floorWaitMs: number;
-  private transcriptionsSeen = false;
-  private readonly transcripts = new Map<number, { text: string; at: number }>();
-  private readonly waiters = new Map<number, (text: string | null) => void>();
   private incidentsCache: { at: number; list: OpenIncident[] } | null = null;
   private readonly cursors = new Map<string, number>();
   /** null = no se sabe; true = el servidor no tiene la salida del agente (se usa /ask). */
@@ -131,62 +123,10 @@ export class ZelloBridge {
 
   constructor(private readonly d: BridgeDeps) {
     this.now = d.now ?? Date.now;
-    this.wait = d.transcriptionWaitMs ?? { unseen: 1_500, seen: 6_000 };
     this.floorWaitMs = d.floorWaitMs ?? 10_000;
   }
 
   /* ───────────── Entrada ───────────── */
-
-  onTranscription(t: ZelloTranscription): void {
-    if (t.truncated) return; // la parcial (al minuto) la reemplaza la final
-    this.transcriptionsSeen = true;
-    const waiter = this.waiters.get(t.streamId);
-    if (waiter) return waiter(t.text);
-    const now = this.now();
-    // Las que llegan tarde (ya se usó la transcripción propia) no se acumulan.
-    for (const [id, old] of this.transcripts) if (now - old.at > STALE_TRANSCRIPT_MS) this.transcripts.delete(id);
-    this.transcripts.set(t.streamId, { text: t.text, at: now });
-  }
-
-  private waitTranscription(streamId: number): Promise<string | null> {
-    const ms = this.transcriptionsSeen ? this.wait.seen : this.wait.unseen;
-    return new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        this.waiters.delete(streamId);
-        resolve(null);
-      }, ms);
-      this.waiters.set(streamId, (text) => {
-        clearTimeout(timer);
-        this.waiters.delete(streamId);
-        resolve(text);
-      });
-    });
-  }
-
-  /**
-   * Texto de una transmisión. La transcripción propia parte al soltar el PTT, sin esperar la
-   * de Zello (que casi nunca llega): vale la primera que traiga texto. Si la de Zello ya
-   * estaba, se usa esa y no se transcribe.
-   */
-  private async transcribeStream(streamId: number, ogg: Uint8Array): Promise<{ text: string | null; zello: boolean }> {
-    const ready = this.transcripts.get(streamId);
-    if (ready) {
-      this.transcripts.delete(streamId);
-      return { text: ready.text, zello: true };
-    }
-    const own = this.d.transcribe(ogg);
-    const zello = this.waitTranscription(streamId);
-    const first = await Promise.race([
-      own.then((text) => ({ text, zello: false })),
-      zello.then((text) => ({ text, zello: true })),
-    ]);
-    if (first.text) {
-      if (!first.zello) this.waiters.get(streamId)?.(null); // ya hay texto: no se sigue esperando a Zello
-      return first;
-    }
-    // La primera llegó vacía (falló o venció la espera): vale la otra.
-    return first.zello ? { text: await own, zello: false } : { text: await zello, zello: true };
-  }
 
   /** Sube la grabación a las emergencias que la van a recibir, mientras se transcribe. Nunca lanza. */
   private async uploadEarly(ogg: Uint8Array): Promise<Map<string, string>> {
@@ -245,10 +185,10 @@ export class ZelloBridge {
     }
     const ogg = buildOggOpus(s.packets, { sampleRate: s.codec.sampleRate, fallbackSamples });
     const uploaded = this.uploadEarly(ogg);
-    const { text, zello } = await this.transcribeStream(s.streamId, ogg);
+    const text = await this.d.transcribe(ogg);
     // El tiempo desde que soltó el PTT queda en el registro: es lo que se mide al afinar la latencia.
     const took = ((this.now() - endedAt) / 1000).toFixed(1);
-    this.d.log(`${s.from} (${seconds.toFixed(1)} s): ${text ?? "[sin transcribir]"} · texto en ${took} s${zello ? " · transcripción de Zello" : ""}`);
+    this.d.log(`${s.from} (${seconds.toFixed(1)} s): ${text ?? "[sin transcribir]"} · texto en ${took} s`);
     return { text: text ?? "", from: s.from, at: s.startedAt.toISOString(), ogg, uploaded };
   }
 

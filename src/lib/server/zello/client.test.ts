@@ -87,7 +87,7 @@ test("logon manda token, usuario, clave y un solo canal; queda en línea con el 
   assert.equal(logon.username, "vigia_bot");
   assert.equal(logon.password, "clave");
   assert.deepEqual(logon.channels, ["demo"]);
-  assert.deepEqual(logon.features, { transcriptions: true });
+  assert.equal(logon.features, undefined); // no se pide la transcripción de Zello
   assert.deepEqual(states.at(-1), { online: true, usersOnline: 3, error: null });
   client.stop();
 });
