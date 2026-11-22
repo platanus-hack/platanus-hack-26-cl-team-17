@@ -9,7 +9,7 @@
  * Los marcadores son HTML (Marker del motor) y su contenido se dibuja con React por portal.
  * Si dos etiquetas chocan en pantalla, se oculta la de menor prioridad (el punto queda).
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import type { GeoJSONSource, LngLatBoundsLike, Map as MlMap, Marker } from "maplibre-gl";
 import type { Feature, FeatureCollection, LineString, Polygon } from "geojson";
@@ -45,6 +45,11 @@ export interface FichaMapProps {
   onOpenMedia: (mediaId: string) => void;
   /** Muestra la ruta completa (estado "llegando"). */
   frameRoute: boolean;
+  /** Ventana flotante (intercambiada con el video del dron): sin controles ni HUD, se reencuadra al cambiar. */
+  mini?: boolean;
+  /** Caja del mapa; sin `style` ocupa toda la pantalla. */
+  className?: string;
+  style?: CSSProperties;
 }
 
 const PITCH_3D = 60;
@@ -212,7 +217,7 @@ interface Slot {
 }
 
 export default function FichaMap(props: FichaMapProps) {
-  const { model, view, focus, padding, media, openCamera, onOpenCamera, onOpenMedia, frameRoute } = props;
+  const { model, view, focus, padding, media, openCamera, onOpenCamera, onOpenMedia, frameRoute, mini = false, className, style } = props;
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [handle, setHandle] = useState<MapHandle | null>(null);
   const [ready, setReady] = useState(false);
@@ -333,6 +338,14 @@ export default function FichaMap(props: FichaMapProps) {
     }
     frame(true);
   }, [view, frameRoute, ready, frame]);
+  // Al pasar a la ventana flotante (o volver) el contenedor cambia de tamaño: se ajusta y se reencuadra.
+  const lastMini = useRef(mini);
+  useEffect(() => {
+    if (!ready || lastMini.current === mini) return;
+    lastMini.current = mini;
+    handle?.map.resize();
+    frame(true);
+  }, [mini, ready, handle, frame]);
 
   /* ── Capas propias ── */
   useEffect(() => {
@@ -531,7 +544,7 @@ export default function FichaMap(props: FichaMapProps) {
   const mediaById = useMemo(() => new Map(media.map((m) => [m.id, m])), [media]);
 
   return (
-    <div className="absolute inset-0 isolate">
+    <div className={cn("absolute isolate", !style && "inset-0", className)} style={style}>
       <div ref={containerRef} className="absolute inset-0" aria-label="Mapa 3D del incidente" role="region" />
       {failed && (
         <div className="absolute inset-0 grid place-items-center bg-f-wash text-[15px] text-f-muted">Mapa no disponible sin conexión</div>
@@ -559,27 +572,29 @@ export default function FichaMap(props: FichaMapProps) {
         return el ? createPortal(<SmokeColumn volume={k.volume} color={k.color} />, el, k.id) : null;
       })}
 
-      <MapHud map={ready ? (handle?.map ?? null) : null} padding={padding} />
+      {!mini && <MapHud map={ready ? (handle?.map ?? null) : null} padding={padding} />}
 
       {/* Controles mínimos: zoom, brújula, recentrar */}
-      <div
-        className="absolute z-10 flex flex-col overflow-hidden rounded-2xl bg-white/92 shadow-[0_8px_30px_rgb(33_32_28/0.12)] backdrop-blur-md"
-        // Sobre el círculo de Vigía (VigiaDock), que va abajo a la derecha del hueco.
-        style={{ right: padding.right + 16, bottom: 96 }}
-      >
-        <MapButton label="Acercar" onClick={() => handle?.map.zoomIn()}>
-          <Plus className="size-5" aria-hidden="true" />
-        </MapButton>
-        <MapButton label="Alejar" onClick={() => handle?.map.zoomOut()}>
-          <Minus className="size-5" aria-hidden="true" />
-        </MapButton>
-        <MapButton label="Orientar al norte" onClick={() => handle?.map.easeTo({ bearing: 0, duration: 500 })}>
-          <Compass className="size-5" style={{ transform: `rotate(${-bearing - 45}deg)` }} aria-hidden="true" />
-        </MapButton>
-        <MapButton label="Recentrar" onClick={() => frame(true)}>
-          <LocateFixed className="size-5" aria-hidden="true" />
-        </MapButton>
-      </div>
+      {!mini && (
+        <div
+          className="absolute z-10 flex flex-col overflow-hidden rounded-2xl bg-white/92 shadow-[0_8px_30px_rgb(33_32_28/0.12)] backdrop-blur-md"
+          // Sobre el círculo de Vigía (VigiaDock), que va abajo a la derecha del hueco.
+          style={{ right: padding.right + 16, bottom: 96 }}
+        >
+          <MapButton label="Acercar" onClick={() => handle?.map.zoomIn()}>
+            <Plus className="size-5" aria-hidden="true" />
+          </MapButton>
+          <MapButton label="Alejar" onClick={() => handle?.map.zoomOut()}>
+            <Minus className="size-5" aria-hidden="true" />
+          </MapButton>
+          <MapButton label="Orientar al norte" onClick={() => handle?.map.easeTo({ bearing: 0, duration: 500 })}>
+            <Compass className="size-5" style={{ transform: `rotate(${-bearing - 45}deg)` }} aria-hidden="true" />
+          </MapButton>
+          <MapButton label="Recentrar" onClick={() => frame(true)}>
+            <LocateFixed className="size-5" aria-hidden="true" />
+          </MapButton>
+        </div>
+      )}
     </div>
   );
 }

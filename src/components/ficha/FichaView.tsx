@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
-import { Box, Images, Map as MapIcon, Shapes } from "lucide-react";
+import { Box, Images, Map as MapIcon, Shapes, Video } from "lucide-react";
 import type { IncidentStatus, SceneModel } from "@/lib/domain";
 import { api, errorMessage, type ApiClientError } from "@/lib/client/api";
 import { useIncidentSnapshot } from "@/lib/client/use-live";
@@ -20,12 +20,15 @@ import { cn } from "@/lib/cn";
 import { MediaViewer } from "@/components/mando/incident/MediaViewer";
 import { findMediaByLabel, type MediaViewerTarget } from "@/components/mando/incident/types";
 import { Scene3D, type SceneSelection } from "@/components/scene3d";
+import { LiveVideo } from "@/components/drone/LiveFeed";
+import { isMissionActive } from "@/lib/drone/plan";
 import { useToast } from "@/components/ui/Toast";
 import { VigiaDock, useVigia } from "@/components/vigia";
 import { agentMessages, buildFicha, type ChatMessage, type LngLat } from "./model";
 import { placeUnitsOnRoute, useStreetRoute } from "./street-route";
 import { FichaHealth } from "./health";
 import { CriticalPanel, GLASS, MediaGridPanel, TopBar, VigiaPanel, useNow } from "./parts";
+import { FloatingControls, FloatingPill } from "./floating";
 import type { MapView } from "./map/FichaMap";
 
 const FichaMap = dynamic(() => import("./map/FichaMap"), { ssr: false });
@@ -71,6 +74,8 @@ function isUnauthorized(err: ApiClientError | null): boolean {
 }
 const GAP = 16;
 const TOP = 16 + 56 + 12;
+/** El mapa en la ventana flotante se encuadra sin márgenes de paneles. */
+const MINI_PADDING = { top: 0, right: 0, bottom: 0, left: 0 };
 
 export function FichaView({ id, demoState = null }: { id: string; demoState?: FichaDemoState }) {
   const { snapshot, error, refresh, stale, lastUpdatedAt } = useIncidentSnapshot(id);
@@ -98,6 +103,16 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
   const [schemeSel, setSchemeSel] = useState<SceneSelection | null>(null);
   /** El estado forzado "hablando" dura hasta que el OBAC toca algo. */
   const [demoActive, setDemoActive] = useState(demoState === "hablando");
+  // Dron real en vuelo (el más reciente): su video en vivo va en una ventana flotante sobre el mapa,
+  // intercambiable con él (el video al centro y el mapa a la ventana). Se recuerda la misión: si
+  // termina o llega otra, vuelve el mapa.
+  const liveMissionId = useMemo(() => {
+    const active = (snapshot?.missions ?? []).filter((m) => m.mode !== "simulated" && isMissionActive(m));
+    active.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return active[0]?.id ?? null;
+  }, [snapshot]);
+  const [videoMainFor, setVideoMainFor] = useState<string | null>(null);
+  const [floatHidden, setFloatHidden] = useState(false);
 
   const ficha = useMemo(() => (snapshot ? buildFicha(snapshot, { forceArriving: demoState === "llegando" }) : null), [snapshot, demoState]);
   // Historial del agente; sin mensajes del agente todavía, el resumen de radio y el informe.
@@ -176,6 +191,28 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
   const padding = { top: TOP + 52, right: gapRight, bottom: 110, left: gapLeft };
   const citizen = snapshot.media.filter((m) => m.source !== "drone");
   const incident = snapshot.incident;
+  const liveMission = liveMissionId ? (snapshot.missions.find((m) => m.id === liveMissionId) ?? null) : null;
+  const floating = liveMission !== null;
+  const videoBig = floating && videoMainFor === liveMissionId;
+  const floatW = compact ? 288 : 360;
+  // Bajo la caja de norte y escala del mapa; con el video al centro, dentro de él con margen.
+  const floatBox: CSSProperties = {
+    top: TOP + 108,
+    right: gapRight + (videoBig ? 12 : 0),
+    width: floatW,
+    height: Math.round((floatW * 9) / 16),
+  };
+  const stageBox: CSSProperties = { top: TOP + 56, left: gapLeft, right: gapRight, bottom: 110 };
+  const swap = () => {
+    setFloatHidden(false);
+    setOpenCamera(null);
+    if (videoBig) {
+      setVideoMainFor(null);
+    } else {
+      setVideoMainFor(liveMissionId);
+      if (tab !== "3d" && tab !== "plan") setTab("3d");
+    }
+  };
   const openByLabel = (label: string, frame?: number) => {
     const m = findMediaByLabel(snapshot.media, label);
     if (m) setViewer({ mediaId: m.id, frame: frame ?? null });
@@ -203,7 +240,7 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
         model={mapModel}
         view={tab === "plan" ? "plan" : "3d"}
         focus={focus}
-        padding={padding}
+        padding={videoBig ? MINI_PADDING : padding}
         media={citizen}
         openCamera={openCamera}
         onOpenCamera={(pinId) => {
@@ -212,6 +249,9 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
         }}
         onOpenMedia={(mediaId) => setViewer({ mediaId })}
         frameRoute={ficha.arriving}
+        mini={videoBig}
+        className={videoBig ? cn("z-[25] overflow-hidden rounded-xl shadow-[0_8px_24px_rgb(33_32_28/0.28)]", floatHidden && "invisible") : undefined}
+        style={videoBig ? floatBox : undefined}
       />
 
       {tab === "scheme" && (
@@ -256,7 +296,10 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
               type="button"
               role="tab"
               aria-selected={on}
-              onClick={() => setTab(t.key)}
+              onClick={() => {
+                setTab(t.key);
+                setVideoMainFor(null);
+              }}
               className={cn(
                 "inline-flex h-8 items-center gap-1.5 rounded-lg px-3 text-[14px] font-semibold transition-colors",
                 on ? "bg-f-wash text-f-ink" : "text-f-muted hover:text-f-ink",
@@ -295,6 +338,37 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
       {tab === "media" && (
         <MediaGridPanel media={citizen} onOpen={(mediaId) => setViewer({ mediaId })} style={{ top: TOP + 56, left: gapLeft, right: gapRight, bottom: 110 }} />
       )}
+
+      {/* Video en vivo del dron: el mismo elemento pasa de la ventana al centro, sin volver a cargar. */}
+      {liveMission && floating && (videoBig || !floatHidden) && (
+        <div
+          className={cn(
+            "absolute overflow-hidden rounded-xl bg-black shadow-[0_8px_24px_rgb(33_32_28/0.28)]",
+            videoBig ? "z-[6]" : "z-[25]",
+          )}
+          style={videoBig ? stageBox : floatBox}
+        >
+          <LiveVideo missionId={liveMission.id} label={liveMission.label} active compact={!videoBig} className="size-full" />
+        </div>
+      )}
+      {liveMission &&
+        floating &&
+        (floatHidden ? (
+          <FloatingPill
+            style={{ top: floatBox.top, right: floatBox.right }}
+            icon={videoBig ? MapIcon : Video}
+            label={videoBig ? "Mapa" : `Video del dron ${liveMission.label}`}
+            onShow={() => setFloatHidden(false)}
+          />
+        ) : (
+          <FloatingControls
+            style={floatBox}
+            what={videoBig ? "el mapa" : "el video"}
+            badge={videoBig ? (tab === "plan" ? "Planta" : "Mapa 3D") : null}
+            onSwap={swap}
+            onHide={() => setFloatHidden(true)}
+          />
+        ))}
 
       {/* Vigía (agente): un mensaje a la vez, abajo al centro del hueco; su voz sale por Zello. */}
       <VigiaDock incidentId={id} className="absolute z-30" style={{ left: gapLeft, right: gapRight, bottom: 24 }} />

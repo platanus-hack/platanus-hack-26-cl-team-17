@@ -289,20 +289,20 @@ function InsightRow({ insight, latest }: { insight: LiveInsightView; latest: boo
   );
 }
 
-export interface LiveFeedProps {
-  missionId: string;
+interface LiveVideoViewProps {
+  feed: FeedState;
+  detections: LiveDetection[];
   label: string;
-  /** false cuando la misión terminó: deja de consultar. */
-  active: boolean;
+  /** Miniatura (ventana flotante): rótulos chicos, sin conteo del detector ni pantalla completa. */
+  compact?: boolean;
+  /** Texto abajo en pantalla completa (la última observación de la IA). */
+  caption?: string | null;
   className?: string;
 }
 
-/** Video en vivo del dron con las observaciones de la IA cada ~15 s. */
-export function LiveFeed({ missionId, label, active, className }: LiveFeedProps) {
+/** El cuadro en vivo con las cajas del detector, el estado de la señal y la pantalla completa. */
+function LiveVideoView({ feed, detections, label, compact = false, caption = null, className }: LiveVideoViewProps) {
   const now = useNow(1000);
-  const feed = useLiveFrame(missionId, active);
-  const insights = useLiveInsights(missionId, active);
-  const detections = useLiveDetections(missionId, active);
   const boxRef = useRef<HTMLDivElement>(null);
   const [fullscreen, setFullscreen] = useState(false);
 
@@ -319,89 +319,140 @@ export function LiveFeed({ missionId, label, active, className }: LiveFeedProps)
 
   const age = feed.kind === "frame" && now !== null ? Math.max(0, now - feed.receivedAt) : null;
   const stale = age !== null && age > STALE_MS;
-  const list = insights?.insights ?? [];
-  const [latest, ...older] = list;
   // Cajas del cuadro que se está mostrando (mismo seq o el más cercano); con la señal detenida no se dibujan.
   const shownDetection = feed.kind === "frame" && !stale ? pickDetectionForSeq(detections, feed.seq) : null;
   const boxes = shownDetection ? overlayDetections(shownDetection.result) : [];
-  const countsText = detectionCountsLine(boxes);
+  const countsText = compact ? "" : detectionCountsLine(boxes);
+  const chip = compact ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-xs";
+
+  return (
+    <div ref={boxRef} className={cn("relative overflow-hidden bg-black", className)}>
+      {feed.kind === "frame" ? (
+        // eslint-disable-next-line @next/next/no-img-element -- cuadro local (blob:) que cambia varias veces por segundo
+        <img
+          src={feed.url}
+          alt={`Video en vivo del dron ${label}`}
+          className={cn("size-full object-contain", stale && "opacity-60 grayscale")}
+        />
+      ) : (
+        <div
+          className={cn(
+            "absolute inset-0 flex flex-col items-center justify-center gap-2 text-center text-white/75",
+            compact ? "p-2 text-xs" : "p-4 text-sm",
+          )}
+        >
+          {feed.kind === "error" ? (
+            <>
+              <VideoOff aria-hidden="true" className={compact ? "size-5" : "size-7"} />
+              No pudimos cargar el video. Reintentando…
+            </>
+          ) : (
+            <>
+              <Spinner size={compact ? "sm" : "md"} label="Esperando video" />
+              {compact ? "Esperando video del dron…" : "Esperando video del dron. Aparece apenas el sensor toque «Iniciar envío»."}
+            </>
+          )}
+        </div>
+      )}
+
+      {shownDetection && (
+        <DetectionOverlay width={shownDetection.result.width} height={shownDetection.result.height} detections={boxes} />
+      )}
+
+      <div
+        className={cn(
+          "pointer-events-none absolute flex items-center justify-between gap-2",
+          compact ? "inset-x-1.5 top-1.5" : "inset-x-2 top-2",
+        )}
+      >
+        {feed.kind === "frame" && (
+          <span
+            className={cn(
+              "flex items-center gap-1.5 rounded-md font-mono font-semibold text-white backdrop-blur-sm",
+              chip,
+              stale ? "bg-black/60" : "bg-critical/85",
+            )}
+          >
+            <span className={cn("size-2 rounded-full bg-white", !stale && "animate-pulse")} aria-hidden="true" />
+            {stale ? `SEÑAL DETENIDA · hace ${Math.round((age ?? 0) / 1000)} s` : "EN VIVO"}
+          </span>
+        )}
+        <span className={cn("rounded-md bg-black/60 font-mono font-semibold text-white backdrop-blur-sm", chip)}>Dron {label}</span>
+      </div>
+
+      {countsText && (
+        <span
+          className="pointer-events-none absolute top-10 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/65 px-2 py-1 font-mono text-xs font-semibold text-white backdrop-blur-sm"
+          title="Detecciones automáticas del detector de objetos: pueden fallar"
+        >
+          <ScanEye aria-hidden="true" className={cn("size-3.5 shrink-0", hasCritical(boxes) && "text-critical")} />
+          <span className="sr-only">Detector automático: </span>
+          <span className="truncate">{countsText}</span>
+        </span>
+      )}
+
+      {feed.kind === "frame" && !compact && (
+        <div className="absolute right-2 bottom-2">
+          <IconButton
+            icon={fullscreen ? Minimize2 : Maximize2}
+            label={fullscreen ? "Salir de pantalla completa" : "Ver en pantalla completa"}
+            size="sm"
+            variant="secondary"
+            onClick={toggleFullscreen}
+          />
+        </div>
+      )}
+
+      {fullscreen && caption && (
+        <p className="absolute inset-x-0 bottom-0 bg-black/70 px-4 py-3 pr-14 font-display text-lg leading-snug font-semibold text-white">
+          {caption}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export interface LiveVideoProps {
+  missionId: string;
+  label: string;
+  /** false cuando la misión terminó: deja de consultar. */
+  active: boolean;
+  compact?: boolean;
+  className?: string;
+}
+
+/** Solo el video en vivo del dron (con las cajas del detector), sin las observaciones de la IA. */
+export function LiveVideo({ missionId, label, active, compact, className }: LiveVideoProps) {
+  const feed = useLiveFrame(missionId, active);
+  const detections = useLiveDetections(missionId, active);
+  return <LiveVideoView feed={feed} detections={detections} label={label} compact={compact} className={className} />;
+}
+
+export interface LiveFeedProps {
+  missionId: string;
+  label: string;
+  /** false cuando la misión terminó: deja de consultar. */
+  active: boolean;
+  className?: string;
+}
+
+/** Video en vivo del dron con las observaciones de la IA cada ~15 s. */
+export function LiveFeed({ missionId, label, active, className }: LiveFeedProps) {
+  const feed = useLiveFrame(missionId, active);
+  const insights = useLiveInsights(missionId, active);
+  const detections = useLiveDetections(missionId, active);
+  const list = insights?.insights ?? [];
+  const [latest, ...older] = list;
 
   return (
     <div className={cn("flex flex-col gap-2", className)}>
-      <div ref={boxRef} className="relative aspect-video w-full overflow-hidden rounded-md border border-line bg-black">
-        {feed.kind === "frame" ? (
-          // eslint-disable-next-line @next/next/no-img-element -- cuadro local (blob:) que cambia varias veces por segundo
-          <img
-            src={feed.url}
-            alt={`Video en vivo del dron ${label}`}
-            className={cn("size-full object-contain", stale && "opacity-60 grayscale")}
-          />
-        ) : (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center text-sm text-white/75">
-            {feed.kind === "error" ? (
-              <>
-                <VideoOff aria-hidden="true" className="size-7" />
-                No pudimos cargar el video. Reintentando…
-              </>
-            ) : (
-              <>
-                <Spinner size="md" label="Esperando video" />
-                Esperando video del dron. Aparece apenas el sensor toque «Iniciar envío».
-              </>
-            )}
-          </div>
-        )}
-
-        {shownDetection && (
-          <DetectionOverlay width={shownDetection.result.width} height={shownDetection.result.height} detections={boxes} />
-        )}
-
-        <div className="pointer-events-none absolute inset-x-2 top-2 flex items-center justify-between gap-2">
-          {feed.kind === "frame" && (
-            <span
-              className={cn(
-                "flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-xs font-semibold text-white backdrop-blur-sm",
-                stale ? "bg-black/60" : "bg-critical/85",
-              )}
-            >
-              <span className={cn("size-2 rounded-full bg-white", !stale && "animate-pulse")} aria-hidden="true" />
-              {stale ? `SEÑAL DETENIDA · hace ${Math.round((age ?? 0) / 1000)} s` : "EN VIVO"}
-            </span>
-          )}
-          <span className="rounded-md bg-black/60 px-2 py-1 font-mono text-xs font-semibold text-white backdrop-blur-sm">
-            Dron {label}
-          </span>
-        </div>
-
-        {countsText && (
-          <span
-            className="pointer-events-none absolute top-10 left-2 flex max-w-[calc(100%-1rem)] items-center gap-1.5 rounded-md bg-black/65 px-2 py-1 font-mono text-xs font-semibold text-white backdrop-blur-sm"
-            title="Detecciones automáticas del detector de objetos: pueden fallar"
-          >
-            <ScanEye aria-hidden="true" className={cn("size-3.5 shrink-0", hasCritical(boxes) && "text-critical")} />
-            <span className="sr-only">Detector automático: </span>
-            <span className="truncate">{countsText}</span>
-          </span>
-        )}
-
-        {feed.kind === "frame" && (
-          <div className="absolute right-2 bottom-2">
-            <IconButton
-              icon={fullscreen ? Minimize2 : Maximize2}
-              label={fullscreen ? "Salir de pantalla completa" : "Ver en pantalla completa"}
-              size="sm"
-              variant="secondary"
-              onClick={toggleFullscreen}
-            />
-          </div>
-        )}
-
-        {fullscreen && latest && (
-          <p className="absolute inset-x-0 bottom-0 bg-black/70 px-4 py-3 pr-14 font-display text-lg leading-snug font-semibold text-white">
-            {latest.summary}
-          </p>
-        )}
-      </div>
+      <LiveVideoView
+        feed={feed}
+        detections={detections}
+        label={label}
+        caption={latest?.summary ?? null}
+        className="aspect-video w-full rounded-md border border-line"
+      />
 
       <div className="flex flex-col gap-2 rounded-md border border-line bg-surface-2 p-2.5">
         <div className="flex items-center justify-between gap-2">
