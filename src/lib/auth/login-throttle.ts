@@ -1,6 +1,9 @@
 /**
  * Límite de intentos FALLIDOS de inicio de sesión por correo (en memoria, por instancia).
  *
+ * INACTIVO mientras el login sea una maqueta (src/lib/auth.ts): la ruta de login ya no lo
+ * llama, porque nunca rechaza. Se conserva para cuando vuelva el login real.
+ *
  * Solo cuentan las contraseñas incorrectas: entrar bien no suma (y además limpia
  * el contador), así que el admin que inicia sesión en varios equipos durante una
  * emergencia no queda bloqueado. Defensa de mejor esfuerzo, como `rateLimit()`.

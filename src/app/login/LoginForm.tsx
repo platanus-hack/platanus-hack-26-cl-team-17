@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type FormEvent } from "react";
+import { useId, useState, useSyncExternalStore, type FormEvent } from "react";
 import { Eye, EyeOff, LockKeyhole, LogIn, Mail, TriangleAlert } from "lucide-react";
 import { Button, Field, IconButton, Input } from "@/components/ui";
 import { api, isApiClientError } from "@/lib/client/api";
@@ -13,6 +13,8 @@ interface LoginFormProps {
 /** Datos que el formulario trae puestos: los de la cuenta de demostración (DEMO_STAFF). */
 const DEMO_EMAIL = "demo@vigia.local";
 const DEMO_PASSWORD = "demo";
+
+const noopSubscribe = () => () => {};
 
 function messageFor(err: unknown): string {
   if (!isApiClientError(err)) return "No pudimos iniciar sesión. Intenta de nuevo.";
@@ -41,6 +43,10 @@ export function LoginForm({ next }: LoginFormProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // false en el HTML del servidor, true cuando React ya tomó el formulario. Hasta entonces el
+  // botón queda deshabilitado: un clic temprano haría un envío nativo (GET con el correo y la
+  // contraseña en la URL) que vuelve al login y pierde `next`.
+  const hydrated = useSyncExternalStore(noopSubscribe, () => true, () => false);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -115,8 +121,8 @@ export function LoginForm({ next }: LoginFormProps) {
         </div>
       </Field>
 
-      <Button type="submit" variant="primary" size="lg" icon={LogIn} loading={pending} autoFocus fullWidth>
-        {pending ? "Ingresando…" : "Ingresar como administrador"}
+      <Button type="submit" variant="primary" size="lg" icon={LogIn} loading={pending} disabled={!hydrated} fullWidth>
+        {pending ? "Ingresando…" : "Ingresar"}
       </Button>
       <p className="sr-only" aria-live="polite">
         {pending ? "Ingresando…" : ""}

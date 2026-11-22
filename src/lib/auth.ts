@@ -6,7 +6,10 @@
  *
  * MAQUETA PARA LA DEMO: el inicio de sesión no protege nada. Quien llega sin sesión entra
  * como la cuenta administradora de demostración, así el jurado abre el puesto de mando sin
- * pedir una cuenta. Todo lo que está detrás de requireStaff() queda abierto a internet.
+ * pedir una cuenta. Todo lo que está detrás de requireStaff() queda abierto a internet, y
+ * también lo que consulta getStaff() directo: /api/files y /api/briefing responden sin la
+ * clave del enlace, y /api/public/reports acepta `as_responder` de cualquiera.
+ * Sigue cerrado solo lo que exige el token del puente (requireBridge).
  *
  * Modo open (sin DATABASE_URL): siempre la sesión de demostración.
  * Modo staff: una cookie `__session` vigente de una cuenta real y activa conserva su nombre

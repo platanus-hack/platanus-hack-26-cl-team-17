@@ -6,6 +6,8 @@
  *  - Local: transmite el archivo desde disco con soporte de Range (seek del <video>).
  * Autoriza al personal con sesión, o a quien traiga la clave de solo lectura del
  * incidente dueño del archivo (enlace de briefing en ruta).
+ * OJO, demo: con el login de maqueta getStaff() siempre entrega a alguien, así que hoy
+ * cualquiera lee cualquier archivo, con o sin clave (ver src/lib/auth.ts).
  */
 import { getStaff } from "@/lib/auth";
 import { errors, route, type RouteCtx } from "@/lib/http";

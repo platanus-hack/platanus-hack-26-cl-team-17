@@ -2,8 +2,9 @@
  * Vigía — contrato HTTP entre el navegador (o el dron) y las rutas /api.
  *
  * Todas las respuestas de error usan `ApiError` con el status HTTP adecuado.
- * Las rutas "staff" exigen sesión de personal cuando hay Postgres configurado
- * (mode.auth === "staff"); en modo local quedan abiertas y la UI muestra "MODO LOCAL".
+ * Las rutas "staff" están pensadas para exigir sesión de personal cuando hay Postgres
+ * (mode.auth === "staff"). En la demo el login es una maqueta y quedan abiertas en ambos
+ * modos (ver src/lib/auth.ts); en modo local la UI muestra "MODO LOCAL".
  *
  * Mapa de rutas
  * ─────────────

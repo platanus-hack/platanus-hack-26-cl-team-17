@@ -47,7 +47,10 @@ export const config = {
   get gcpProject() {
     return env("GOOGLE_CLOUD_PROJECT") || env("GCP_PROJECT");
   },
-  /** Secreto para firmar la cookie de sesión del personal. Obligatorio con DATABASE_URL. */
+  /**
+   * Secreto para firmar la cookie de sesión del personal. Con el login de maqueta, si falta no
+   * hay error: no se emite cookie y /mando abre sin pasar por la pantalla de login.
+   */
   get sessionSecret() {
     return env("VIGIA_SESSION_SECRET");
   },

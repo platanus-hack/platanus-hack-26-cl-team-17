@@ -40,7 +40,8 @@ SECRET_SESSION="${SECRET_SESSION:-vigia-session-secret}"
 SECRET_ADMIN_PASSWORD="${SECRET_ADMIN_PASSWORD:-vigia-admin-password}"
 SECRET_ANTHROPIC="${SECRET_ANTHROPIC:-anthropic-api-key}"
 # Token interno del puente Zello (tools/zello-bridge → Authorization: Bearer). Con
-# DATABASE_URL las rutas del mando exigen sesión, así que sin él el puente recibe 401.
+# DATABASE_URL solo el puente puede anotar la radio e informar su estado: sin el token
+# esas dos rutas le responden 401/403 (el resto del mando está abierto por el login de maqueta).
 SECRET_BRIDGE="${SECRET_BRIDGE:-vigia-bridge-token}"
 
 # Servicio Cloud Run. min-instances=1 sin throttling de CPU es el principal costo fijo.

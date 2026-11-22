@@ -14,8 +14,8 @@ export function LoginScreen({ next }: { next: string }) {
         <Card padding="none" className="p-6">
           <h1 className="font-display text-2xl font-semibold">Ingresar</h1>
           <p className="mt-1 text-sm text-muted">
-            Acceso de demostración: entra como administrador con los datos que ya están puestos, o con cualquier
-            correo y contraseña.
+            Acceso de demostración: con los datos que ya están puestos, o con cualquier correo y contraseña, entras
+            como administrador. Una cuenta creada en Personal entra con su propio rol.
           </p>
           <LoginForm next={next} />
         </Card>
