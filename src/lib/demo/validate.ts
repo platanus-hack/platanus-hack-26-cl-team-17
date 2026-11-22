@@ -239,10 +239,24 @@ export function validateShowcase(spec: ShowcaseSpec): string[] {
   return out;
 }
 
+/** El simulacro acompaña el pitch: debe terminar en 40 s como máximo. */
+export const SCENARIO_MAX_S = 40;
+/** Margen del total para la red y los ~7 llamados al servidor. */
+export const SCENARIO_NETWORK_MARGIN_S = 6;
+
+/** Segundos de esperas del guion (la del último paso no se cumple: el simulacro ya terminó). */
+export function scenarioWaitS(script: ScenarioScript): number {
+  return script.steps.slice(0, -1).reduce((n, s) => n + s.wait_s, 0);
+}
+
 export function validateScenario(script: ScenarioScript): string[] {
   const out: string[] = [];
   const steps = script.steps;
-  if (steps.length < 8 || steps.length > 12) out.push(`guion: ${steps.length} pasos (se esperan ~9-10)`);
+  if (steps.length < 6 || steps.length > 12) out.push(`guion: ${steps.length} pasos (se esperan ~7)`);
+  const waitS = scenarioWaitS(script);
+  if (waitS > SCENARIO_MAX_S - SCENARIO_NETWORK_MARGIN_S) {
+    out.push(`guion: ${waitS} s de esperas (máx. ${SCENARIO_MAX_S - SCENARIO_NETWORK_MARGIN_S} para durar ≤ ${SCENARIO_MAX_S} s)`);
+  }
   const texts = new Set<string>();
   const titles = new Set<string>();
   let mediaCount = 0;

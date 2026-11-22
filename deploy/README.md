@@ -151,6 +151,23 @@ Variantes útiles:
 Las migraciones de `db/migrations/` se aplican solas al primer uso (con candado de Postgres,
 así que varias instancias no chocan). Para desactivarlo: `VIGIA_AUTO_MIGRATE=0`.
 
+### Detector YOLO (cajas en el video en vivo)
+
+La imagen de la app no trae el detector (`detector/` es Python y pesa ~50 MB de modelos). Para
+que el video en vivo del dron dibuje las cajas en la nube, se despliega aparte como servicio
+**privado** `vigia-detector` (4 vCPU / 2 GiB, `MIN_INSTANCES=0`: sin tráfico se apaga; el primer
+cuadro tras un rato sin uso espera unos segundos el arranque en frío):
+
+```bash
+bash deploy/detector.sh          # construye, despliega, da roles/run.invoker a vigia-run y conecta la app
+```
+
+La app lo llama con token de identidad (`VIGIA_DETECTOR_AUTH=gcp`, necesita una imagen de la app
+con ese soporte). `cloudrun.sh` encuentra `vigia-detector` solo y mantiene `VIGIA_DETECTOR_URL`
+en cada despliegue. Más CPU = YOLO más rápido por cuadro: `CPU=8 MEMORY=4Gi SKIP_BUILD=1 bash deploy/detector.sh`.
+Sobre el video solo se dibujan personas, bomberos, fuego, humo, cilindros de gas y cables caídos
+(`OVERLAY_LABELS` en `src/lib/vision/live-detections.ts`); el observador IA recibe todo.
+
 ## IAM: firmar URLs V4 sin llave, y CORS
 
 El navegador sube la evidencia **directo** a Cloud Storage con una URL firmada V4 (PUT) y la
@@ -244,6 +261,15 @@ docker run --rm -p 8080:8080 --add-host=host.docker.internal:host-gateway \
 
 Sin `-e DATABASE_URL` el contenedor corre en modo local (datos efímeros dentro del contenedor).
 `next build` ocupa varios GB de memoria: no lo corras con la máquina cargada.
+
+## Planes B durante la demo
+
+| Falla | Qué hacer |
+|---|---|
+| Claude lento o caído | Automático: Vigía cae a plantillas en ~30 s y no vuelve a esperar a Claude por 2 min. Un clic: en la ficha, botón «V» → **«Vigía sin IA (plantillas)»** (la fusión y la radio de esa emergencia pasan a reglas; «Volver a usar IA» lo revierte). La barra de la ficha muestra «Vigía sin IA». |
+| Puente Zello cortado o expulsado | La barra de la ficha muestra «Zello desconectado / sin señal». Si la cuenta del bot está abierta en otro lado, ciérrala: tras 3 expulsiones en 5 min el puente deja de pelear la conexión. Sin voz, la demo sigue con «V» → **«Demo: dos radios a la vez»**. Reiniciar el puente de la nube: `INSTANCES=0 SKIP_BUILD=1 CONFIRM=1 bash deploy/zello-bridge.sh` y luego `INSTANCES=1 SKIP_BUILD=1 CONFIRM=1 bash deploy/zello-bridge.sh`. No corras `npm run zello` local con el de la nube encendido (el puente local se niega si lo detecta; `--force` lo salta). |
+| Cloud SQL no responde | Las consultas fallan en ~10–15 s en vez de colgarse. Pasar a modo local en memoria (sin login, datos efímeros): `gcloud run services update vigia --region southamerica-west1 --remove-secrets=DATABASE_URL --max-instances=1` y en el tablero «Demostración → Cargar incidentes de demostración». Volver: correr `deploy/cloudrun.sh` de nuevo. |
+| Se cae el Wi-Fi del evento | Hotspot del teléfono para el notebook de la mesa. Radio y Vigía siguen (corren en la nube). La ficha muestra «Sin conexión · hace N s» mientras no hay red. El público debe usar el QR con código (`/reportar/<código>`), abierto desde la URL pública, no desde localhost. |
 
 ## Notas
 

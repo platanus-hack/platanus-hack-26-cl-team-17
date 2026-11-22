@@ -16,7 +16,7 @@ Conecta un dron (o algo que lo imite) con una misión de Vigía: envía la telem
 | `--simulate` | Vuelo sintético sin cámara: despega unos 300 m al sur, vuela a la órbita y gira alrededor del incidente mirando al centro. Necesita `--lat` y `--lng`. |
 | `--video ARCHIVO` | Igual que `--simulate`, pero además reproduce el video y envía un cuadro cada `--every` segundos (5 por defecto) al ritmo real de reproducción, con el lado mayor a 1280 px. Sirve para mostrar en una demo un video aéreo real. |
 | `--mavlink CONEXIÓN` | Lee posición y batería de un dron MAVLink (p. ej. `udp:127.0.0.1:14550`). **Retornar** pone el dron en modo RTL y **Abortar** en LAND. Es una **referencia que no se ha probado con hardware**: revísala y pruébala en simulador (SITL) antes de volar. |
-| `--rtmp [ESCUCHA]` | Servidor RTMP local para la **transmisión en vivo de DJI Fly** (por defecto `rtmp://0.0.0.0:1935/live/dron`). Manda video en vivo al puesto de mando y un cuadro cada `--every` s a análisis. La posición es la órbita sintética. Sin `--mission`, va sola a la emergencia más nueva. Ver [Video en vivo desde DJI Fly](#video-en-vivo-desde-dji-fly-rtmp). |
+| `--rtmp [ESCUCHA]` | Servidor RTMP local para la **transmisión en vivo de DJI Fly** (por defecto `rtmp://0.0.0.0:1935/live/dron`). Manda video en vivo al puesto de mando y un cuadro cada `--every` s a análisis. La posición es la órbita sintética. Sin `--mission`, va sola a la emergencia que atiende Vigía. Ver [Video en vivo desde DJI Fly](#video-en-vivo-desde-dji-fly-rtmp). |
 | `--stream URL` | Igual que `--rtmp`, pero lee el video de una URL que ffmpeg sepa abrir (RTSP, RTMP, SRT…), p. ej. la de un MediaMTX. |
 
 ### Ejemplos
@@ -55,7 +55,7 @@ Los pasos de abajo usan el servidor RTMP de ffmpeg integrado en el puente (`--rt
    `Servidor RTMP escuchando. En DJI Fly (Transmisión en vivo → RTMP) usa:  rtmp://172.16.1.45:1935/live/dron`
 3. En DJI Fly, desde la vista de cámara, abre los ajustes y busca **Transmisión en vivo → RTMP** (el nombre exacto del menú cambia según la versión y el dron). Pega la URL e inicia. A los 1–2 s el puente escribe `Llega video` y, cada 10 s, cuántos cuadros por segundo llegan a Vigía.
 
-**Modo automático.** El video va siempre a la emergencia abierta (activa o controlada) más nueva, igual que el agente Vigía y el puente Zello (Vigía atiende una emergencia a la vez; para pasar a otra, cierra las más nuevas o fija una con `--incident VG-XXXX`): el puente despliega ahí un dron «real por API» (aparece como `D<n>` en el panel Dron) y revisa cada 10 s. Si se crea una emergencia más nueva, o la actual se cierra, cierra esa misión y se cambia sola. Si el mando pulsa **Retornar** o **Abortar**, el puente deja de mandar a esa emergencia y espera una nueva. Sin emergencias abiertas, el video llega al notebook pero no se envía. La misión en curso queda en `~/.cache/vigia/drone-bridge.json` (solo para tu usuario) para retomarla al reiniciar el puente.
+**Modo automático.** El video va siempre a la emergencia que atiende Vigía, igual que el agente y el puente Zello. Vigía atiende una emergencia a la vez: la elegida en el selector discreto del tablero (arriba a la derecha, junto a los contadores) o, en «Automático», la abierta (activa o controlada) más nueva. Con `--incident VG-XXXX` el puente queda fijo en esa e ignora el selector. El puente despliega ahí un dron «real por API» (aparece como `D<n>` en el panel Dron) y revisa cada 10 s. Si la elegida cambia, se crea una más nueva (en Automático) o la actual se cierra, cierra esa misión y se cambia sola. Si el mando pulsa **Retornar** o **Abortar**, el puente deja de mandar a esa emergencia y espera una nueva. Sin emergencias abiertas, el video llega al notebook pero no se envía. La misión en curso queda en `~/.cache/vigia/drone-bridge.json` (solo para tu usuario) para retomarla al reiniciar el puente.
 
 **Con una misión fija.** Si prefieres elegir la emergencia: en el puesto de mando, **Desplegar dron → Dron real por API**, copia el comando y cambia `--simulate` por `--rtmp`.
 
@@ -104,7 +104,7 @@ Proceso aparte (notebook o Jetson) que mantiene abierta la conexión con la Zell
 No corre dentro de Next.js: Cloud Run atiende pedidos cortos y tiene varias instancias.
 
 ```bash
-npm run zello                                    # contra http://localhost:3000, la emergencia abierta más nueva
+npm run zello                                    # contra http://localhost:3000, la emergencia que atiende Vigía
 npm run zello -- --url https://vigia.example     # contra el despliegue (con VIGIA_BRIDGE_TOKEN)
 npm run zello -- --incident VG-XXXX              # solo una emergencia
 npm run zello -- --listen-only                   # Vigía no habla
@@ -123,7 +123,7 @@ npm run zello -- --listen-only                   # Vigía no habla
 ### Qué hace
 - **Escucha** el canal: cada transmisión (Opus → Ogg, sin decodificar) se transcribe con
   `on_transcription` si Zello la manda, o con ElevenLabs, y entra a la bitácora de **la emergencia
-  abierta más nueva** (o la de `--incident`) con su grabación (speaker = usuario de Zello, source `zello`).
+  que atiende Vigía** (la elegida en el tablero o la abierta más nueva; o la de `--incident`) con su grabación (speaker = usuario de Zello, source `zello`).
 - **Pregunta del OBAC**: lo que dice `ZELLO_OBAC_USERNAME`, o lo que empieza con «Vigía, …». La
   responde el agente; mientras la salida del agente no exista, el puente usa `POST …/ask`.
 - **Habla** en el canal lo que el agente marca para decir: ElevenLabs (PCM 16 kHz) → Opus en cuadros

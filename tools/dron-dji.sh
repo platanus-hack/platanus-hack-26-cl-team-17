@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Video en vivo de DJI Fly → Vigía, en un solo comando (desde vigia/):
 #
-#   tools/dron-dji.sh                         # Cloud Run, emergencia abierta más nueva
+#   tools/dron-dji.sh                         # Cloud Run, la emergencia que atiende Vigía
 #   tools/dron-dji.sh --incident VG-XXXX      # solo esa emergencia
 #   tools/dron-dji.sh http://localhost:3000   # otro Vigía (las opciones van después)
 #
 # 1. Levanta MediaMTX (servidor RTMP, en Docker) si no está corriendo: DJI Fly le transmite a él.
 # 2. Corre el puente en modo automático: lee el video de MediaMTX y lo manda a la emergencia
-#    abierta más nueva (pide el correo y la contraseña del puesto de mando, o usa
+#    que atiende Vigía (pide el correo y la contraseña del puesto de mando, o usa
 #    VIGIA_EMAIL / VIGIA_PASSWORD).
 # Ctrl+C detiene el puente; MediaMTX sigue corriendo (docker stop vigia-mediamtx lo apaga).
 set -euo pipefail

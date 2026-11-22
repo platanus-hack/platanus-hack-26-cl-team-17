@@ -123,15 +123,15 @@ test("cada cuadro pasa por YOLO en segundo plano; con una detección en curso se
   );
 });
 
-test("historial corto: quedan las últimas 30", async () => {
+test("historial corto: quedan las últimas 120 (cubren la ventana del observador)", async () => {
   const mission = await newMission();
-  for (let i = 0; i < 35; i++) {
+  for (let i = 0; i < 125; i++) {
     clock += 300;
     await live.pushLiveFrame(deps, mission, jpeg(i));
     await runDeferred();
   }
   const history = live.listLiveDetectionHistory(mission.id);
-  assert.equal(history.length, 30);
+  assert.equal(history.length, 120);
   assert.ok(history.every((d, i) => i === 0 || d.seq > history[i - 1].seq));
 });
 

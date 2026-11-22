@@ -16,10 +16,10 @@ const LEVELS: { label: string; items: string; detail: string; main?: boolean }[]
 
 export function FlowMinimal() {
   return (
-    <ol className="relative flex flex-col gap-10 text-white [text-shadow:0_1px_12px_rgb(0_0_0/0.6)] lg:ml-auto lg:w-full lg:max-w-lg">
+    <ol className="relative flex flex-col gap-7 text-white sm:gap-10 [text-shadow:0_1px_12px_rgb(0_0_0/0.6)] lg:ml-auto lg:w-full lg:max-w-lg">
       <span aria-hidden="true" className="absolute top-2 bottom-2 left-[5px] w-px bg-white/35" />
       {LEVELS.map((l) => (
-        <li key={l.label} className="relative flex gap-6">
+        <li key={l.label} className="relative flex gap-4 sm:gap-6">
           <span
             aria-hidden="true"
             className={
@@ -29,9 +29,9 @@ export function FlowMinimal() {
             }
           />
           <div className="min-w-0">
-            <p className={l.main ? "font-display text-2xl font-bold" : "font-mono text-[12px] tracking-[0.14em] text-white/65 uppercase"}>{l.label}</p>
-            <p className="mt-2 text-[18px] font-semibold text-white">{l.items}</p>
-            <p className="mt-1 text-[15px] leading-relaxed text-white/85">{l.detail}</p>
+            <p className={l.main ? "font-display text-xl font-bold sm:text-2xl" : "font-mono text-[12px] tracking-[0.14em] text-white/65 uppercase"}>{l.label}</p>
+            <p className="mt-1.5 text-[16px] font-semibold text-white sm:mt-2 sm:text-[18px]">{l.items}</p>
+            <p className="mt-1 text-[14px] leading-relaxed text-white/85 sm:text-[15px]">{l.detail}</p>
           </div>
         </li>
       ))}

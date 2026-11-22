@@ -20,8 +20,9 @@ Fuentes (elige una):
                        p. ej. la de un servidor MediaMTX.
 
 Modo automático: --rtmp o --stream sin --mission/--token. El puente entra con una cuenta del
-personal (VIGIA_EMAIL / VIGIA_PASSWORD, o las pregunta), despliega el dron en la emergencia
-abierta más nueva y se cambia solo cuando se crea otra.
+personal (VIGIA_EMAIL / VIGIA_PASSWORD, o las pregunta), despliega el dron en la emergencia que
+atiende Vigía (la elegida en el tablero o, si no hay, la abierta más nueva) y se cambia solo
+cuando esa cambia.
 
 Ejemplos:
   python3 tools/drone_bridge.py --url https://vigia.example --mission ID --token TOKEN --simulate --lat -33.4569 --lng -70.5987
@@ -657,7 +658,7 @@ def fly(
     """Una misión: telemetría cada 2 s, órdenes del mando (RETORNAR/ABORTAR) y cuadros de análisis.
 
     Devuelve por qué terminó: "stop" (Ctrl+C), "ended" (aterrizó o el mando abortó) o "leave"
-    (`leave()` pidió salir; en modo automático, porque hay una emergencia más nueva). Al salir
+    (`leave()` pidió salir; en modo automático, porque Vigía pasó a otra emergencia). Al salir
     cierra el lote de análisis en curso, salvo que el mando haya abortado.
     """
     video_done = not has_video
@@ -804,7 +805,7 @@ def _error_message(body: dict) -> str:
 
 
 class VigiaAccount:
-    """Sesión del personal en Vigía: lee las emergencias abiertas y despliega el dron en la más nueva.
+    """Sesión del personal en Vigía: lee las emergencias abiertas y despliega el dron en la que atiende Vigía.
 
     Sin base de datos (modo local abierto) no hace falta cuenta. Con cuentas usa VIGIA_EMAIL y
     VIGIA_PASSWORD, o las pregunta en la terminal; si la sesión vence, vuelve a entrar sola.
@@ -867,14 +868,18 @@ class VigiaAccount:
         log(f"Sesión iniciada como {self.email}.")
 
     def target(self, pinned: str | None) -> dict | None:
-        """La emergencia a la que va el dron: la fijada (código VG-XXXX o id) si sigue abierta, o la
-        abierta (activa o controlada) más nueva; mismo criterio que el puente Zello. None si no hay."""
-        incidents = self._call("GET", "/api/incidents").get("incidents", [])
+        """La emergencia a la que va el dron: la de --incident (código VG-XXXX o id) si sigue abierta;
+        sin --incident, la que atiende Vigía (la elegida en el tablero o, si no hay, la abierta más
+        nueva); mismo criterio que el puente Zello. None si no hay."""
+        body = self._call("GET", "/api/incidents")
+        incidents = body.get("incidents", [])
         abiertas = [i for i in incidents if i.get("status") in ("active", "controlled")]
         if pinned:
             key = pinned.strip().upper()
             return next((i for i in abiertas if i.get("code", "").upper() == key or i.get("id") == pinned.strip()), None)
-        return max(abiertas, key=lambda i: i.get("created_at", ""), default=None)
+        foco = (body.get("focus") or {}).get("incident_id")  # falta en servidores viejos
+        elegida = next((i for i in abiertas if i.get("id") == foco), None) if foco else None
+        return elegida or max(abiertas, key=lambda i: i.get("created_at", ""), default=None)
 
     def create_mission(self, incident_id: str) -> tuple[str, str, str]:
         """Despliega un dron real por API en la emergencia: (id de la misión, token, etiqueta D<n>)."""
@@ -944,11 +949,13 @@ def deploy(account: VigiaAccount, base_url: str, incident: dict, flight: Synthet
 
 
 def run_auto(args: argparse.Namespace, stop: threading.Event) -> int:
-    """Sin --mission: el video va siempre a la emergencia abierta más nueva.
+    """Sin --mission: el video va siempre a la emergencia que atiende Vigía (la elegida en el
+    tablero o, si no hay, la abierta más nueva).
 
     Despliega el dron (misión «dron real por API») en esa emergencia, la retoma si el puente se
-    reinicia y, si aparece una emergencia más nueva o la actual se cierra, cierra la misión y se
-    cambia. Si el mando termina la misión (RETORNAR o ABORTAR), no vuelve a esa emergencia.
+    reinicia y, si la elegida cambia, aparece una más nueva o la actual se cierra, cierra la
+    misión y se cambia. Si el mando termina la misión (RETORNAR o ABORTAR), no vuelve a esa
+    emergencia.
     """
     account = VigiaAccount(args.url)
     try:
@@ -959,7 +966,7 @@ def run_auto(args: argparse.Namespace, stop: threading.Event) -> int:
     if args.incident:
         log(f"Modo automático fijo: el video va solo a {args.incident} mientras esté abierta.")
     else:
-        log("Modo automático: el video va a la emergencia abierta más nueva y se cambia sola si llega otra.")
+        log("Modo automático: el video va a la emergencia que atiende Vigía (la elegida en el tablero o la más nueva) y se cambia sola.")
     frames: "queue.Queue[bytes | None]" = queue.Queue()
     sender = start_live(args, stop, frames, keep_going=True)
     finished: set[str] = set()
@@ -1018,7 +1025,7 @@ def run_auto(args: argparse.Namespace, stop: threading.Event) -> int:
             finished.add(target["id"])
             save_mission(args.url, None)
             continue
-        # Hay una emergencia más nueva (o esta se cerró): el dron deja esta misión cerrada.
+        # Vigía pasó a otra emergencia (o esta se cerró): el dron deja esta misión cerrada.
         try:
             flight.alt, flight.speed = 0.0, 0.0
             client.telemetry([flight.point()], "landed")
@@ -1039,12 +1046,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     p.add_argument(
         "--mission",
         help="Id de la misión (aparece en el panel de dron). Con --rtmp/--stream se puede omitir: "
-        "modo automático, el video va a la emergencia abierta más nueva.",
+        "modo automático, el video va a la emergencia que atiende Vigía (la elegida en el tablero o la más nueva).",
     )
     p.add_argument("--token", help="Token de ingesta entregado al desplegar el dron (va con --mission).")
     p.add_argument(
         "--incident", metavar="VG-XXXX",
-        help="Modo automático fijo: el dron va solo a esta emergencia (código o id) en vez de seguir la más nueva.",
+        help="Modo automático fijo: el dron va solo a esta emergencia (código o id) en vez de seguir la que atiende Vigía.",
     )
     src = p.add_mutually_exclusive_group(required=True)
     src.add_argument("--simulate", action="store_true", help="Órbita sintética sin cámara.")

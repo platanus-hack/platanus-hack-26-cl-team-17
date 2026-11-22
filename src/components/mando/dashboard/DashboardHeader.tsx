@@ -8,6 +8,8 @@ export interface DashboardHeaderProps {
   counts: ReturnType<typeof dashboardCounts>;
   /** Primera carga: muestra esqueletos en vez de ceros. */
   loading?: boolean;
+  /** Contenido discreto al final de la línea (el selector de la emergencia que atiende Vigía). */
+  aside?: ReactNode;
 }
 
 /** Un contador sin caja: número grande y rótulo corto debajo. */
@@ -28,16 +30,17 @@ function Count({ value, label, tone = "neutral" }: { value: ReactNode; label: st
 }
 
 /** Contadores del tablero en una línea: activos, con personas atrapadas y reportes sin verificar. */
-export function DashboardHeader({ counts, loading = false }: DashboardHeaderProps) {
+export function DashboardHeader({ counts, loading = false, aside }: DashboardHeaderProps) {
   const value = (n: number) => (loading ? <Skeleton className="h-8 w-12" /> : n);
   const trapped = !loading && counts.trapped > 0;
   const unverified = !loading && counts.unverified > 0;
 
   return (
-    <div className="flex items-end gap-8 px-3 pt-2 pb-1 sm:gap-12" aria-busy={loading || undefined}>
+    <div className="flex flex-wrap items-end gap-x-8 gap-y-2 px-3 pt-2 pb-1 sm:gap-x-12" aria-busy={loading || undefined}>
       <Count value={value(counts.active)} label="Activos" />
       <Count value={value(counts.trapped)} label="Con personas atrapadas" tone={trapped ? "critical" : "neutral"} />
       <Count value={value(counts.unverified)} label="Reportes sin verificar" tone={unverified ? "warning" : "neutral"} />
+      {aside && <div className="ml-auto min-w-0 pb-0.5">{aside}</div>}
     </div>
   );
 }

@@ -31,7 +31,7 @@ export function LandingHeader() {
       <nav
         aria-label="Principal"
         className={cn(
-          "mx-auto flex h-14 w-full max-w-6xl items-center gap-3 rounded-full border border-white/40 pr-2 pl-5 backdrop-blur-xl transition-[background-color,box-shadow] duration-300",
+          "mx-auto flex h-12 w-full max-w-6xl items-center gap-3 rounded-full sm:h-14 border border-white/40 pr-1.5 pl-4 backdrop-blur-xl sm:pr-2 sm:pl-5 transition-[background-color,box-shadow] duration-300",
           scrolled ? "bg-white/85 shadow-[0_8px_30px_rgb(21_26_33/0.14)]" : "bg-white/70 shadow-[0_8px_30px_rgb(21_26_33/0.25)]",
         )}
       >
@@ -60,7 +60,7 @@ export function LandingHeader() {
           </Link>
           <Link
             href="/mando"
-            className="inline-flex h-10 items-center gap-1.5 rounded-full bg-text px-4 text-[14px] font-bold text-white transition-colors hover:bg-text/85"
+            className="inline-flex h-9 items-center gap-1.5 rounded-full bg-text px-3.5 text-[13px] font-bold text-white transition-colors hover:bg-text/85 sm:h-10 sm:px-4 sm:text-[14px]"
           >
             <MonitorDot className="size-4" aria-hidden="true" />
             Puesto de mando
@@ -70,7 +70,7 @@ export function LandingHeader() {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label={open ? "Cerrar menú" : "Abrir menú"}
-            className="grid size-10 place-items-center rounded-full text-text hover:bg-surface-2 md:hidden"
+            className="grid size-9 place-items-center rounded-full text-text hover:bg-surface-2 sm:size-10 md:hidden"
           >
             {open ? <X className="size-5" aria-hidden="true" /> : <Menu className="size-5" aria-hidden="true" />}
           </button>

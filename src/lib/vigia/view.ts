@@ -2,7 +2,7 @@
  * Lo que la mesa de mando, el puente y la página pública ven de la memoria de Vigía. Puro.
  */
 import { scrubText } from "@/lib/server/diagnostics";
-import type { PublicVideoRequest, VigiaSalida, VigiaState, VigiaView } from "./types";
+import { radioText, type PublicVideoRequest, type VigiaSalida, type VigiaState, type VigiaView } from "./types";
 
 export function toVigiaView(state: VigiaState, engine: VigiaView["engine"], nowMs: number): VigiaView {
   return {
@@ -23,9 +23,14 @@ export function toVigiaView(state: VigiaState, engine: VigiaView["engine"], nowM
   };
 }
 
-/** Mensajes con seq mayor a `after` (todos si es null), en orden. */
+/**
+ * Mensajes con seq mayor a `after` (todos si es null), en orden. En los que van por voz,
+ * `text` es la línea de radio (lo que el puente dice); el detalle de la mesa queda en la vista.
+ */
 export function toSalida(state: VigiaState, after: number | null): VigiaSalida {
-  const items = state.utterances.filter((u) => after === null || u.seq > after);
+  const items = state.utterances
+    .filter((u) => after === null || u.seq > after)
+    .map((u) => (u.speak ? { ...u, text: radioText(u) } : u));
   return { items, last_seq: state.seq };
 }
 

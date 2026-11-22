@@ -5,6 +5,7 @@
  * quien llama sigue por el camino de antes (Claude con visión). Así la app funciona
  * igual sin el servicio.
  */
+import type { IdTokenClient } from "google-auth-library";
 import { config } from "@/lib/config";
 import { recordServerError } from "@/lib/server/diagnostics";
 import { parseDetectResult, type DetectResult } from "./types";
@@ -14,10 +15,30 @@ const DEFAULT_TIMEOUT_MS = 4_000;
 
 type GlobalWithDetector = typeof globalThis & {
   __vigiaDetectorHealth?: { at: number; ok: boolean; labels: string[] };
+  __vigiaDetectorIdClient?: Promise<IdTokenClient>;
 };
 
 function healthCache() {
   return globalThis as GlobalWithDetector;
+}
+
+/**
+ * Con VIGIA_DETECTOR_AUTH=gcp, token de identidad de la cuenta del servicio para el Cloud Run
+ * privado del detector (el cliente lo guarda y lo renueva antes de que venza). Si falla, lanza.
+ */
+async function authHeaders(): Promise<Record<string, string>> {
+  if (config.detectorAuth !== "gcp") return {};
+  const g = healthCache();
+  g.__vigiaDetectorIdClient ??= import("google-auth-library").then(({ GoogleAuth }) =>
+    new GoogleAuth().getIdTokenClient(config.detectorUrl),
+  );
+  try {
+    const value = (await (await g.__vigiaDetectorIdClient).getRequestHeaders()).get("authorization");
+    return value ? { authorization: value } : {};
+  } catch (err) {
+    g.__vigiaDetectorIdClient = undefined;
+    throw err;
+  }
 }
 
 export function isDetectorConfigured(): boolean {
@@ -39,7 +60,11 @@ export async function detectorHealthy(): Promise<boolean> {
   let ok = false;
   let labels: string[] = [];
   try {
-    const res = await fetch(`${config.detectorUrl}/health`, { signal: AbortSignal.timeout(1500), cache: "no-store" });
+    const res = await fetch(`${config.detectorUrl}/health`, {
+      headers: await authHeaders(),
+      signal: AbortSignal.timeout(1500),
+      cache: "no-store",
+    });
     if (res.ok) {
       const body = (await res.json()) as { ok?: unknown; labels?: unknown };
       ok = body.ok === true;
@@ -73,7 +98,7 @@ export async function detectFrame(bytes: Uint8Array, opts: DetectOptions = {}): 
   try {
     const res = await fetch(url, {
       method: "POST",
-      headers: { "content-type": opts.contentType ?? "image/jpeg" },
+      headers: { ...(await authHeaders()), "content-type": opts.contentType ?? "image/jpeg" },
       body: bytes as BodyInit,
       signal: AbortSignal.timeout(opts.timeoutMs ?? DEFAULT_TIMEOUT_MS),
       cache: "no-store",

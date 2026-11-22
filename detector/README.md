@@ -49,6 +49,9 @@ Variables: `VIGIA_DETECTOR_HOST` (127.0.0.1), `VIGIA_DETECTOR_PORT` (8765), `VIG
 (ruta a otro ONNX de YOLOE), `VIGIA_DETECTOR_POSE=0` (sin modelo de pose),
 `VIGIA_DETECTOR_THREADS` (hilos de onnxruntime, 4).
 
+En Cloud Run: `bash deploy/detector.sh` (usa el `Dockerfile` de esta carpeta, sube solo lo que
+no ignora `.gcloudignore` y deja el servicio privado; ver `deploy/README.md`).
+
 ## Probar
 
 ```bash

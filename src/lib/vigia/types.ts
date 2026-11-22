@@ -18,18 +18,23 @@ export type VigiaKind =
   | "pedido_video"
   | "propuesta";
 
-/** Un mensaje de Vigía (tarjeta en la mesa de mando y, si speak, voz por Zello). */
+/** Un mensaje de Vigía (tarjeta en la mesa de mando y, si speak, su línea de radio por Zello). */
 export interface VigiaUtterance {
   id: string;
   /** Secuencial por emergencia (la salida del puente pide ?after=<seq>). */
   seq: number;
   incident_id: string;
   at: string;
-  /** Texto final, ya pasado por las reglas duras. */
+  /** Texto para la mesa de mando (puede ser detallado), ya pasado por las reglas duras. */
   text: string;
+  /**
+   * Lo que se dice por radio: una frase corta y precisa. null = solo pantalla. Ausente en
+   * mensajes guardados antes de que existiera: ahí la radio decía `text`.
+   */
+  radio?: string | null;
   priority: VigiaPriority;
   kind: VigiaKind;
-  /** true → va por voz (Zello). false → solo pantalla (límite de 20 s, silencio o propuesta). */
+  /** true → `radio` va por voz (Zello). false → solo pantalla (sin línea de radio, límite de 20 s, silencio o propuesta). */
   speak: boolean;
   /** Etiquetas de la evidencia: "M3", "C12", "D1"… */
   evidence: string[];
@@ -206,6 +211,11 @@ export interface VigiaUnchanged {
 }
 
 /** Salida para el puente Zello (GET /api/incidents/[id]/vigia/salida?after=<seq>). */
+/** Lo que se dice (o se diría) por radio de un mensaje. */
+export function radioText(u: Pick<VigiaUtterance, "text" | "radio">): string {
+  return u.radio ?? u.text;
+}
+
 export interface VigiaSalida {
   items: VigiaUtterance[];
   last_seq: number;

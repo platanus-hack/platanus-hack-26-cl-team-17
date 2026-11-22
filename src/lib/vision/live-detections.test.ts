@@ -35,11 +35,21 @@ test("detectionCountsLine: lo crítico primero, plurales y sin número para el h
   );
 });
 
-test("overlayDetections: deja peligros desde 15 % y el resto desde 30 %", () => {
-  const out = overlayDetections(res([d("humo", 0.16), d("fuego", 0.1), d("persona", 0.29), d("auto", 0.31), d("persona", 0.8)]));
+test("overlayDetections: solo personas y peligros; peligros desde 15 % y el resto desde 30 %", () => {
+  const out = overlayDetections(
+    res([
+      d("humo", 0.16),
+      d("fuego", 0.1),
+      d("persona", 0.29),
+      d("auto", 0.9),
+      d("ventana", 0.8),
+      d("bombero", 0.31),
+      d("persona", 0.8),
+    ]),
+  );
   assert.deepEqual(
     out.map((x) => `${x.label}:${x.conf}`),
-    ["humo:0.16", "auto:0.31", "persona:0.8"],
+    ["humo:0.16", "bombero:0.31", "persona:0.8"],
   );
   assert.equal(hasCritical(out), true);
   assert.equal(hasCritical([d("auto", 0.9)]), false);

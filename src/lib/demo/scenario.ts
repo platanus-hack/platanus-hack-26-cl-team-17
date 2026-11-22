@@ -16,13 +16,13 @@ import type { DemoDeps, ScenarioMediaSpec, ScenarioScript } from "./types";
 
 /** Un paso 0 repetido dentro de esta ventana reutiliza el simulacro recién creado. */
 const RESTART_DEDUP_MS = 90_000;
-/** El dron del simulacro despega desde el puesto de mando, cerca del incidente (no a 300 m). */
-const DRILL_HOME_DISTANCE_M = 120;
-const DRILL_HOME_BEARING_DEG = 200;
+/** El dron del simulacro despega desde el puesto de mando, a pasos del incidente: llega en ~14 s. */
+export const DRILL_HOME_DISTANCE_M = 60;
+export const DRILL_HOME_BEARING_DEG = 200;
 /** Antes del lote del dron se espera, como máximo, esto a que el dron simulado llegue a su órbita. */
-const MAX_DRONE_WAIT_S = 20;
+export const MAX_DRONE_WAIT_S = 20;
 /** Margen por el intervalo del tick del mando (~2 s) y la red. */
-const TICK_MARGIN_S = 3;
+export const TICK_MARGIN_S = 3;
 
 const STATUS_TEXT: Record<Incident["status"], string> = {
   active: "activo",
@@ -39,7 +39,11 @@ async function findFreshDrill(deps: DemoDeps, script: ScenarioScript): Promise<I
   );
   if (candidates.length === 0) return null;
   const counts = await deps.store.getIncidentCounts(candidates.map((i) => i.id));
-  return candidates.find((i) => (counts[i.id]?.media ?? 0) === 0 && (counts[i.id]?.comms ?? 0) === 0) ?? null;
+  // Solo se reutiliza si no avanzó más allá del paso 0 (que puede traer radio y despegar el dron).
+  const step0Comms = script.steps[0]?.comms?.length ?? 0;
+  return (
+    candidates.find((i) => (counts[i.id]?.media ?? 0) === 0 && (counts[i.id]?.comms ?? 0) <= step0Comms) ?? null
+  );
 }
 
 async function createDrill(deps: DemoDeps, script: ScenarioScript): Promise<Incident> {

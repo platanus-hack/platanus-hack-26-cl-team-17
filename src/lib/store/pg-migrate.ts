@@ -10,12 +10,17 @@
  */
 import fsp from "node:fs/promises";
 import path from "node:path";
-import type { Pool } from "pg";
+import type { Pool, QueryConfig } from "pg";
 import { config } from "../config";
 import { getPool } from "./pg-pool";
 
 /** Clave fija del candado consultivo de migraciones ("vigia" + 1). */
 const MIGRATION_LOCK_KEY = 7_316_201_001;
+/** Espera máxima del candado y de cada migración (el resto de las consultas corta a los 10–15 s). */
+const MIGRATION_TIMEOUT_MS = 10 * 60_000;
+
+/** node-postgres acepta `query_timeout` por consulta (pisa el del pool); sus tipos no lo declaran. */
+type TimedQuery = QueryConfig & { query_timeout?: number };
 
 type GlobalWithMigration = typeof globalThis & { __vigiaPgMigrated?: Promise<void> };
 
@@ -42,7 +47,11 @@ export async function migrate(pool: Pool = getPool()): Promise<string[]> {
   let broken: Error | undefined;
   const applied: string[] = [];
   try {
-    await client.query("select pg_advisory_lock($1)", [MIGRATION_LOCK_KEY]);
+    // Esperar el candado (otra instancia migrando) y una migración pesada pueden pasar el tope
+    // normal de las consultas: aquí se espera hasta 10 min. RESET al final lo devuelve al del pool.
+    await client.query("SET statement_timeout = 0");
+    const lock: TimedQuery = { text: "select pg_advisory_lock($1)", values: [MIGRATION_LOCK_KEY], query_timeout: MIGRATION_TIMEOUT_MS };
+    await client.query(lock);
     try {
       await client.query(
         `create table if not exists schema_migrations (
@@ -58,7 +67,8 @@ export async function migrate(pool: Pool = getPool()): Promise<string[]> {
         await client.query("BEGIN");
         try {
           // Sin parámetros: protocolo simple, admite varias sentencias y cuerpos $$.
-          await client.query(sql);
+          const run: TimedQuery = { text: sql, query_timeout: MIGRATION_TIMEOUT_MS };
+          await client.query(run);
           await client.query("insert into schema_migrations (name) values ($1)", [name]);
           await client.query("COMMIT");
         } catch (err) {
@@ -79,6 +89,7 @@ export async function migrate(pool: Pool = getPool()): Promise<string[]> {
       }
     }
   } finally {
+    if (!broken) await client.query("RESET statement_timeout").catch(() => (broken = new Error("No se pudo restaurar statement_timeout.")));
     // Una conexión en mal estado (o con el candado tomado) se descarta en vez de volver al pool.
     client.release(broken);
   }

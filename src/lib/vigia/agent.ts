@@ -40,7 +40,7 @@ import {
   VIGIA_TOOLS,
   type TurnContext,
 } from "./tools";
-import type { VigiaState, VigiaStatus, VigiaUtterance } from "./types";
+import { radioText, type VigiaState, type VigiaStatus, type VigiaUtterance } from "./types";
 import { loadWorld, type World } from "./world";
 
 const MAX_STEPS = 6;
@@ -106,9 +106,11 @@ function clip(text: string, max: number): string {
 function describeEvent(e: VigiaEvent): string {
   switch (e.type) {
     case "inicio":
-      return "- INICIO: es tu primera vuelta en esta emergencia. Preséntate al OBAC: qué estás mirando, qué radios escuchas y qué lados no ves. Si falta un lado y hay videos, pide video de ese lado.";
+      return "- INICIO: es tu primera vuelta en esta emergencia. Preséntate al OBAC (tipo \"presentacion\"): en texto, qué estás mirando, qué radios escuchas y qué lados no ves; por_radio, una sola frase corta («OBAC, Vigía: en escucha, 3 videos, sin ver el lado C.»). Si falta un lado y hay videos, pide video de ese lado.";
     case "pregunta":
-      return `- PREGUNTA DEL OBAC (${e.question.from === "zello" ? `por radio, C${e.question.comm_seq}` : "en la mesa de mando"}, ${formatClock(e.question.at)}): «${e.question.text}» → respóndela con hablarle_al_obac tipo "respuesta".`;
+      return e.question.from === "zello"
+        ? `- PREGUNTA DEL OBAC POR RADIO (C${e.question.comm_seq}, ${formatClock(e.question.at)}): «${e.question.text}» → respóndela con hablarle_al_obac tipo "respuesta": por_radio con la respuesta precisa (máx. 25 palabras) y el detalle en texto.`
+        : `- PREGUNTA DEL OBAC EN LA MESA DE MANDO (${formatClock(e.question.at)}): «${e.question.text}» → respóndela con hablarle_al_obac tipo "respuesta", solo en texto (sin por_radio): con detalle, fuentes y lo que no sabes.`;
     case "radio":
       return `- RADIO NUEVA:\n${e.lines.map((l) => `  C${l.seq} ${formatClock(l.at)} ${l.speaker || "Sin identificar"}${l.channel ? ` [${l.channel}]` : ""}: ${l.expanded}`).join("\n")}`;
     case "video_nuevo":
@@ -141,9 +143,9 @@ function describeEvent(e: VigiaEvent): string {
         .map((f) => `${detectionText(f.label)}${f.count > 1 ? ` ×${f.count}` : ""} ${Math.round(f.conf * 100)} %${f.pose === "tendido" ? " (tendida)" : ""}`)
         .join(", ")}. Avisa al OBAC si importa (evidencia ${e.label}), con la confianza; una detección sola es «posible».`;
     case "pendiente_vencido":
-      return `- PENDIENTES SIN CONFIRMAR: ${e.pending.map((p) => `${p.id}: ${p.text} a las ${formatClock(p.at)} (${p.source})`).join("; ")}. Recuérdaselo al OBAC (tipo "pendiente").`;
+      return `- PENDIENTES SIN CONFIRMAR: ${e.pending.map((p) => `${p.id}: ${p.text} a las ${formatClock(p.at)} (${p.source})`).join("; ")}. Recuérdaselo al OBAC en la mesa (tipo "pendiente"); por radio solo si lo pedido es para una posible persona o un riesgo.`;
     case "reloj":
-      return `- RELOJ: resume la radio de los últimos minutos si aporta algo (tipo "resumen"):\n${e.radio.map((l) => `  C${l.seq} ${l.speaker}: ${l.expanded}`).join("\n")}`;
+      return `- RELOJ: actualiza el estado en la mesa de mando si hay algo nuevo (tipo "resumen", solo texto, nunca por radio): qué pasó en la radio, qué ves y qué no ves, pendientes. Radio de los últimos minutos:\n${e.radio.map((l) => `  C${l.seq} ${l.speaker}: ${l.expanded}`).join("\n")}`;
   }
 }
 
@@ -166,7 +168,9 @@ function answerContext(world: World, state: VigiaState, nowMs: number): string {
 function turnMessage(world: World, state: VigiaState, events: VigiaEvent[], nowMs: number): string {
   const s = statusLine(world);
   const lastSpoken = state.last_spoken_at ? Math.round((nowMs - Date.parse(state.last_spoken_at)) / 1000) : null;
-  const recent = state.utterances.slice(-6).map((u) => `  ${formatClock(u.at)} [${u.kind}${u.speak ? ", hablado" : ", pantalla"}] ${u.text}`);
+  const recent = state.utterances
+    .slice(-6)
+    .map((u) => `  ${formatClock(u.at)} [${u.kind}${u.speak ? `, por radio: «${radioText(u)}»` : ", pantalla"}] ${u.text}`);
   const open = state.pending.filter((p) => p.status === "abierto");
   const requests = state.video_requests.filter((r) => Date.parse(r.expires_at) > nowMs);
   return [
@@ -181,7 +185,7 @@ function turnMessage(world: World, state: VigiaState, events: VigiaEvent[], nowM
     ...(events.some((e) => e.type === "pregunta")
       ? [
           "",
-          "PRIMERO responde la pregunta del OBAC con hablarle_al_obac (tipo \"respuesta\") en esta misma llamada: directo, con lo que sabes y lo que no. Lo demás, después.",
+          "PRIMERO responde la pregunta del OBAC con hablarle_al_obac (tipo \"respuesta\") en esta misma llamada: directo, con lo que sabes y lo que no (con por_radio solo si preguntó por radio). Lo demás, después.",
           answerContext(world, state, nowMs),
         ]
       : []),

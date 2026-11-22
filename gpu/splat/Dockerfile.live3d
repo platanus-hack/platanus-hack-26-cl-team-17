@@ -1,0 +1,12 @@
+# Servicio de reconstrucción 3D en vivo (LIVE3D.md) sobre la imagen del job vigia-splat:
+# reutiliza CUDA, PyTorch, VGGT y sus pesos; solo agrega el código y cambia el punto de entrada.
+# deploy/live3d.sh pasa BASE (por defecto vigia-splat:latest del mismo repositorio).
+ARG BASE
+FROM ${BASE}
+
+WORKDIR /app
+COPY splat/ /app/splat/
+RUN python -m compileall -q /app/splat
+
+ENV PORT=8080
+ENTRYPOINT ["python", "-m", "splat.live3d_server"]

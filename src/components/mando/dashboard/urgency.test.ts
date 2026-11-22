@@ -6,7 +6,9 @@ import {
   filterCounts,
   filterIncidents,
   isIncidentFilter,
+  isIncidentSort,
   sortByUrgency,
+  sortIncidents,
   splitUnverifiedCitizen,
   urgencyScore,
 } from "./urgency";
@@ -138,4 +140,24 @@ test("filterCounts e isIncidentFilter", () => {
   assert.ok(isIncidentFilter("closed"));
   assert.ok(!isIncidentFilter("nope"));
   assert.ok(!isIncidentFilter(null));
+});
+
+test("sortIncidents: cada criterio ordena y desempata por urgencia", () => {
+  const a = inc({ id: "a", created_at: "2026-11-21T08:00:00.000Z", updated_at: "2026-11-21T12:00:00.000Z", severity: "low" });
+  const b = inc({ id: "b", created_at: "2026-11-21T09:00:00.000Z", updated_at: "2026-11-21T09:30:00.000Z", severity: "critical" });
+  const c = inc({ id: "c", created_at: "2026-11-21T10:00:00.000Z", updated_at: "2026-11-21T10:00:00.000Z", severity: "low", trapped_status: "confirmed" });
+  const list = [a, b, c];
+  assert.deepEqual(ids(sortIncidents(list, "urgency")), ids(sortByUrgency(list)));
+  assert.deepEqual(ids(sortIncidents(list, "recent")), ["c", "b", "a"]);
+  assert.deepEqual(ids(sortIncidents(list, "oldest")), ["a", "b", "c"]);
+  assert.deepEqual(ids(sortIncidents(list, "updated")), ["a", "c", "b"]);
+  // Gravedad: b crítica; a y c empatan en baja → gana c por atrapados confirmados.
+  assert.deepEqual(ids(sortIncidents(list, "severity")), ["b", "c", "a"]);
+  assert.deepEqual(ids(list), ["a", "b", "c"], "no muta la entrada");
+});
+
+test("isIncidentSort valida valores leídos del almacenamiento", () => {
+  assert.equal(isIncidentSort("recent"), true);
+  assert.equal(isIncidentSort("nope"), false);
+  assert.equal(isIncidentSort(null), false);
 });

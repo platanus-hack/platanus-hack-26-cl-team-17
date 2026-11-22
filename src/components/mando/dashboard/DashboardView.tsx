@@ -2,9 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { CircleCheck, FlaskConical, Inbox, ListFilter, Map as MapIcon, Play, Plus, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
+import { ArrowDownUp, CircleCheck, FlaskConical, Inbox, ListFilter, Map as MapIcon, Play, Plus, RefreshCw, ShieldAlert, WifiOff } from "lucide-react";
 import { MandoShell } from "@/components/shell";
-import { Badge, Button, EmptyState, SegmentedControl, Skeleton, TimeAgo } from "@/components/ui";
+import { Badge, Button, EmptyState, SegmentedControl, Select, Skeleton, TimeAgo } from "@/components/ui";
 import { OverviewMap } from "@/components/map";
 import { useIncidentList, useMe, useRuntimeMode } from "@/lib/client/use-live";
 import { errorMessage } from "@/lib/client/api";
@@ -13,56 +13,87 @@ import { cn } from "@/lib/cn";
 import { CitizenReportCard } from "./CitizenReportCard";
 import { DashboardHeader } from "./DashboardHeader";
 import { DemoMenu, useSeedDemo, useToggleScenario } from "./DemoMenu";
+import { FocusSelect } from "./FocusSelect";
 import { IncidentCard, incidentCardDomId } from "./IncidentCard";
 import { NewIncidentDialog } from "./NewIncidentDialog";
 import {
   dashboardCounts,
   filterCounts,
   filterIncidents,
+  INCIDENT_SORTS,
   isIncidentFilter,
-  sortByUrgency,
+  isIncidentSort,
+  sortIncidents,
   splitUnverifiedCitizen,
   type IncidentFilter,
+  type IncidentSort,
 } from "./urgency";
 
-/* ───────────── Filtro persistido en sessionStorage ───────────── */
+/* ───────────── Preferencias persistidas en sessionStorage ───────────── */
 
-const FILTER_KEY = "vigia:mando-filter";
-const DEFAULT_FILTER: IncidentFilter = "active";
-const filterListeners = new Set<() => void>();
-// Respaldo en memoria si sessionStorage no está disponible (modo privado, bloqueado).
-let memoryFilter: IncidentFilter = DEFAULT_FILTER;
+/**
+ * Valor persistido en sessionStorage con respaldo en memoria (modo privado,
+ * almacenamiento bloqueado), compartido entre componentes y sin desajuste de
+ * hidratación (el servidor ve el valor por defecto).
+ */
+function createSessionPref<T extends string>(key: string, fallback: T, isValid: (v: unknown) => v is T) {
+  const listeners = new Set<() => void>();
+  let memory: T = fallback;
 
-function readFilter(): IncidentFilter {
-  try {
-    const v = window.sessionStorage.getItem(FILTER_KEY);
-    if (isIncidentFilter(v)) return v;
-  } catch {
-    /* sin almacenamiento: queda el valor en memoria */
-  }
-  return memoryFilter;
+  const read = (): T => {
+    try {
+      const v = window.sessionStorage.getItem(key);
+      if (isValid(v)) return v;
+    } catch {
+      /* sin almacenamiento: queda el valor en memoria */
+    }
+    return memory;
+  };
+
+  const write = (v: T): void => {
+    memory = v;
+    try {
+      window.sessionStorage.setItem(key, v);
+    } catch {
+      /* sin almacenamiento: solo en memoria */
+    }
+    listeners.forEach((l) => l());
+  };
+
+  const subscribe = (l: () => void): (() => void) => {
+    listeners.add(l);
+    return () => listeners.delete(l);
+  };
+
+  return function usePref(): [T, (v: T) => void] {
+    const value = useSyncExternalStore(subscribe, read, () => fallback);
+    return [value, write];
+  };
 }
 
-function writeFilter(v: IncidentFilter): void {
-  memoryFilter = v;
-  try {
-    window.sessionStorage.setItem(FILTER_KEY, v);
-  } catch {
-    /* sin almacenamiento: solo en memoria */
-  }
-  filterListeners.forEach((l) => l());
-}
+const usePersistedFilter = createSessionPref<IncidentFilter>("vigia:mando-filter", "active", isIncidentFilter);
+const usePersistedSort = createSessionPref<IncidentSort>("vigia:mando-sort", "urgency", isIncidentSort);
 
-function subscribeFilter(l: () => void): () => void {
-  filterListeners.add(l);
-  return () => filterListeners.delete(l);
-}
+/* ───────────── Textos por criterio de orden ───────────── */
 
-/** Filtro del tablero, sin desajuste de hidratación (el servidor ve el valor por defecto). */
-function usePersistedFilter(): [IncidentFilter, (v: IncidentFilter) => void] {
-  const value = useSyncExternalStore(subscribeFilter, readFilter, () => DEFAULT_FILTER);
-  return [value, writeFilter];
-}
+const SORT_LABEL: Record<IncidentSort, string> = {
+  urgency: "Urgencia",
+  recent: "Más recientes",
+  updated: "Última actualización",
+  severity: "Gravedad",
+  oldest: "Más antiguos",
+};
+
+/** Sufijo del título de la lista ("Activos · por urgencia"). */
+const SORT_HEADING: Record<IncidentSort, string> = {
+  urgency: "por urgencia",
+  recent: "más recientes primero",
+  updated: "por última actualización",
+  severity: "por gravedad",
+  oldest: "más antiguos primero",
+};
+
+const SORT_OPTIONS = INCIDENT_SORTS.map((value) => ({ value, label: SORT_LABEL[value] }));
 
 /* ───────────── Textos por filtro ───────────── */
 
@@ -98,6 +129,7 @@ export function DashboardView() {
   const { staff } = useMe();
   const { refresh } = list;
   const [filter, setFilter] = usePersistedFilter();
+  const [sort, setSort] = usePersistedSort();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [pinnedId, setPinnedId] = useState<string | null>(null);
@@ -110,7 +142,7 @@ export function DashboardView() {
 
   const incidents = list.incidents ?? NO_INCIDENTS;
   const loaded = list.incidents !== null;
-  const sorted = useMemo(() => sortByUrgency(incidents), [incidents]);
+  const sorted = useMemo(() => sortIncidents(incidents, sort), [incidents, sort]);
   const counts = useMemo(() => dashboardCounts(incidents), [incidents]);
   const perFilter = useMemo(() => filterCounts(incidents), [incidents]);
   const visible = useMemo(() => filterIncidents(sorted, filter), [sorted, filter]);
@@ -244,7 +276,7 @@ export function DashboardView() {
         {rest.length > 0 && (
           <section aria-labelledby="incidents-heading" className="flex flex-col gap-2">
             <h2 id="incidents-heading" className="label-caps text-xs text-muted">
-              {FILTER_LABEL[filter]} · por urgencia
+              {FILTER_LABEL[filter]} · {SORT_HEADING[sort]}
             </h2>
             <ul className="flex flex-col divide-y divide-line">
               {rest.map((i) => (
@@ -273,10 +305,16 @@ export function DashboardView() {
         </>
       }
     >
-      <div className="relative flex h-full min-h-0 flex-col overflow-y-auto lg:grid lg:grid-cols-[1fr_420px] lg:overflow-hidden">
+      <div className="relative flex h-full min-h-0 flex-col overflow-y-auto lg:grid lg:grid-cols-[minmax(0,1fr)_clamp(420px,42%,720px)] lg:overflow-hidden">
         <div className="relative min-w-0 lg:h-full lg:min-h-0 lg:overflow-y-auto">
           <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4">
-            {(loaded || !list.error) && <DashboardHeader counts={counts} loading={!loaded} />}
+            {(loaded || !list.error) && (
+              <DashboardHeader
+                counts={counts}
+                loading={!loaded}
+                aside={<FocusSelect incidents={incidents} focus={list.focus} onChanged={refresh} />}
+              />
+            )}
 
             {showBanner && (
               <div
@@ -293,13 +331,27 @@ export function DashboardView() {
               </div>
             )}
 
-            <div className="overflow-x-auto">
-              <SegmentedControl
-                ariaLabel="Filtrar incidentes por estado"
-                options={filterOptions}
-                value={filter}
-                onChange={setFilter}
-              />
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+              <div className="min-w-0 overflow-x-auto">
+                <SegmentedControl
+                  ariaLabel="Filtrar incidentes por estado"
+                  options={filterOptions}
+                  value={filter}
+                  onChange={setFilter}
+                />
+              </div>
+              <label className="flex shrink-0 items-center gap-2 text-sm text-muted">
+                <ArrowDownUp aria-hidden="true" className="size-4" />
+                Ordenar por
+                <Select
+                  options={SORT_OPTIONS}
+                  value={sort}
+                  onChange={(e) => {
+                    if (isIncidentSort(e.target.value)) setSort(e.target.value);
+                  }}
+                  className="w-52"
+                />
+              </label>
             </div>
 
             {body}
@@ -308,7 +360,7 @@ export function DashboardView() {
 
         <section
           aria-label="Mapa de incidentes"
-          className="relative order-first h-64 shrink-0 border-b border-line bg-surface-2 lg:order-none lg:h-full lg:border-b-0 lg:border-l"
+          className="relative order-first h-80 shrink-0 border-b border-line bg-surface-2 lg:order-none lg:h-full lg:border-b-0 lg:border-l"
         >
           <MapIcon aria-hidden="true" className="absolute left-1/2 top-1/2 size-8 -translate-1/2 text-faint" />
           <OverviewMap

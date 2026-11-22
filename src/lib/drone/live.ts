@@ -33,22 +33,26 @@ import { detectFrame, isDetectorConfigured } from "@/lib/vision/detector";
 import type { LiveDetection } from "@/lib/vision/live-detections";
 import { withoutAnnotation } from "@/lib/vision/media-detections";
 import { detectionText, frameInterest, type DetectResult } from "@/lib/vision/types";
+import { forwardLive3dFrame, isLive3dConfigured } from "./live3d";
 import { isMissionActive } from "./plan";
 import type { DroneDeps } from "./service";
 
 export const LIVE_INSIGHT_EVERY_MS = 15_000;
-/** Cuadros que se guardan en memoria por misión (~20 s a 3 cuadros por segundo). */
-const BUFFER_FRAMES = 60;
+/** Cuadros que se guardan en memoria por misión (~20 s a 8 cuadros por segundo, ~50 KB cada uno). */
+const BUFFER_FRAMES = 160;
 const MAX_INSIGHT_FRAMES = 3;
 const KEEP_INSIGHTS = 20;
 /** Cada cuánto el último cuadro se copia al storage para otras instancias. */
 const STORE_EVERY_MS = 2000;
 /** Sin cuadros nuevos por este tiempo la memoria de la misión se libera. */
 const IDLE_DROP_MS = 10 * 60_000;
-/** Detecciones en vivo que se guardan por misión (las más nuevas). */
-const KEEP_DETECTIONS = 30;
-/** Separación mínima entre detecciones de una misión (tope ~4 cuadros por segundo). */
-const MIN_DETECT_GAP_MS = 250;
+/** Detecciones en vivo que se guardan por misión (las más nuevas; cubren la ventana del observador). */
+const KEEP_DETECTIONS = 120;
+/**
+ * Separación mínima entre detecciones de una misión (tope ~8 por segundo). En la práctica manda
+ * la velocidad del detector: si hay una en curso, el cuadro se salta.
+ */
+const MIN_DETECT_GAP_MS = 125;
 /** Fuego y humo salen con confianzas bajas: se piden desde 0,1 y la interfaz filtra lo que dibuja. */
 const LIVE_DETECT_CONF = 0.1;
 const LIVE_DETECT_TIMEOUT_MS = 2500;
@@ -143,6 +147,8 @@ export async function pushLiveFrame(
   const seq = Math.max(now, (s.frames.at(-1)?.seq ?? 0) + 1);
   s.frames.push({ seq, at: now, bytes });
   if (s.frames.length > BUFFER_FRAMES) s.frames.splice(0, s.frames.length - BUFFER_FRAMES);
+  // Reconstrucción 3D en vivo (VIGIA_LIVE3D_URL): reenvío en segundo plano, se salta cuadros si hay uno en curso.
+  if (isLive3dConfigured()) deps.defer(() => forwardLive3dFrame(mission.id, bytes, now));
 
   // YOLO en segundo plano: la respuesta al sensor no espera; si hay una en curso, se salta este cuadro.
   if (!s.detecting && now - s.lastDetectAt >= MIN_DETECT_GAP_MS && isDetectorConfigured()) {

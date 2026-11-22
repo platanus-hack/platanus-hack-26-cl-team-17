@@ -8,6 +8,7 @@
  */
 import { config } from "@/lib/config";
 import { recordServerError } from "@/lib/server/diagnostics";
+import { loadFocusPin } from "@/lib/server/focus";
 import { getStore } from "@/lib/store";
 import { runVigiaTurn } from "./agent";
 import { getVigiaState } from "./state-store";
@@ -19,8 +20,8 @@ const IDLE_CHECK_MS = 5_000;
 /** Solo emergencias activas tocadas en las últimas horas (las viejas de demo no gastan). */
 const RECENT_MS = 12 * 3600_000;
 /**
- * Vigía se centra en una emergencia a la vez: la abierta más nueva (mismo criterio que el
- * puente Zello y el puente del dron). Para atender otra, se cierran las más nuevas.
+ * Vigía se centra en una emergencia a la vez: la fijada en el tablero o, si no hay, la abierta
+ * más nueva (mismo criterio que el puente Zello y el puente del dron; ver lib/server/focus.ts).
  */
 const MAX_INCIDENTS = 1;
 const LOCK_TTL_S = 90;
@@ -50,7 +51,9 @@ type GlobalWithSupervisor = typeof globalThis & {
 
 async function listWatched(): Promise<string[]> {
   const now = Date.now();
-  const incidents = await getStore().listIncidents({ status: ["active", "controlled"] });
+  const [incidents, pin] = await Promise.all([getStore().listIncidents({ status: ["active", "controlled"] }), loadFocusPin()]);
+  // La fijada a mano se atiende aunque lleve horas sin cambios.
+  if (pin && incidents.some((i) => i.id === pin)) return [pin];
   return incidents
     .filter((i) => now - Date.parse(i.updated_at) <= RECENT_MS)
     .sort((a, b) => b.created_at.localeCompare(a.created_at))
@@ -133,6 +136,12 @@ export function ensureVigiaSupervisor(): void {
   sup.timer.unref?.();
   g.__vigiaSupervisor = sup;
   console.info("[vigia] escucha continua activa", { every_ms: TICK_MS, model: config.vigiaAgentModel });
+}
+
+/** Cambió la emergencia en foco: la próxima vuelta del reloj vuelve a leer cuál atender. */
+export function refreshVigiaWatch(): void {
+  const sup = (globalThis as GlobalWithSupervisor).__vigiaSupervisor;
+  if (sup) sup.listedAt = 0;
 }
 
 /** Pide una vuelta lo antes posible (el OBAC escribió). */

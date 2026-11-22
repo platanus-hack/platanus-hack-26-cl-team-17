@@ -33,11 +33,11 @@ function Cta({ href, icon: Icon, children, variant }: { href: string; icon: Luci
     <Link
       href={href}
       className={cn(
-        "inline-flex h-14 items-center justify-center gap-2 rounded-full px-7 text-[17px] font-bold transition-colors",
+        "inline-flex h-12 items-center justify-center gap-2 rounded-full px-6 text-[15px] font-bold transition-colors sm:h-14 sm:px-7 sm:text-[17px]",
         variant === "light" ? "bg-white text-text hover:bg-white/90" : "border border-white/35 bg-white/10 text-white backdrop-blur-md hover:bg-white/20",
       )}
     >
-      <Icon className="size-5" aria-hidden="true" />
+      <Icon className="size-4 sm:size-5" aria-hidden="true" />
       {children}
     </Link>
   );
@@ -46,10 +46,10 @@ function Cta({ href, icon: Icon, children, variant }: { href: string; icon: Luci
 function SectionTitle({ id, eyebrow, children, tone = "light" }: { id: string; eyebrow: string; children: ReactNode; tone?: "light" | "dark" }) {
   return (
     <div>
-      <p className={cn("text-[13px] font-semibold tracking-[0.12em] uppercase", tone === "dark" ? "text-brand-amber" : "text-brand-red")}>{eyebrow}</p>
+      <p className={cn("text-[12px] font-semibold tracking-[0.12em] uppercase sm:text-[13px]", tone === "dark" ? "text-brand-amber" : "text-brand-red")}>{eyebrow}</p>
       <h2
         id={id}
-        className={cn("mt-3 max-w-2xl font-display text-4xl leading-tight font-bold tracking-[-0.02em] sm:text-5xl", tone === "dark" && "text-white")}
+        className={cn("mt-3 max-w-2xl font-display text-[28px] leading-tight font-bold tracking-[-0.02em] sm:text-4xl lg:text-5xl", tone === "dark" && "text-white")}
       >
         {children}
       </h2>
@@ -75,15 +75,15 @@ export function Landing() {
           />
           <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 h-40 bg-gradient-to-t from-[#141C26]/48 to-transparent" />
 
-          <div className="mx-auto grid min-h-dvh w-full max-w-7xl items-center gap-14 px-4 pt-28 pb-20 sm:px-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16">
+          <div className="mx-auto grid min-h-dvh w-full max-w-7xl items-center gap-14 px-5 pt-24 pb-16 sm:px-6 sm:pt-28 sm:pb-20 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] lg:gap-16">
             <div className="flex min-w-0 flex-col gap-8">
               <h1
                 id="portada-titulo"
-                className="font-display text-5xl leading-[1.05] font-bold tracking-[-0.03em] text-white [text-shadow:0_2px_24px_rgb(0_0_0/0.45)] sm:text-6xl"
+                className="font-display text-[34px] leading-[1.08] font-bold tracking-[-0.03em] text-white [text-shadow:0_2px_24px_rgb(0_0_0/0.45)] sm:text-5xl lg:text-6xl"
               >
                 La emergencia, vista antes de llegar.
               </h1>
-              <p className="max-w-xl text-xl leading-relaxed text-white [text-shadow:0_1px_12px_rgb(0_0_0/0.55)]">
+              <p className="max-w-xl text-[16px] leading-relaxed text-white [text-shadow:0_1px_12px_rgb(0_0_0/0.55)] sm:text-xl">
                 Reúne los videos de los vecinos, el dron y la radio en una sola ficha, para que el oficial a cargo decida
                 con más información y las unidades lleguen sabiendo a qué van.
               </p>
@@ -102,12 +102,12 @@ export function Landing() {
         </section>
 
         <section id="ficha" aria-labelledby="ficha-titulo" className="scroll-mt-24 border-b border-line bg-surface-2">
-          <div className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 md:py-28">
+          <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 sm:py-20 md:py-28">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between lg:gap-12">
               <SectionTitle id="ficha-titulo" eyebrow="La ficha del oficial">
                 Todo el incidente en una pantalla.
               </SectionTitle>
-              <p className="max-w-md text-[17px] leading-relaxed text-muted lg:pb-1.5 lg:text-right">
+              <p className="max-w-md text-[15px] leading-relaxed text-muted sm:text-[17px] lg:pb-1.5 lg:text-right">
                 Mapa 3D con la casa y el foco, personas atrapadas, riesgos, unidades y lo que dice Vigía. Se lee en tres
                 segundos desde tres metros.
               </p>
@@ -117,12 +117,12 @@ export function Landing() {
         </section>
 
         <section id="reglas" aria-labelledby="reglas-titulo" className="scroll-mt-24">
-          <div className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 md:py-28">
+          <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 sm:py-20 md:py-28">
             <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between lg:gap-12">
               <SectionTitle id="reglas-titulo" eyebrow="Reglas de la IA">
                 La IA informa. Decide el oficial.
               </SectionTitle>
-              <p className="max-w-md text-[17px] leading-relaxed text-muted lg:pb-1.5 lg:text-right">
+              <p className="max-w-md text-[15px] leading-relaxed text-muted sm:text-[17px] lg:pb-1.5 lg:text-right">
                 Son reglas duras: el agente no puede saltárselas y la ficha las aplica en cada dato.
               </p>
             </div>
@@ -132,8 +132,8 @@ export function Landing() {
                   <span className="font-mono text-[13px] text-brand-red tabular" aria-hidden="true">
                     {String(i + 1).padStart(2, "0")}
                   </span>
-                  <h3 className="mt-3 font-display text-xl font-bold">{r.title}</h3>
-                  <p className="mt-2 text-[16px] leading-relaxed text-muted">{r.body}</p>
+                  <h3 className="mt-3 font-display text-lg font-bold sm:text-xl">{r.title}</h3>
+                  <p className="mt-2 text-[15px] leading-relaxed text-muted sm:text-[16px]">{r.body}</p>
                 </li>
               ))}
             </ol>
@@ -141,7 +141,7 @@ export function Landing() {
         </section>
 
         <section id="tecnologia" aria-labelledby="tecnologia-titulo" className="scroll-mt-24 bg-[#18212C]">
-          <div className="mx-auto w-full max-w-7xl px-4 py-20 sm:px-6 md:py-28">
+          <div className="mx-auto w-full max-w-7xl px-4 py-16 sm:px-6 sm:py-20 md:py-28">
             <SectionTitle id="tecnologia-titulo" eyebrow="Tecnología" tone="dark">
               Hecho para el terreno.
             </SectionTitle>
@@ -150,21 +150,21 @@ export function Landing() {
                 <div key={f.label} className="border-t border-white/15 pt-6">
                   <dt className="sr-only">{f.label}</dt>
                   <dd>
-                    <span className="block font-display text-5xl font-bold tracking-[-0.02em] text-white tabular">{f.value}</span>
-                    <span className="mt-3 block text-[16px] leading-relaxed text-white/65">{f.label}</span>
+                    <span className="block font-display text-4xl font-bold tracking-[-0.02em] text-white tabular sm:text-5xl">{f.value}</span>
+                    <span className="mt-2 block text-[15px] leading-relaxed text-white/65 sm:mt-3 sm:text-[16px]">{f.label}</span>
                   </dd>
                 </div>
               ))}
             </dl>
             <ul className="mt-14 flex flex-wrap gap-2" aria-label="Tecnologías">
               {STACK.map((s) => (
-                <li key={s} className="rounded-full border border-white/15 px-3.5 py-1.5 text-[14px] text-white/80">
+                <li key={s} className="rounded-full border border-white/15 px-3 py-1 text-[13px] text-white/80 sm:px-3.5 sm:py-1.5 sm:text-[14px]">
                   {s}
                 </li>
               ))}
             </ul>
             <div className="mt-16 flex flex-col items-start gap-6 border-t border-white/15 pt-10 md:flex-row md:items-center md:justify-between">
-              <p className="flex items-center gap-4 font-display text-2xl font-bold text-white sm:text-3xl">
+              <p className="flex items-center gap-4 font-display text-xl font-bold text-white sm:text-3xl">
                 <Logo size={44} title="" />
                 Pruébalo con un incidente de demostración.
               </p>

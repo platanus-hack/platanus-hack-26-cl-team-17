@@ -36,7 +36,7 @@ export interface NewZelloComm {
 }
 
 export interface VigiaApi {
-  /** Emergencias abiertas (activas o controladas), la más reciente primero. */
+  /** Emergencias abiertas (activas o controladas): primero la que atiende Vigía, luego la más reciente. */
   openIncidents(): Promise<OpenIncident[]>;
   uploadAudio(incidentId: string, ogg: Uint8Array): Promise<string>;
   addComm(incidentId: string, comm: NewZelloComm): Promise<CommEntry>;
@@ -88,10 +88,16 @@ export function createVigiaApi(baseUrl: string, token: string): VigiaApi {
 
   return {
     async openIncidents() {
-      const body = await json<{ incidents: { id: string; code: string; status: string; created_at: string }[] }>("/api/incidents");
+      const body = await json<{
+        incidents: { id: string; code: string; status: string; created_at: string }[];
+        /** La que atiende Vigía (fijada en el tablero o la más nueva); falta en servidores viejos. */
+        focus?: { incident_id: string | null };
+      }>("/api/incidents");
+      const focusId = body.focus?.incident_id ?? null;
+      const first = (i: { id: string }) => (i.id === focusId ? 1 : 0);
       return body.incidents
         .filter((i) => i.status === "active" || i.status === "controlled")
-        .sort((a, b) => b.created_at.localeCompare(a.created_at))
+        .sort((a, b) => first(b) - first(a) || b.created_at.localeCompare(a.created_at))
         .map((i) => ({ id: i.id, code: i.code }));
     },
     async uploadAudio(incidentId, ogg) {

@@ -545,7 +545,15 @@ export default function FichaMap(props: FichaMapProps) {
 
   return (
     <div className={cn("absolute isolate", !style && "inset-0", className)} style={style}>
-      <div ref={containerRef} className="absolute inset-0" aria-label="Mapa 3D del incidente" role="region" />
+      {/* Posición en línea: maplibre-gl.css pone `.maplibregl-map { position: relative }` y, según el orden en que
+          cargan las hojas de estilo (en producción va después de Tailwind), ganaría a `absolute` y el mapa quedaría
+          de 300 px de alto. El estilo en línea gana siempre. */}
+      <div
+        ref={containerRef}
+        style={{ position: "absolute", inset: 0 }}
+        aria-label="Mapa 3D del incidente"
+        role="region"
+      />
       {failed && (
         <div className="absolute inset-0 grid place-items-center bg-f-wash text-[15px] text-f-muted">Mapa no disponible sin conexión</div>
       )}

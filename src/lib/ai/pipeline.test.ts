@@ -382,7 +382,9 @@ function fakeEngine(kind: Engine["kind"], impl: Partial<Engine> = {}): Engine & 
   };
 }
 
-function setup(opts: { engine?: Engine & { calls: EngineCalls }; extractFrames?: PipelineDeps["extractFrames"] } = {}) {
+function setup(
+  opts: { engine?: Engine & { calls: EngineCalls }; extractFrames?: PipelineDeps["extractFrames"]; rulesOnly?: PipelineDeps["rulesOnly"] } = {},
+) {
   let t = Date.parse("2026-11-21T12:00:00.000Z");
   const now = () => new Date((t += 1000));
   const nowIso = () => now().toISOString();
@@ -397,6 +399,7 @@ function setup(opts: { engine?: Engine & { calls: EngineCalls }; extractFrames?:
     files,
     engine,
     fallbackEngine: fallback,
+    rulesOnly: opts.rulesOnly,
     extractFrames:
       opts.extractFrames ??
       (async () => {
@@ -885,4 +888,40 @@ test("funciones de nivel superior nunca lanzan", async () => {
   await mod.processMedia("no-existe");
   await mod.requestFusion("no-existe");
   await mod.requestCommsAnalysis("no-existe");
+});
+
+const radioLine = (seq: number, text: string): CommEntry => ({
+  id: `c${seq}`,
+  incident_id: INC,
+  seq,
+  at: "2026-11-21T11:30:00.000Z",
+  channel: "",
+  speaker: "B-3",
+  text,
+  source: "manual",
+  audio_path: null,
+  created_at: "2026-11-21T11:30:00.000Z",
+});
+
+test("«Vigía sin IA» en la emergencia: la fusión y la radio van directo por reglas, sin esperar al modelo", async () => {
+  const ctx = setup({ rulesOnly: async (id) => id === INC });
+  addMediaWithFrames(ctx, "m1", 1, [0], { analysis: makeAnalysis(), status: "analyzed" });
+  ctx.store.comms.push(radioLine(1, "Central, B-3 en el lugar"));
+  await ctx.pipeline.requestFusion(INC);
+  await ctx.pipeline.requestCommsAnalysis(INC);
+  assert.equal(ctx.engine.calls.situation.length, 0, "no llama al modelo");
+  assert.equal(ctx.engine.calls.scene.length, 0);
+  assert.equal(ctx.engine.calls.comms.length, 0);
+  // La radio vuelve a pedir la fusión al guardar su análisis: el respaldo puede correr más de una vez.
+  assert.ok(ctx.fallback.calls.situation.length >= 1);
+  assert.equal(ctx.fallback.calls.comms.length, 1);
+  const inc = ctx.store.incidents.get(INC)!;
+  assert.equal(inc.situation_engine, "simulated");
+  assert.equal(inc.scene_engine, "simulated");
+  assert.equal(inc.comms_engine, "simulated");
+  // Si no se puede saber (error al leer la memoria de Vigía), se usa el modelo como siempre.
+  const other = setup({ rulesOnly: async () => { throw new Error("sin store"); } });
+  addMediaWithFrames(other, "m1", 1, [0], { analysis: makeAnalysis(), status: "analyzed" });
+  await other.pipeline.requestFusion(INC);
+  assert.equal(other.engine.calls.situation.length, 1);
 });

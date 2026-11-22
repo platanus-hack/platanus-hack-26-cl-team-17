@@ -27,6 +27,7 @@ import { api, ApiClientError } from "@/lib/client/api";
 import type {
   BriefingSnapshot,
   IncidentDiagnostics,
+  IncidentFocus,
   IncidentListResponse,
   IncidentSnapshot,
   IncidentSummary,
@@ -227,6 +228,8 @@ export interface IncidentListState {
   /** null hasta la primera respuesta. */
   incidents: IncidentSummary[] | null;
   mode: RuntimeMode | null;
+  /** La que atienden Vigía y los puentes; null hasta la primera respuesta (o servidor viejo). */
+  focus: IncidentFocus | null;
   error: ApiClientError | null;
   isLoading: boolean;
   refresh: Refresh;
@@ -249,6 +252,7 @@ export function useIncidentList(options: LiveOptions = {}): IncidentListState {
   return {
     incidents: live.data?.incidents ?? null,
     mode: live.data?.mode ?? null,
+    focus: live.data?.focus ?? null,
     error: live.error,
     isLoading: live.isLoading,
     refresh: live.refresh,

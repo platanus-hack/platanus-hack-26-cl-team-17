@@ -113,7 +113,8 @@ export class ZelloBridge {
   private chain: Promise<void> = Promise.resolve();
   /** Las preguntas a /ask van aparte: una respuesta lenta no atrasa el registro de la radio. */
   private askChain: Promise<void> = Promise.resolve();
-  private warnedMulti = 0;
+  /** Último aviso de varias abiertas ("cuántas:código"): se repite si cambia la cantidad o la elegida. */
+  private warnedMulti = "";
 
   constructor(private readonly d: BridgeDeps) {
     this.now = d.now ?? Date.now;
@@ -213,7 +214,7 @@ export class ZelloBridge {
     return this.chain.then(() => this.askChain);
   }
 
-  /** Sin la salida del agente, la pregunta del OBAC se responde con /ask (la emergencia más reciente). */
+  /** Sin la salida del agente, la pregunta del OBAC se responde con /ask (la emergencia que atiende Vigía). */
   private async answerWithAskIfNeeded(inc: OpenIncident, question: string): Promise<void> {
     if (this.salidaMissing === null) await this.pollIncident(inc);
     if (this.salidaMissing !== true) return; // la responde el agente por su salida
@@ -234,11 +235,13 @@ export class ZelloBridge {
     if (pin) {
       list = list.filter((i) => i.id.toUpperCase() === pin || i.code.toUpperCase() === pin);
     } else {
-      // Vigía se centra en una emergencia a la vez: la abierta más nueva (la lista viene así ordenada).
-      if (list.length > 1 && list.length !== this.warnedMulti) {
-        this.warnedMulti = list.length;
+      // Vigía se centra en una emergencia a la vez: la elegida en el tablero o, si no hay, la
+      // abierta más nueva (la lista viene así ordenada).
+      const key = `${list.length}:${list[0]?.code ?? ""}`;
+      if (list.length > 1 && key !== this.warnedMulti) {
+        this.warnedMulti = key;
         this.d.log(
-          `hay ${list.length} emergencias abiertas: Vigía escucha y habla solo en la más nueva (${list[0].code}). Usa --incident para fijar otra.`,
+          `hay ${list.length} emergencias abiertas: Vigía escucha y habla solo en ${list[0].code} (la elegida en el tablero o, si no hay, la más nueva). Usa --incident para fijar otra.`,
         );
       }
       list = list.slice(0, 1);

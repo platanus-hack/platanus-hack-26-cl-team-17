@@ -12,15 +12,17 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type CSSProperties } from "react";
 import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
-import { Box, Images, Map as MapIcon, Shapes, Video } from "lucide-react";
-import type { IncidentStatus, SceneModel } from "@/lib/domain";
+import { Box, Images, Map as MapIcon, Rotate3d, Shapes, Video } from "lucide-react";
+import type { DroneMission, IncidentStatus, SceneModel } from "@/lib/domain";
 import { api, errorMessage, type ApiClientError } from "@/lib/client/api";
 import { useIncidentSnapshot } from "@/lib/client/use-live";
 import { cn } from "@/lib/cn";
 import { MediaViewer } from "@/components/mando/incident/MediaViewer";
 import { findMediaByLabel, type MediaViewerTarget } from "@/components/mando/incident/types";
 import { Scene3D, type SceneSelection } from "@/components/scene3d";
+import { Live3DStage, useLive3dEnabled } from "@/components/drone/Live3D";
 import { LiveVideo } from "@/components/drone/LiveFeed";
+import { useSimulatedMissionTicker } from "@/components/drone/use-mission-ticker";
 import { isMissionActive } from "@/lib/drone/plan";
 import { useToast } from "@/components/ui/Toast";
 import { VigiaDock, useVigia } from "@/components/vigia";
@@ -32,10 +34,11 @@ import { FloatingControls, FloatingPill } from "./floating";
 import type { MapView } from "./map/FichaMap";
 
 const FichaMap = dynamic(() => import("./map/FichaMap"), { ssr: false });
+const NO_MISSIONS: DroneMission[] = [];
 
 export type FichaDemoState = "llegando" | "hablando" | null;
 
-type Tab = MapView | "scheme" | "media";
+type Tab = MapView | "scheme" | "media" | "drone3d";
 
 const TABS: { key: Tab; label: string; icon: typeof Box }[] = [
   { key: "3d", label: "Mapa 3D", icon: Box },
@@ -43,6 +46,8 @@ const TABS: { key: Tab; label: string; icon: typeof Box }[] = [
   { key: "plan", label: "Planta", icon: MapIcon },
   { key: "media", label: "Medios", icon: Images },
 ];
+/** Pestaña de la reconstrucción 3D en vivo: solo con un dron real en vuelo y el servicio configurado. */
+const DRONE_TAB: { key: Tab; label: string; icon: typeof Box } = { key: "drone3d", label: "Dron 3D", icon: Rotate3d };
 
 /** Marcador de la ficha (P1, H2, F0, M1…) → entidad del esquema técnico, para resaltarla en los dos. */
 function selectionFor(focus: string | null, scene: SceneModel | null): SceneSelection | null {
@@ -79,6 +84,13 @@ const MINI_PADDING = { top: 0, right: 0, bottom: 0, left: 0 };
 
 export function FichaView({ id, demoState = null }: { id: string; demoState?: FichaDemoState }) {
   const { snapshot, error, refresh, stale, lastUpdatedAt } = useIncidentSnapshot(id);
+  const refreshNow = useCallback(() => {
+    refresh().catch(() => {
+      /* el error queda en el estado del sondeo */
+    });
+  }, [refresh]);
+  // Las misiones simuladas (p. ej. el dron del simulacro) vuelan también con la ficha abierta.
+  useSimulatedMissionTicker(snapshot?.missions ?? NO_MISSIONS, refreshNow);
   const agent = useVigia(id);
   const now = useNow(2000);
   const toast = useToast();
@@ -103,14 +115,16 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
   const [schemeSel, setSchemeSel] = useState<SceneSelection | null>(null);
   /** El estado forzado "hablando" dura hasta que el OBAC toca algo. */
   const [demoActive, setDemoActive] = useState(demoState === "hablando");
-  // Dron real en vuelo (el más reciente): su video en vivo va en una ventana flotante sobre el mapa,
-  // intercambiable con él (el video al centro y el mapa a la ventana). Se recuerda la misión: si
-  // termina o llega otra, vuelve el mapa.
+  // Dron real en vuelo (el más reciente) → pestaña «Dron 3D» si hay servicio de reconstrucción en vivo.
   const liveMissionId = useMemo(() => {
     const active = (snapshot?.missions ?? []).filter((m) => m.mode !== "simulated" && isMissionActive(m));
     active.sort((a, b) => b.created_at.localeCompare(a.created_at));
     return active[0]?.id ?? null;
   }, [snapshot]);
+  const live3d = useLive3dEnabled(liveMissionId ?? "");
+  const tabs = live3d ? [...TABS, DRONE_TAB] : TABS;
+  // Video en vivo de ese dron: ventana flotante sobre el mapa, intercambiable con él (el video al
+  // centro y el mapa a la ventana). Se recuerda la misión: si termina o llega otra, vuelve el mapa.
   const [videoMainFor, setVideoMainFor] = useState<string | null>(null);
   const [floatHidden, setFloatHidden] = useState(false);
 
@@ -192,7 +206,8 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
   const citizen = snapshot.media.filter((m) => m.source !== "drone");
   const incident = snapshot.incident;
   const liveMission = liveMissionId ? (snapshot.missions.find((m) => m.id === liveMissionId) ?? null) : null;
-  const floating = liveMission !== null;
+  // La pestaña «Dron 3D» ya trae el video en miniatura: ahí no hay ventana flotante.
+  const floating = liveMission !== null && tab !== "drone3d";
   const videoBig = floating && videoMainFor === liveMissionId;
   const floatW = compact ? 288 : 360;
   // Bajo la caja de norte y escala del mapa; con el video al centro, dentro de él con margen.
@@ -287,7 +302,7 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
 
       {/* Pestañas del mapa, discretas, arriba a la izquierda del hueco */}
       <div role="tablist" aria-label="Vista del mapa" className={cn(GLASS, "absolute z-20 flex gap-0.5 rounded-xl p-1")} style={{ top: TOP, left: gapLeft }}>
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const Icon = t.icon;
           const on = tab === t.key;
           return (
@@ -334,6 +349,14 @@ export function FichaView({ id, demoState = null }: { id: string; demoState?: Fi
         onPick={onPick}
         style={{ top: TOP, right: GAP, bottom: GAP, width: panelR }}
       />
+
+      {tab === "drone3d" && live3d && liveMissionId && (
+        <Live3DStage
+          missionId={liveMissionId}
+          className="absolute z-[6] overflow-hidden rounded-xl shadow-[0_8px_24px_rgb(33_32_28/0.18)]"
+          style={{ top: TOP + 56, left: gapLeft, right: gapRight, bottom: 110 }}
+        />
+      )}
 
       {tab === "media" && (
         <MediaGridPanel media={citizen} onOpen={(mediaId) => setViewer({ mediaId })} style={{ top: TOP + 56, left: gapLeft, right: gapRight, bottom: 110 }} />

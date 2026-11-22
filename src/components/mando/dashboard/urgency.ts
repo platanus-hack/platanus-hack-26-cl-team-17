@@ -103,3 +103,46 @@ export function filterCounts(list: IncidentSummary[]): Record<IncidentFilter, nu
   }
   return counts;
 }
+
+/* ───────────── Criterio de orden elegible ───────────── */
+
+/** Criterio de orden de la lista del tablero. */
+export type IncidentSort = "urgency" | "recent" | "updated" | "severity" | "oldest";
+
+/** Criterios válidos, en el orden en que se muestran. */
+export const INCIDENT_SORTS: readonly IncidentSort[] = ["urgency", "recent", "updated", "severity", "oldest"];
+
+/** true si `v` es un criterio válido (p. ej. leído de sessionStorage). */
+export function isIncidentSort(v: unknown): v is IncidentSort {
+  return typeof v === "string" && (INCIDENT_SORTS as readonly string[]).includes(v);
+}
+
+function updatedMs(i: IncidentSummary): number {
+  const ms = Date.parse(i.updated_at);
+  return Number.isFinite(ms) ? ms : createdMs(i);
+}
+
+/**
+ * Copia ordenada según `sort`. Los empates se resuelven por urgencia y luego
+ * por el orden recibido (estable).
+ */
+export function sortIncidents(list: IncidentSummary[], sort: IncidentSort): IncidentSummary[] {
+  const byUrgency = sortByUrgency(list);
+  if (sort === "urgency") return byUrgency;
+  const key = (i: IncidentSummary): number => {
+    switch (sort) {
+      case "recent":
+        return createdMs(i);
+      case "oldest":
+        return -createdMs(i);
+      case "updated":
+        return updatedMs(i);
+      case "severity":
+        return severityRank(i.severity);
+    }
+  };
+  return byUrgency
+    .map((incident, index) => ({ incident, index, k: key(incident) }))
+    .sort((a, b) => (a.k !== b.k ? (a.k > b.k ? -1 : 1) : a.index - b.index))
+    .map((x) => x.incident);
+}

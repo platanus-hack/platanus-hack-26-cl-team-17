@@ -30,6 +30,7 @@ import type {
   LiveFrameAck,
   LiveInsightsResponse,
   IncidentDiagnostics,
+  IncidentFocus,
   IncidentListResponse,
   IncidentSnapshot,
   LoginRequest,
@@ -39,6 +40,7 @@ import type {
   RuntimeMode,
   ScenarioStepRequest,
   ScenarioStepResponse,
+  SetFocusInput,
   StaffFramesRequest,
   ZelloStatusResponse,
   StaffFramesResponse,
@@ -221,6 +223,8 @@ const post = <T>(path: string, body?: unknown, o?: RequestOptions) =>
   request<T>({ method: "POST", path, body: body ?? {}, ...o });
 const patch = <T>(path: string, body: unknown, o?: RequestOptions) =>
   request<T>({ method: "PATCH", path, body, ...o });
+const put = <T>(path: string, body: unknown, o?: RequestOptions) =>
+  request<T>({ method: "PUT", path, body, ...o });
 
 export interface DroneFrameParams {
   lat: number;
@@ -235,6 +239,11 @@ export interface DroneFrameParams {
 
 export const api = {
   status: (o?: RequestOptions) => get<{ mode: RuntimeMode }>("/api/status", undefined, o),
+
+  /** Emergencia que atienden Vigía y los puentes; `incident_id: null` vuelve a la más nueva. */
+  focus: {
+    set: (body: SetFocusInput, o?: RequestOptions) => put<{ focus: IncidentFocus }>("/api/focus", body, o),
+  },
 
   /** Estado del puente Zello (latido cada ~10 s). */
   zello: {

@@ -30,7 +30,7 @@ import { detectorHealthSnapshot, detectorHealthy, isDetectorConfigured } from "@
 import { agentEngine, agentModelSettings } from "@/lib/vigia/agent";
 import { SPOKEN_MIN_INTERVAL_MS } from "@/lib/vigia/rules";
 import { getVigiaState } from "@/lib/vigia/state-store";
-import { emptyVigiaState, type VigiaLogEntry, type VigiaState, type VigiaUtterance } from "@/lib/vigia/types";
+import { emptyVigiaState, radioText, type VigiaLogEntry, type VigiaState, type VigiaUtterance } from "@/lib/vigia/types";
 import { isHeardComm } from "@/lib/vigia/world";
 import { getAgentTurns, listClaudeCalls, listServerErrors, recordServerError, type AgentTurnRecord } from "./diagnostics";
 import { isTranscriptionConfigured } from "./transcribe";
@@ -126,7 +126,7 @@ export function buildOutbox(input: OutboxInput): DiagnosticsOutbox {
   let saidSeq: number | null = null;
   if (spoken) {
     for (let i = all.length - 1; i >= 0; i--) {
-      if (all[i].speak && sameSpoken(spoken.text, all[i].text)) {
+      if (all[i].speak && sameSpoken(spoken.text, radioText(all[i]))) {
         saidSeq = all[i].seq;
         break;
       }
@@ -150,7 +150,7 @@ export function buildOutbox(input: OutboxInput): DiagnosticsOutbox {
       if (Number.isFinite(at)) prevSpokenAt = at;
       if (u.seq === saidSeq) st = "dicho";
       else if (!canSpeak) st = "sin_puente";
-      else if (queue) st = queue.some((q) => sameSpoken(q.text, u.text)) || !(at <= sentAt) ? "en_cola" : "salio";
+      else if (queue) st = queue.some((q) => sameSpoken(q.text, radioText(u))) || !(at <= sentAt) ? "en_cola" : "salio";
       else if (nowMs - at <= BRIDGE_SPEECH_TTL_MS) st = "en_cola";
       else st = "salio";
     }

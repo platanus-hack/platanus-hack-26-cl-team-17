@@ -68,6 +68,8 @@
  *
  * Estado
  *   GET    /api/status                         → { mode: RuntimeMode }
+ *   PUT    /api/focus                          SetFocusInput → { focus: IncidentFocus }
+ *          (fija la emergencia que atienden Vigía y los puentes; null vuelve a la más nueva)
  */
 import type {
   CommEntry,
@@ -162,9 +164,26 @@ export interface IncidentSummary {
   active_missions: number;
 }
 
+/**
+ * Emergencia que atienden Vigía, el puente Zello y el puente del dron (una a la vez): la fijada
+ * en el tablero si sigue abierta; si no, la abierta (activa o controlada) más nueva.
+ */
+export interface IncidentFocus {
+  /** null si no hay emergencias abiertas. */
+  incident_id: string | null;
+  /** true si es la fijada en el tablero; false si es la automática (la más nueva). */
+  pinned: boolean;
+}
+
+/** `incident_id: null` vuelve al modo automático. */
+export interface SetFocusInput {
+  incident_id: string | null;
+}
+
 export interface IncidentListResponse {
   incidents: IncidentSummary[];
   mode: RuntimeMode;
+  focus: IncidentFocus;
 }
 
 /** URLs estables servidas por /api/files (no cambian entre sondeos, así el navegador las cachea). */

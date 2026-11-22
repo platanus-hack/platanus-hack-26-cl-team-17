@@ -8,6 +8,7 @@ import { observe } from "./observe";
 import { confirmsRequest, radioRequests } from "./radio";
 import { runTool, type TurnContext } from "./tools";
 import { emptyVigiaState } from "./types";
+import { toSalida } from "./view";
 import type { World, WorldMedia, WorldRadio } from "./world";
 
 const NOW = Date.parse("2026-11-21T17:00:00.000Z");
@@ -191,18 +192,90 @@ test("herramientas: hablarle_al_obac bloquea órdenes y respeta el límite de 20
   const ctx = ctxFor(world());
   const blocked = runTool(ctx, "hablarle_al_obac", { texto: "Entren por el lado A.", tipo: "alerta", prioridad: "riesgo" });
   assert.equal(blocked.isError, true);
-  const first = runTool(ctx, "hablarle_al_obac", { texto: "OBAC, Vigía: humo denso en el lado A.", tipo: "alerta", prioridad: "riesgo" });
-  assert.match(first.content, /Dicho por radio/);
-  const second = runTool(ctx, "hablarle_al_obac", { texto: "OBAC, Vigía: B-5 llegando.", tipo: "resumen", prioridad: "resto" });
+  const blockedRadio = runTool(ctx, "hablarle_al_obac", {
+    texto: "OBAC, Vigía: humo en el lado A.",
+    por_radio: "Entren por el lado A.",
+    tipo: "alerta",
+    prioridad: "riesgo",
+  });
+  assert.equal(blockedRadio.isError, true);
+  const first = runTool(ctx, "hablarle_al_obac", {
+    texto: "OBAC, Vigía: humo denso en el lado A, visto en M1 y M2 (confianza media). No tengo video del lado C.",
+    por_radio: "OBAC, Vigía: humo denso en el lado A, 2 videos.",
+    tipo: "alerta",
+    prioridad: "riesgo",
+  });
+  assert.match(first.content, /por radio: «OBAC, Vigía: humo denso en el lado A, 2 videos\.»/);
+  const second = runTool(ctx, "hablarle_al_obac", {
+    texto: "OBAC, Vigía: cable cortado en el lado B.",
+    por_radio: "OBAC, Vigía: cable cortado en el lado B.",
+    tipo: "alerta",
+    prioridad: "riesgo",
+  });
   assert.match(second.content, /Solo en pantalla \(límite de 20 s\)/);
-  const person = runTool(ctx, "hablarle_al_obac", { texto: "OBAC, Vigía: posible persona en ventana, lado B.", tipo: "alerta", prioridad: "persona" });
-  assert.match(person.content, /Dicho por radio/);
+  const person = runTool(ctx, "hablarle_al_obac", {
+    texto: "OBAC, Vigía: posible persona en ventana, lado B.",
+    por_radio: "OBAC, Vigía: posible persona en ventana, lado B.",
+    tipo: "alerta",
+    prioridad: "persona",
+  });
+  assert.match(person.content, /por radio/);
 
-  // applyOps decide lo mismo al guardar.
+  // applyOps decide lo mismo al guardar, y la salida del puente lleva la línea de radio.
   const state = emptyVigiaState("inc-1", iso(1000));
   const added = applyOps(state, ctx.ops, NOW);
   assert.deepEqual(added.map((u) => u.speak), [true, false, true]);
   assert.deepEqual(added.map((u) => u.seq), [1, 2, 3]);
+  assert.match(added[0].text, /No tengo video del lado C/);
+  assert.equal(toSalida(state, null).items[0].text, "OBAC, Vigía: humo denso en el lado A, 2 videos.");
+});
+
+test("herramientas: sin por_radio, resúmenes y preguntas de la mesa quedan solo en pantalla", () => {
+  const ctx = ctxFor(world());
+  const screen = runTool(ctx, "hablarle_al_obac", { texto: "OBAC, Vigía: B-5 llegando al lugar (C3).", tipo: "alerta", prioridad: "resto" });
+  assert.match(screen.content, /^Solo en pantalla\./);
+  const summary = runTool(ctx, "hablarle_al_obac", {
+    texto: "Resumen: B-5 en el lugar, sin cambios en el lado A.",
+    por_radio: "OBAC, Vigía: sin cambios.",
+    tipo: "resumen",
+    prioridad: "resto",
+  });
+  assert.match(summary.content, /no va por radio/);
+
+  ctx.state.questions.push({ id: "q-mesa", at: iso(5000), text: "¿Qué ves?", from: "mesa", comm_seq: null, reply_to: null, answered: false });
+  ctx.answering = "q-mesa";
+  runTool(ctx, "hablarle_al_obac", {
+    texto: "OBAC, Vigía: veo humo en el lado A (M1).",
+    por_radio: "OBAC, Vigía: humo en el lado A.",
+    tipo: "respuesta",
+    prioridad: "resto",
+  });
+
+  ctx.state.questions.push({ id: "q-radio", at: iso(3000), text: "Vigía, ¿qué ves?", from: "zello", comm_seq: 4, reply_to: null, answered: false });
+  ctx.answering = "q-radio";
+  const noRadio = runTool(ctx, "hablarle_al_obac", { texto: "OBAC, Vigía: humo en el lado A, M1.", tipo: "respuesta", prioridad: "resto" });
+  assert.equal(noRadio.isError, true);
+  const tooLong = runTool(ctx, "hablarle_al_obac", {
+    texto: "OBAC, Vigía: humo en el lado A.",
+    por_radio: Array.from({ length: 30 }, () => "humo").join(" "),
+    tipo: "respuesta",
+    prioridad: "resto",
+  });
+  assert.equal(tooLong.isError, true);
+  runTool(ctx, "hablarle_al_obac", {
+    texto: "OBAC, Vigía: humo en el lado A, visto en M1; no tengo video del lado C.",
+    por_radio: "OBAC, Vigía: humo en el lado A, un video. Sin ver el lado C.",
+    tipo: "respuesta",
+    prioridad: "resto",
+  });
+
+  const added = applyOps(emptyVigiaState("inc-1", iso(1000)), ctx.ops, NOW);
+  assert.deepEqual(added.map((u) => [u.kind, u.speak, u.radio]), [
+    ["alerta", false, null],
+    ["resumen", false, null],
+    ["respuesta", false, null],
+    ["respuesta", true, "OBAC, Vigía: humo en el lado A, un video. Sin ver el lado C."],
+  ]);
 });
 
 test("herramientas: propuesta nunca va por voz; pedir_video agrega 'Sin acercarse'", () => {

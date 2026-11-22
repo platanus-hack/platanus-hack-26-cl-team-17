@@ -47,6 +47,22 @@ cd gpu/splat
 
 La reconstrucción solo muestra lo estático: personas o vehículos en movimiento no quedan. El mensaje final lo advierte ("no la uses para descartar víctimas").
 
+## Probar con fotos propias (`gpu/splat/tools/prueba_fotos.py`)
+Para medir qué tan bien reconstruye un set de fotos sin pasar por la app (mismo job, mismo manifiesto):
+
+```bash
+cd gpu/splat
+uv pip install --python .venv/bin/python -r requirements-test.txt   # una vez: Pillow + HEIC
+.venv/bin/python tools/prueba_fotos.py revisar ~/fotos/sala          # segundos, sin GPU
+.venv/bin/python tools/prueba_fotos.py correr ~/fotos/sala --caso sala-1   # ~7 min de L4 con 7.000 pasos
+.venv/bin/python tools/prueba_fotos.py ver sala-1                    # visor 3D en http://127.0.0.1:8090/ver.html
+.venv/bin/python tools/prueba_fotos.py tabla                         # todas las corridas
+```
+- `revisar` avisa antes de gastar GPU: menos de 8 fotos, fotos movidas, fotos que no se solapan con ninguna (SIFT + matriz fundamental), un set que se parte en grupos sin fotos de transición, y falta de paralaje (si casi todos los pares se explican con una homografía, se giró en el lugar o se fotografió una superficie plana).
+- `correr` endereza (EXIF), achica a 1280 px y guarda JPEG **sin metadatos**; el GPS de las fotos solo con `--gps` (al aire libre: adentro el error del GPS es del tamaño de la sala y arruina la escala). Sube a `gs://…/test/fotos/<caso>/<corrida>/`, corre el job con un solo medio de fotos y deja en `gpu/splat/out/fotos/<caso>/<corrida>/` las fotos preparadas, `scene.splat`, `preview.jpg`, `result.json`, `consistency.json` y `ver.html`; agrega una fila a `out/fotos/resultados.tsv`.
+- En la L4 caben ~76 fotos en una pasada de VGGT: con más, el job usa las más nítidas.
+- Cómo tomar las fotos: 20 a 60, caminando alrededor del espacio (no girando en el lugar), cada una solapada ~60 % con la anterior, a distintas alturas si se puede; exposición pareja; evitar vidrios, espejos y gente moviéndose.
+
 ## Costo aproximado
 Sin ejecuciones no hay costo fijo (solo el almacenamiento de la imagen, ~14 GB en Artifact Registry). Cada ejecución cobra GPU + 20 vCPU + 80 GiB por segundo mientras corre: del orden de algunos USD por hora en total (revisa la tabla vigente de precios de Cloud Run con GPU antes de usarlo en serio). Una reconstrucción típica (≤ 300 cuadros, hasta 30.000 pasos) debería tomar 20–40 min con arranque en frío incluido y nunca pasa del timeout de la tarea (45 min); no está medido todavía (ver abajo). El bundle adjustment con 300 cámaras y 250 mil observaciones toma ~8 s en CPU (medido sin GPU). Cada build con la caché cuesta pocos minutos de Cloud Build (`E2_HIGHCPU_32`); el primero tomó ~13 min.
 

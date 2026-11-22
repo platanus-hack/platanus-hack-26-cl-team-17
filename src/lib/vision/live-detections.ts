@@ -26,10 +26,24 @@ export interface LiveDetectionsResponse {
 const LOW_CONF_LABELS: ReadonlySet<string> = new Set(["fuego", "humo", "cilindro_gas", "cable_caido"]);
 const MIN_CONF_LOW = 0.15;
 const MIN_CONF = 0.3;
+/**
+ * Lo único que se dibuja sobre el video: personas (y bomberos) y peligros. Autos, ventanas,
+ * postes, etc. siguen en las detecciones que recibe el observador IA, pero no ensucian el video.
+ */
+export const OVERLAY_LABELS: ReadonlySet<string> = new Set([
+  "persona",
+  "bombero",
+  "fuego",
+  "humo",
+  "cilindro_gas",
+  "cable_caido",
+]);
 
-/** Lo que se dibuja encima del video: sin ruido de confianza muy baja. */
+/** Lo que se dibuja encima del video: solo lo relevante y sin ruido de confianza muy baja. */
 export function overlayDetections(result: DetectResult): Detection[] {
-  return result.detections.filter((d) => d.conf >= (LOW_CONF_LABELS.has(d.label) ? MIN_CONF_LOW : MIN_CONF));
+  return result.detections.filter(
+    (d) => OVERLAY_LABELS.has(d.label) && d.conf >= (LOW_CONF_LABELS.has(d.label) ? MIN_CONF_LOW : MIN_CONF),
+  );
 }
 
 const PLURAL: Record<string, string> = {

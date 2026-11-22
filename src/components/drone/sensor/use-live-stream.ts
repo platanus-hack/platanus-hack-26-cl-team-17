@@ -11,8 +11,8 @@ import { LIMITS } from "@/lib/domain";
  * bajan los cuadros por segundo en vez de acumularse.
  */
 export const LIVE_TIMING = {
-  /** Intervalo mínimo entre cuadros (~3 por segundo). */
-  everyMs: 333,
+  /** Intervalo mínimo entre cuadros (~8 por segundo; con red lenta baja solo). */
+  everyMs: 125,
   /** Espera tras un error de red antes de volver a intentar. */
   retryMs: 2000,
   timeoutMs: 8000,

@@ -162,7 +162,8 @@ export function fallbackTurn(ctx: TurnContext, events: VigiaEvent[]): void {
           });
         }
         for (const c of e.contradictions.slice(0, 1)) {
-          addUtterance(ctx, { text: contradictionText(c), kind: "contradiccion", priority: "riesgo", evidence: c.sources });
+          // Las del informe de situación quedan en la mesa; por radio van las de las reglas con personas.
+          addUtterance(ctx, { text: contradictionText(c), radio: null, kind: "contradiccion", priority: "riesgo", evidence: c.sources });
         }
         break;
       }
@@ -170,15 +171,25 @@ export function fallbackTurn(ctx: TurnContext, events: VigiaEvent[]): void {
         // Hasta dos por vuelta (las de personas primero); el resto queda en la bitácora.
         e.contradictions.forEach((c, i) => {
           if (i < 2) {
-            addUtterance(ctx, { text: contradictionText(c), kind: "contradiccion", priority: c.people ? "persona" : "riesgo", evidence: c.sources });
+            const text = contradictionText(c);
+            addUtterance(ctx, {
+              text,
+              radio: c.people ? text : null,
+              kind: "contradiccion",
+              priority: c.people ? "persona" : "riesgo",
+              evidence: c.sources,
+            });
           }
           addLog(ctx, `No calza: ${clip(c.description, 160)}`, "La radio dice una cosa y la imagen otra", c.sources);
         });
         break;
       case "dron":
         for (const i of e.insights.slice(0, 1)) {
+          const text = `OBAC, Vigía: el dron ${e.label} ve ${clip(i.summary, 120)}`;
           addUtterance(ctx, {
-            text: `OBAC, Vigía: el dron ${e.label} ve ${clip(i.summary, 120)}`,
+            text,
+            // Por radio solo lo grave; lo demás del dron queda en la mesa.
+            radio: i.severity === "critical" || i.severity === "warning" ? text : null,
             kind: "alerta",
             priority: i.severity === "critical" ? "persona" : "riesgo",
             evidence: [e.label],
@@ -194,6 +205,8 @@ export function fallbackTurn(ctx: TurnContext, events: VigiaEvent[]): void {
             : `posible ${detectionText(top.label)}`;
         addUtterance(ctx, {
           text: `OBAC, Vigía: el dron ${e.label} ve ${what}, detección automática ${Math.round(top.conf * 100)} %.`,
+          // Una posible persona va siempre por radio (lo asegura radioLine); otros objetos, en la mesa.
+          radio: top.label === "persona" ? undefined : null,
           kind: "alerta",
           priority: top.label === "persona" ? "persona" : "riesgo",
           evidence: [e.label],
@@ -207,6 +220,7 @@ export function fallbackTurn(ctx: TurnContext, events: VigiaEvent[]): void {
           const what = p.text.replace(/^.*?pidió\s+/, "");
           addUtterance(ctx, {
             text: `OBAC, Vigía: ${p.who} pidió ${clip(what, 60)} hace ${minutes} minutos y nadie confirmó.`,
+            radio: null,
             kind: "pendiente",
             priority: "recursos",
             evidence: [p.source],

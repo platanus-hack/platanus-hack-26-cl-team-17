@@ -24,9 +24,10 @@ import {
   type FramesUploadedInfo,
   type UploadProgress,
 } from "@/lib/client/upload";
-import { getCompassHeading, useGeolocation } from "@/lib/client/geo";
+import { getCompassHeading, useGeolocation, type GeoPosition } from "@/lib/client/geo";
 import type { MediaUploaderProps } from "./types";
 import { NoteChips } from "./NoteChips";
+import { AddressFallback, TYPED_PLACE_ACCURACY_M, type TypedPlace } from "./AddressFallback";
 import {
   accuracyText,
   canSendWithoutLocation,
@@ -91,6 +92,8 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
   const [freeText, setFreeText] = useState("");
   const [phase, setPhase] = useState<Phase>({ name: "compose" });
   const [needLocation, setNeedLocation] = useState(false);
+  /** Dirección escrita por el vecino si no puede compartir su ubicación (y no tiene código). */
+  const [typedPlace, setTypedPlace] = useState<TypedPlace | null>(null);
 
   const geo = useGeolocation({ watch: true });
   const codeAllowsNoLocation = canSendWithoutLocation(incidentCode);
@@ -247,6 +250,11 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
 
   const budget = freeTextBudget(chips);
   const note = composeNote(chips, freeText);
+  // Bomberos ve la dirección tal como la escribió el vecino (la ubicación es aproximada).
+  const noteToSend =
+    typedPlace && !geo.position
+      ? [note, `Dirección indicada por el vecino: ${typedPlace.label}`].filter(Boolean).join("\n").slice(0, LIMITS.MAX_NOTE_CHARS)
+      : note;
 
   const send = async () => {
     const sel = selectionRef.current;
@@ -257,7 +265,10 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
       ? getCompassHeading()
       : Promise.resolve(null);
 
-    let position = geo.position;
+    let position: GeoPosition | null = geo.position;
+    if (!position && typedPlace) {
+      position = { lat: typedPlace.lat, lng: typedPlace.lng, accuracy_m: TYPED_PLACE_ACCURACY_M };
+    }
     if (!position && !codeAllowsNoLocation) {
       position = await requestLocation();
       if (!position) {
@@ -293,7 +304,7 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
         kind: sel.kind,
         incidentCode,
         typeHint,
-        note,
+        note: noteToSend,
         position: position ? { lat: position.lat, lng: position.lng, accuracy_m: position.accuracy_m } : null,
         heading,
         capturedAt: sel.source === "capture" ? new Date(sel.selectedAt) : null,
@@ -721,14 +732,14 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
                 <p className="text-base text-muted">
                   {codeAllowsNoLocation
                     ? "Puedes enviar igual: ya sabemos a qué emergencia corresponde."
-                    : "Sin tu ubicación no sabemos dónde es la emergencia. Actívala en los ajustes del navegador, o pide a Bomberos el código de la emergencia (VG-XXXX)."}
+                    : "Sin tu ubicación no sabemos dónde es la emergencia. Actívala en los ajustes del navegador o escribe la dirección aquí abajo."}
                 </p>
               </div>
             )}
-            {needLocation && !geoError && (
+            {needLocation && !geoError && !typedPlace && (
               <p role="alert" className="flex items-start gap-2 text-base text-critical">
                 <CircleAlert aria-hidden="true" className="mt-0.5 size-5 shrink-0" />
-                <span>Necesitamos tu ubicación para enviar el reporte.</span>
+                <span>Necesitamos tu ubicación o la dirección para enviar el reporte.</span>
               </p>
             )}
             <Button
@@ -746,6 +757,7 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
                 Buscando tu ubicación…
               </p>
             )}
+            {!codeAllowsNoLocation && <AddressFallback value={typedPlace} onChange={setTypedPlace} idPrefix={uid} />}
           </div>
         )}
       </section>
@@ -775,8 +787,8 @@ export function VecinoUploader({ incidentCode, typeHint, asResponder, onSubmitte
             Primero graba o elige un video o fotos.
           </p>
         )}
-        {selection && !geo.position && !codeAllowsNoLocation && (
-          <p className="text-center text-base text-muted">Al enviar te pediremos tu ubicación.</p>
+        {selection && !geo.position && !typedPlace && !codeAllowsNoLocation && (
+          <p className="text-center text-base text-muted">Al enviar te pediremos tu ubicación, o escribe la dirección arriba.</p>
         )}
       </div>
     </div>

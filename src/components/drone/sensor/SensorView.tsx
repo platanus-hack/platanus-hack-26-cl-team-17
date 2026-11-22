@@ -333,7 +333,7 @@ export function SensorView({ token, mission, incident }: SensorViewProps) {
           <section aria-label="Antes de empezar" className="flex flex-col gap-1">
             <p className="text-base leading-relaxed text-muted">
               Este teléfono enviará al puesto de mando su <strong className="text-text">ubicación y rumbo cada 2 s</strong>,{" "}
-              <strong className="text-text">video en vivo</strong> (unos 3 cuadros por segundo, en baja resolución) y{" "}
+              <strong className="text-text">video en vivo</strong> (hasta 8 cuadros por segundo, en baja resolución) y{" "}
               <strong className="text-text">una foto cada 5 s</strong> (la IA las analiza en lotes de {BATCH_SIZE}). Apunta la cámara
               trasera al incidente y mantén la pantalla encendida.
             </p>

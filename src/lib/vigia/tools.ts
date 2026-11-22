@@ -82,11 +82,39 @@ function push(ctx: TurnContext, op: VigiaOp): void {
   }
 }
 
-/** Agrega un mensaje para el OBAC ya pasado por las reglas. Lo usan las herramientas y las plantillas. */
+/** Tipos que nunca van por radio: son para la mesa de mando. */
+const SCREEN_ONLY_KINDS: ReadonlySet<VigiaKind> = new Set(["resumen", "pedido_video", "propuesta"]);
+
+/**
+ * Línea de radio que corresponde a un mensaje, o null si va solo a pantalla. La radio es
+ * para lo que hace falta: los resúmenes y avisos de gestión quedan en la mesa, y una
+ * respuesta va por radio solo si la pregunta llegó por radio (si se escribió en la mesa,
+ * se contesta en la mesa). Una posible persona va siempre.
+ */
+export function radioLine(ctx: TurnContext, kind: VigiaKind, priority: VigiaPriority, radio: string | null): string | null {
+  if (radio === null || radio.trim() === "") return null;
+  if (priority === "persona") return radio;
+  if (SCREEN_ONLY_KINDS.has(kind)) return null;
+  if (kind === "respuesta" && askedAt(ctx) === "mesa") return null;
+  return radio;
+}
+
+/** Por dónde llegó la pregunta que se está respondiendo, si hay. */
+export function askedAt(ctx: TurnContext): "mesa" | "zello" | null {
+  if (!ctx.answering) return null;
+  return ctx.state.questions.find((q) => q.id === ctx.answering)?.from ?? null;
+}
+
+/**
+ * Agrega un mensaje para el OBAC ya pasado por las reglas. Lo usan las herramientas y las
+ * plantillas. `radio` es lo que se diría por radio: sin darlo, la radio dice `text` (las
+ * plantillas ya son cortas); con null, solo pantalla.
+ */
 export function addUtterance(
   ctx: TurnContext,
   u: {
     text: string;
+    radio?: string | null;
     kind: VigiaKind;
     priority: VigiaPriority;
     evidence?: string[];
@@ -98,6 +126,7 @@ export function addUtterance(
   },
 ): void {
   const at = new Date(ctx.nowMs).toISOString();
+  const radio = radioLine(ctx, u.kind, u.priority, u.radio === undefined ? u.text : u.radio);
   push(ctx, {
     op: "utter",
     u: {
@@ -105,6 +134,7 @@ export function addUtterance(
       incident_id: ctx.world.incident.id,
       at,
       text: u.text,
+      radio,
       priority: u.priority,
       kind: u.kind,
       evidence: u.evidence ?? [],
@@ -113,7 +143,7 @@ export function addUtterance(
       rules: u.rules ?? [],
       claves: u.claves ?? null,
       reply_to: u.replyTo ?? null,
-      speak: u.speak,
+      speak: radio === null ? false : u.speak,
     },
   });
 }
@@ -231,8 +261,12 @@ const KINDS_TO_OBAC = ["presentacion", "alerta", "resumen", "respuesta", "pendie
 
 const VerHallazgosInput = z.object({ lado: z.string().max(20).nullish() });
 const EscucharRadioInput = z.object({ ultimas: z.number().int().min(1).max(40).nullish() });
+/** Tope de la línea de radio: una o dos frases que se dicen en unos 10 segundos. */
+const RADIO_MAX_WORDS = 25;
+
 const HablarInput = z.object({
-  texto: z.string().trim().min(1).max(400),
+  texto: z.string().trim().min(1).max(1200),
+  por_radio: z.string().trim().max(240).nullish(),
   tipo: z.enum(KINDS_TO_OBAC),
   prioridad: z.enum(VIGIA_PRIORITIES as unknown as [VigiaPriority, ...VigiaPriority[]]),
   evidencia: z.array(z.string()).max(12).nullish(),
@@ -283,11 +317,19 @@ export const VIGIA_TOOLS: Anthropic.Beta.BetaTool[] = [
   {
     name: "hablarle_al_obac",
     description:
-      "Le dice algo al OBAC: queda como tarjeta en la mesa de mando y, si las reglas lo permiten, se transmite por voz en el canal de radio (lo escuchan también las compañías). Corto, con la fuente. El código bloquea órdenes y decisiones tácticas, cambia «no hay nadie» por «no lo veo» y limita la voz a un mensaje cada ~20 s salvo prioridad «persona». Devuelve si se habló o quedó solo en pantalla.",
+      "Le informa algo al OBAC. `texto` queda como tarjeta en la mesa de mando: ahí va el detalle. `por_radio` es opcional: la frase corta que se transmite por voz en el canal de radio (lo escuchan también las compañías). Sin `por_radio`, el mensaje queda solo en pantalla, que es lo normal. Los resúmenes y las respuestas a preguntas escritas en la mesa nunca van por radio. El código bloquea órdenes y decisiones tácticas, cambia «no hay nadie» por «no lo veo» y limita la voz a un mensaje cada ~20 s salvo prioridad «persona». Devuelve si se habló o quedó solo en pantalla.",
     input_schema: {
       type: "object",
       properties: {
-        texto: { type: "string", description: "Lo que dice Vigía, empezando por «OBAC, Vigía: …». Máximo ~35 palabras." },
+        texto: {
+          type: "string",
+          description:
+            "Para la mesa de mando: el estado con detalle, con fuentes (M<n>, C<n>, D<n>), confianza, cobertura y lo que no sabes. Prosa clara, sin markdown; hasta ~120 palabras.",
+        },
+        por_radio: {
+          type: "string",
+          description: `Solo si hace falta por radio (posible persona, riesgo nuevo, contradicción que afecta a personas o una pregunta que llegó por radio): «OBAC, Vigía: …», una o dos frases, máximo ${RADIO_MAX_WORDS} palabras, lo esencial y la fuente. Omítelo para que quede solo en pantalla.`,
+        },
         tipo: { type: "string", enum: [...KINDS_TO_OBAC] },
         prioridad: { type: "string", enum: [...VIGIA_PRIORITIES], description: "persona > riesgo > recursos > resto" },
         evidencia: { type: "array", items: { type: "string" }, description: 'Etiquetas: "M3", "C12", "D1".' },
@@ -390,17 +432,31 @@ export function runTool(ctx: TurnContext, name: string, input: unknown): ToolOut
       const p = HablarInput.safeParse(input);
       if (!p.success) return invalid(p.error);
       const r = sanitizeForObac(p.data.texto);
-      if (r.blocked) {
-        addLog(ctx, `Mensaje bloqueado por las reglas: «${p.data.texto}»`, `Regla: ${r.reasons.join(", ")}`);
+      const rawRadio = p.data.por_radio?.trim() || null;
+      const rr = rawRadio ? sanitizeForObac(rawRadio) : null;
+      for (const [label, check, raw] of [["texto", r, p.data.texto], ["por_radio", rr, rawRadio]] as const) {
+        if (!check?.blocked) continue;
+        addLog(ctx, `Mensaje bloqueado por las reglas (${label}): «${raw}»`, `Regla: ${check.reasons.join(", ")}`);
         return {
           isError: true,
-          content: `Bloqueado por las reglas (${r.reasons.join(", ")}): no das órdenes ni decisiones tácticas. Reformúlalo como información para el OBAC, o usa proponer_mensaje.`,
+          content: `Bloqueado por las reglas en ${label} (${check.reasons.join(", ")}): no das órdenes ni decisiones tácticas. Reformúlalo como información para el OBAC, o usa proponer_mensaje.`,
         };
+      }
+      if (rr && rr.text.split(/\s+/).length > RADIO_MAX_WORDS) {
+        return {
+          isError: true,
+          content: `por_radio es muy largo (máximo ${RADIO_MAX_WORDS} palabras). Deja en la radio solo lo esencial y la fuente; el detalle va en texto.`,
+        };
+      }
+      const from = p.data.tipo === "respuesta" ? askedAt(ctx) : null;
+      if (from === "zello" && !rr) {
+        return { isError: true, content: "La pregunta llegó por radio: la respuesta necesita por_radio (corta, máximo 25 palabras)." };
       }
       const dup = recentlySaid(ctx.state, r.text, ctx.nowMs);
       if (dup) return { isError: true, content: `Ya dijiste eso a las ${clock(dup.at)} (seq ${dup.seq}). No lo repitas.` };
       addUtterance(ctx, {
         text: r.text,
+        radio: rr?.text ?? null,
         kind: p.data.tipo,
         priority: p.data.prioridad,
         evidence: evidenceRefs(p.data.evidencia ?? []),
@@ -408,10 +464,19 @@ export function runTool(ctx: TurnContext, name: string, input: unknown): ToolOut
         rules: r.reasons,
         replyTo: p.data.tipo === "respuesta" ? ctx.answering : null,
       });
-      const spoken = ctx.state.utterances.at(-1)?.speak ?? false;
-      return {
-        content: `${spoken ? "Dicho por radio y en pantalla" : ctx.state.silenced ? "Solo en pantalla (silencio)" : "Solo en pantalla (límite de 20 s)"}: «${r.text}»${r.reasons.length > 0 ? ` [reglas: ${r.reasons.join(", ")}]` : ""}`,
-      };
+      const last = ctx.state.utterances.at(-1);
+      const spoken = last?.speak ?? false;
+      const reasons = [...new Set([...r.reasons, ...(rr?.reasons ?? [])])];
+      const where = spoken
+        ? `En pantalla; por radio: «${last?.radio}»`
+        : !last?.radio
+          ? rr
+            ? "Solo en pantalla (este tipo de mensaje no va por radio)"
+            : "Solo en pantalla"
+          : ctx.state.silenced
+            ? "Solo en pantalla (silencio)"
+            : "Solo en pantalla (límite de 20 s)";
+      return { content: `${where}. Tarjeta: «${r.text}»${reasons.length > 0 ? ` [reglas: ${reasons.join(", ")}]` : ""}` };
     }
     case "proponer_mensaje": {
       const p = ProponerInput.safeParse(input);

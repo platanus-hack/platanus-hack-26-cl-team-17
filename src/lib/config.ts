@@ -123,6 +123,25 @@ export const config = {
   get detectorUrl() {
     return env("VIGIA_DETECTOR_URL").replace(/\/$/, "");
   },
+  /**
+   * "gcp" = el detector es un servicio privado de Cloud Run (deploy/detector.sh): cada llamada
+   * lleva un token de identidad de la cuenta del servicio. Vacío = sin autenticación (local).
+   */
+  get detectorAuth() {
+    return env("VIGIA_DETECTOR_AUTH").toLowerCase();
+  },
+  /**
+   * Reconstrucción 3D en vivo (vigia-live3d, gpu/splat/LIVE3D.md, p. ej. http://127.0.0.1:8790).
+   * Con él, los cuadros del video en vivo del dron se reenvían y el puesto de mando ve la nube
+   * de puntos crecer. Vacío = sin vista 3D en vivo (todo lo demás sigue igual).
+   */
+  get live3dUrl() {
+    return env("VIGIA_LIVE3D_URL").replace(/\/$/, "");
+  },
+  /** "gcp" = Cloud Run privado: cada llamada lleva un token de identidad. Vacío = sin autenticación (local). */
+  get live3dAuth() {
+    return env("VIGIA_LIVE3D_AUTH").toLowerCase();
+  },
   /** Agente Vigía: escucha continua de las emergencias activas. VIGIA_AGENT=0 lo apaga. */
   get vigiaAgent() {
     return env("VIGIA_AGENT") !== "0";

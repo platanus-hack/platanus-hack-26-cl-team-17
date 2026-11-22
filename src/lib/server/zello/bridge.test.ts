@@ -278,7 +278,7 @@ test("una respuesta lenta de /ask no atrasa el registro de la transmisión sigui
 test("avisa cuando hay varias emergencias abiertas y no hay --incident; el latido de cierre dice detenido", async () => {
   const { bridge, logs } = setup();
   await bridge.openIncidents();
-  assert.ok(logs.some((l) => /hay 2 emergencias abiertas.*solo en la más nueva \(VG-BBBB\).*--incident/.test(l)));
+  assert.ok(logs.some((l) => /hay 2 emergencias abiertas.*solo en VG-BBBB \(la elegida en el tablero.*--incident/.test(l)));
   const st = bridge.status(false, true);
   assert.equal(st.stopped, true);
   assert.equal(st.connected, false);

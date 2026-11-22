@@ -7,7 +7,7 @@
  * vecino de 3 pisos queda al norte (lado Bravo) y una casa de un piso al sur (lado Delta).
  * Departamento con fuego: 3er piso, sector central de la fachada. Persona en balcón:
  * 3er piso, extremo sur de la fachada. El humo deriva hacia el nororiente. El fuego
- * sube por la fachada al 4º piso y de ahí al entretecho, que el dron ve recién en el paso 7.
+ * sube por la fachada al 4º piso y de ahí al entretecho, que el dron ve recién en el paso 4.
  */
 import type { MediaAnalysis } from "@/lib/domain";
 import type { PosterSpec, ScenarioMediaSpec, ScenarioScript } from "./types";
@@ -533,162 +533,74 @@ export const SCENARIO: ScenarioScript = {
     description:
       "Simulacro guiado con datos ficticios: fuego en un departamento del 3er piso de un edificio de 4 pisos. Ningún video, análisis ni comunicación de este incidente es real.",
   },
+  // Guion corto para acompañar el pitch (≈35 s): solo los momentos en que Vigía cambia algo.
+  // El dron despega con la alarma para llegar a su órbita justo cuando se piden sus cuadros.
   steps: [
     {
-      label: "Alarma — vecinos llaman por humo en un 3er piso",
+      label: "Alarma: humo en un 3er piso — despega el dron D1",
       wait_s: 4,
+      mission: { pattern: "orbit", radius_m: 50, altitude_m: 40, speed_ms: 15 },
       events: [
         {
           kind: "comms",
           severity: "notice",
           title: "Alarma recibida — llamados de vecinos",
           detail:
-            "La Central recibe varios llamados por humo saliendo de un departamento del 3er piso en Avenida Independencia 1350. Simulacro: datos ficticios.",
+            "La Central recibe llamados por humo en un departamento del 3er piso en Avenida Independencia 1350. Simulacro: datos ficticios.",
         },
       ],
-    },
-    {
-      label: "Central despacha B-3, Q-8 y RX-15",
-      wait_s: 5,
       comms: [
         {
           channel: "Canal 1",
           speaker: "Central",
-          text: "Central a B-3, Q-8 y RX-15, concurran a incendio en edificio de departamentos, Avenida Independencia 1350, comuna de Independencia. Vecinos informan humo negro por ventanas del tercer piso.",
-        },
-        {
-          channel: "Canal 1",
-          speaker: "B-3",
-          text: "B-3 a Central, conforme, saliendo con cinco voluntarios.",
-        },
-        {
-          channel: "Canal 1",
-          speaker: "Q-8",
-          text: "Q-8 a Central, conforme, saliendo con seis.",
+          text: "Central a B-3 y Q-8, concurran a incendio en edificio de departamentos, Avenida Independencia 1350. Humo negro por ventanas del tercer piso. Dron D1 despegando hacia el lugar.",
         },
       ],
     },
     {
-      label: "Llega video de vecino — humo negro en 3er piso",
-      wait_s: 7,
+      label: "Vigía analiza el video de un vecino",
+      wait_s: 5,
       media: M1,
     },
     {
-      label: "Unidades en ruta piden antecedentes",
+      label: "Vigía detecta una persona en el balcón del 3er piso",
       wait_s: 6,
-      comms: [
-        {
-          channel: "Canal 1",
-          speaker: "B-3",
-          text: "B-3 a Central, ¿hay más antecedentes? ¿Se informan personas al interior?",
-        },
-        {
-          channel: "Canal 1",
-          speaker: "Central",
-          text: "Central a B-3, van cinco llamados. Una vecina dice que en el departamento contiguo al que se quema, en el tercer piso, vive una señora mayor que no contesta el teléfono; no está confirmado. Humo negro por ventanas de la fachada. SAMU está alertado.",
-        },
-        {
-          channel: "Canal 1",
-          speaker: "RX-15",
-          text: "RX-15 en ruta por Independencia hacia el norte, tránsito lento.",
-        },
-        {
-          channel: "Canal 1",
-          speaker: "Central",
-          text: "Central a todas las unidades, Carabineros va a cortar el tránsito en Independencia frente al edificio.",
-        },
-      ],
-    },
-    {
-      label: "Video de vecina — persona en balcón del 3er piso",
-      wait_s: 8,
       media: M2,
     },
     {
-      label: "Central avisa a B-3 y se despliega el dron",
-      wait_s: 6,
-      mission: { pattern: "orbit", radius_m: 50, altitude_m: 40, speed_ms: 8 },
+      label: "Central avisa a B-3 antes de que llegue",
+      wait_s: 4,
       comms: [
         {
           channel: "Canal 1",
           speaker: "Central",
-          text: "Central a B-3, video de una vecina muestra una persona en el balcón del tercer piso, costado sur, haciendo señas. Podría ser la señora que informaron.",
+          text: "Central a B-3, video de una vecina muestra una persona en el balcón del tercer piso, costado sur, haciendo señas.",
         },
         {
           channel: "Canal 1",
           speaker: "B-3",
           text: "B-3 conforme. Q-8, prepare la mecánica para rescate por ese balcón.",
         },
-        {
-          channel: "Canal 2",
-          speaker: "Segundo Comandante",
-          text: "Segundo Comandante a Central, voy en ruta. Desplieguen el dron en órbita sobre el edificio; necesito ver la techumbre y el costado norte.",
-        },
-        {
-          channel: "Canal 2",
-          speaker: "Central",
-          text: "Central conforme, dron D1 despegando, órbita de 50 metros a 40 metros de altura.",
-        },
       ],
     },
     {
-      label: "B-3 en el lugar — primer reporte",
-      wait_s: 7,
-      comms: [
-        {
-          channel: "Canal 1",
-          speaker: "B-3",
-          text: "B-3 en el lugar. Edificio de departamentos de cuatro pisos, hormigón, con fuego declarado en un departamento del tercer piso. Persona en el balcón del tercer piso, costado sur, pidiendo ayuda: rescate con la mecánica de Q-8. Armamos línea por la escalera interior al tercer piso, estrategia ofensiva. Lado principal Avenida Independencia, poniente. Con peligro de propagación al cuarto piso. B-3 a cargo, solicito segunda alarma.",
-        },
-        {
-          channel: "Canal 1",
-          speaker: "Central",
-          text: "Central conforme, B-3 a cargo. Se despacha segunda alarma: B-5, B-12 y Q-6.",
-        },
-        {
-          channel: "Canal 1",
-          speaker: "Q-8",
-          text: "Q-8 en el lugar, posicionando la mecánica frente al balcón del tercer piso. Ojo con el tendido eléctrico de la vereda.",
-        },
-      ],
-      events: [
-        {
-          kind: "comms",
-          severity: "notice",
-          title: "B-3 asume el mando en el lugar",
-          detail:
-            "Primer reporte: fuego en departamento del 3er piso, persona en balcón del costado sur, rescate con la mecánica, estrategia ofensiva y segunda alarma solicitada.",
-        },
-      ],
-    },
-    {
-      label: "Dron envía cuadros — fuego sube al 4º piso y techumbre",
-      wait_s: 8,
+      label: "Dron: el fuego sube al 4º piso y a la techumbre",
+      wait_s: 6,
       drone_media: M3,
     },
     {
-      label: "Persona rescatada del balcón; llega segunda alarma",
-      wait_s: 7,
+      label: "Rescate en el balcón; nadie sube al techo",
+      wait_s: 5,
       comms: [
         {
           channel: "Canal 1",
           speaker: "Q-8",
-          text: "Q-8 a B-3, persona rescatada desde el balcón del tercer piso con la mecánica. Mujer adulta mayor, consciente, con inhalación de humo. No sabe si había alguien en el departamento que se quema. Se entrega a SAMU.",
-        },
-        {
-          channel: "Canal 1",
-          speaker: "SAMU",
-          text: "SAMU recibe a la paciente en la vereda, la evaluamos y coordinamos traslado.",
-        },
-        {
-          channel: "Canal 1",
-          speaker: "B-5",
-          text: "B-5 en el lugar con segunda alarma, a disposición del mando.",
+          text: "Q-8 a B-3, persona rescatada desde el balcón del tercer piso con la mecánica. Consciente, con inhalación de humo, a cargo de SAMU.",
         },
         {
           channel: "Canal 1",
           speaker: "B-3",
-          text: "B-3 a B-5, armen línea al cuarto piso y revisen el entretecho desde adentro; el dron muestra llamas en el cuarto piso y humo a presión por la techumbre. Nadie sube al techo, la estructura está comprometida. B-12, al llegar, proteja el edificio del costado norte.",
+          text: "B-3 a todas las unidades, el dron muestra llamas en el cuarto piso y humo a presión por la techumbre. Línea al cuarto piso, nadie sube al techo: la estructura está comprometida.",
         },
       ],
       events: [
@@ -702,24 +614,14 @@ export const SCENARIO: ScenarioScript = {
       ],
     },
     {
-      label: "Fuego controlado — sigue la búsqueda",
-      wait_s: 5,
+      label: "Fuego controlado — la búsqueda sigue abierta",
+      wait_s: 3,
       status: "controlled",
       comms: [
         {
           channel: "Canal 1",
           speaker: "B-3",
-          text: "B-3 a Central, fuego controlado en tercer y cuarto piso y en la techumbre. Seguimos con remoción y búsqueda en los pisos tres y cuatro; la búsqueda no ha terminado.",
-        },
-        {
-          channel: "Canal 1",
-          speaker: "B-12",
-          text: "B-12 a B-3, edificio del costado norte revisado por fuera y su techumbre, no se observa fuego por ahora. Seguimos atentos.",
-        },
-        {
-          channel: "Canal 1",
-          speaker: "Central",
-          text: "Central conforme, fuego controlado. Quedamos atentos al resultado de la búsqueda.",
+          text: "B-3 a Central, fuego controlado en tercer y cuarto piso y en la techumbre. Seguimos con la búsqueda en los pisos tres y cuatro; no ha terminado.",
         },
       ],
       events: [

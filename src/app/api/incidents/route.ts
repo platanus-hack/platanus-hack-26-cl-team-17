@@ -9,6 +9,7 @@ import { ensureLocalSeed } from "@/lib/demo";
 import { CreateIncidentInputSchema, type Incident } from "@/lib/domain";
 import { ok, readJson, route } from "@/lib/http";
 import { requireStaffOrBridge } from "@/lib/server/bridge-auth";
+import { loadFocusPin, resolveFocus } from "@/lib/server/focus";
 import { createCommandIncident, listIncidentSummaries } from "@/lib/server/snapshot";
 import { getStore } from "@/lib/store";
 
@@ -16,13 +17,14 @@ export const runtime = "nodejs";
 // La siembra local de la demo deja análisis en after().
 export const maxDuration = 900;
 
-// El puente Zello también la lee (con su token) para saber qué emergencias están abiertas.
+// Los puentes Zello (con su token) y del dron también la leen: qué emergencias están abiertas
+// y cuál atiende Vigía (`focus`).
 export const GET = route(async (req) => {
   await requireStaffOrBridge(req);
   const store = getStore();
   if (store.kind === "local") await ensureLocalSeed();
-  const incidents = await listIncidentSummaries(store);
-  return ok<IncidentListResponse>({ incidents, mode: runtimeMode() });
+  const [incidents, pin] = await Promise.all([listIncidentSummaries(store), loadFocusPin()]);
+  return ok<IncidentListResponse>({ incidents, mode: runtimeMode(), focus: resolveFocus(incidents, pin) });
 });
 
 export const POST = route(async (req) => {

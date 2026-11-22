@@ -84,7 +84,8 @@ export function VigiaDock({ incidentId, className, style }: VigiaDockProps) {
   // Cada mensaje se va solo después de un rato, salvo una posible persona.
   useEffect(() => {
     if (!current || current.priority === "persona") return;
-    const ms = SHOW_MS[current.kind] ?? SHOW_MS.default;
+    // El detalle de la mesa puede ser largo: ~0,4 s por palabra, con el mínimo del tipo.
+    const ms = Math.max(SHOW_MS[current.kind] ?? SHOW_MS.default, current.text.split(/\s+/).length * 400);
     const t = setTimeout(() => dismiss(current.seq), ms);
     return () => clearTimeout(t);
   }, [current, dismiss]);
@@ -211,6 +212,15 @@ function MessageCard({
       </div>
 
       <p className="mt-1 pr-2 text-lg leading-snug font-medium text-text">{u.text}</p>
+
+      {u.speak && u.radio && u.radio !== u.text ? (
+        <p className="mt-1.5 flex items-start gap-1.5 pr-2 text-sm text-muted">
+          <Volume2 aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+          <span>
+            <span className="sr-only">Por radio: </span>«{u.radio}»
+          </span>
+        </p>
+      ) : null}
 
       {u.kind === "propuesta" && u.claves ? (
         <div className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-surface-2 p-2">
