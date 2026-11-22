@@ -143,7 +143,6 @@ export default function Viewer3D(props: Viewer3DProps) {
   const scaleTextRef = useRef<HTMLSpanElement>(null);
   const tapeRef = useRef<HTMLDivElement>(null);
   const headingTextRef = useRef<HTMLSpanElement>(null);
-  const reticle = compact ? 96 : 132;
 
   return (
     <div ref={attachHost} className="absolute inset-0 isolate overflow-hidden" style={{ background: SCENE_BG }}>
@@ -198,23 +197,11 @@ export default function Viewer3D(props: Viewer3DProps) {
       {/* Etiquetas HTML de la escena (drei <Html>); deja pasar los gestos al lienzo */}
       <div ref={overlayRef} className="pointer-events-none absolute inset-0 z-10 overflow-hidden" style={OVERLAY_CLIP} />
 
-      {/* Hueco visible (entre paneles): retícula en el centro de la órbita y cinta de rumbo. */}
+      {/* Hueco visible (entre paneles): cinta de rumbo. */}
       <div
         aria-hidden="true"
         className="@container pointer-events-none absolute top-[var(--scene-hud-t,0px)] right-[var(--scene-hud-r,0px)] bottom-[var(--scene-hud-b,0px)] left-[var(--scene-hud-l,0px)] z-20"
       >
-        <div className="absolute top-1/2 left-0 h-px bg-text/15" style={{ width: `calc(50% - ${reticle / 2 + 18}px)` }} />
-        <div className="absolute top-1/2 right-0 h-px bg-text/15" style={{ width: `calc(50% - ${reticle / 2 + 18}px)` }} />
-        <div className="absolute top-0 left-1/2 w-px bg-text/15" style={{ height: `calc(50% - ${reticle / 2 + 18}px)` }} />
-        <div className="absolute bottom-0 left-1/2 w-px bg-text/15" style={{ height: `calc(50% - ${reticle / 2 + 18}px)` }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" style={{ width: reticle, height: reticle }}>
-          <span className="absolute top-0 left-0 size-4 border-t border-l border-text/60" />
-          <span className="absolute top-0 right-0 size-4 border-t border-r border-text/60" />
-          <span className="absolute bottom-0 left-0 size-4 border-b border-l border-text/60" />
-          <span className="absolute right-0 bottom-0 size-4 border-r border-b border-text/60" />
-          <span className="absolute inset-[30%] rounded-full border border-dashed border-text/35" />
-        </div>
-
         {/* Cinta de rumbo (hacia dónde mira la cámara); solo si cabe entre la escala y el zoom. */}
         {!compact && (
           <div className="absolute bottom-3 left-1/2 hidden -translate-x-1/2 flex-col items-center text-text/70 @min-[34rem]:flex">

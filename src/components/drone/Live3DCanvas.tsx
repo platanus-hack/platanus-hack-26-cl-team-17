@@ -22,12 +22,12 @@ import { cameraCenter, frustumSegments, matrixScale, robustBounds, type PointClo
  */
 const POINT_SIZE_PER_RADIUS = 0.018;
 const FRUSTUM_PER_RADIUS = 0.08;
-const FOV = 50;
+export const FOV = 50;
 /** Se vuelve a encuadrar si la nube crece más que esto respecto del último encuadre. */
 const REFRAME_GROWTH = 1.4;
 
 const rgb = (r: number, g: number, b: number) => new THREE.Color().setRGB(r, g, b, THREE.LinearSRGBColorSpace);
-const BG: [number, number, number] = [0.035, 0.043, 0.06];
+export const BG: [number, number, number] = [0.035, 0.043, 0.06];
 const ACCENT = rgb(1, 0.62, 0.1);
 const TRAIL = rgb(0.35, 0.8, 1);
 
@@ -76,7 +76,7 @@ function Cloud({ cloud, cloudVersion, pointSize }: { cloud: PointCloudBuffer; cl
   );
 }
 
-function Trajectory({ cameras, display, size }: { cameras: number[][]; display: number[]; size: number }) {
+export function Trajectory({ cameras, display, size }: { cameras: number[][]; display: number[]; size: number }) {
   // Tamaños en unidades de vista pasados al mundo (el grupo aplica `display`).
   const scale = matrixScale(display) / size;
   const centers = useMemo(() => cameras.map((c) => new THREE.Vector3(...cameraCenter(c))), [cameras]);
@@ -100,7 +100,7 @@ function Trajectory({ cameras, display, size }: { cameras: number[][]; display: 
 }
 
 /** Encuadra la nube al llegar el primer trozo y cuando crece mucho; nunca después de que el usuario movió la vista. */
-function AutoFrame({ bounds, interacted }: { bounds: { center: [number, number, number]; radius: number } | null; interacted: boolean }) {
+export function AutoFrame({ bounds, interacted }: { bounds: { center: [number, number, number]; radius: number } | null; interacted: boolean }) {
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as OrbitControlsImpl | null;
   const framedRadius = useRef(0);

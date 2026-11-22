@@ -30,6 +30,29 @@ export interface Live3DStatus {
   display: number[];
   /** c2w 3x4 por filas de cada cuadro clave (OpenCV: x derecha, y abajo, z adelante), en orden. */
   cameras: number[][];
+  /** Gaussian splatting en vivo; null si el servicio no lo trae. */
+  splat: Live3DSplatInfo | null;
+}
+
+/** Estado del Gaussian splatting en vivo (solo entrena mientras alguien pide /splat). */
+export interface Live3DSplatInfo {
+  /** "gsplat" (GPU) o "fake" (simulado: gaussianas sin entrenar); null = desactivado en el servicio. */
+  engine: string | null;
+  /** Entrenando ahora (alguien pidió los splats hace poco). */
+  active: boolean;
+  /** Versión de la última instantánea (0 = todavía ninguna). */
+  version: number;
+  /** Gaussianas de la última instantánea. */
+  gaussians: number;
+  /** Gaussianas en entrenamiento. */
+  training: number;
+  steps: number;
+  views: number;
+  psnr: number | null;
+  /** ms epoch de la última instantánea. */
+  updated_at: number | null;
+  /** Aviso en español si el entrenamiento falló. */
+  error: string | null;
 }
 
 /** GET /api/drone/[missionId]/live/scene3d */
@@ -46,6 +69,7 @@ export const LIVE3D_SESSION_RE = /^[A-Za-z0-9_-]{1,64}$/;
 export const IDENTITY_4X4: readonly number[] = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
 
 const num = (v: unknown, fallback = 0): number => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
+const count = (v: unknown): number => Math.max(0, Math.floor(num(v)));
 const finiteList = (v: unknown, len: number): number[] | null =>
   Array.isArray(v) && v.length === len && v.every((x) => typeof x === "number" && Number.isFinite(x)) ? (v as number[]) : null;
 
@@ -74,5 +98,23 @@ export function parseLive3dStatus(raw: unknown): Live3DStatus | null {
     updated_at: typeof r.updated_at === "number" && Number.isFinite(r.updated_at) && r.updated_at > 0 ? r.updated_at : null,
     display: finiteList(r.display, 16) ?? [...IDENTITY_4X4],
     cameras,
+    splat: parseSplatInfo(r.splat),
+  };
+}
+
+function parseSplatInfo(raw: unknown): Live3DSplatInfo | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  return {
+    engine: typeof r.engine === "string" ? r.engine : null,
+    active: r.active === true,
+    version: count(r.version),
+    gaussians: count(r.gaussians),
+    training: count(r.training),
+    steps: count(r.steps),
+    views: count(r.views),
+    psnr: typeof r.psnr === "number" && Number.isFinite(r.psnr) ? r.psnr : null,
+    updated_at: typeof r.updated_at === "number" && Number.isFinite(r.updated_at) && r.updated_at > 0 ? r.updated_at : null,
+    error: typeof r.error === "string" && r.error.trim() ? r.error : null,
   };
 }

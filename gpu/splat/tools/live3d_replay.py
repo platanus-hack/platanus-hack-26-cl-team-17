@@ -8,6 +8,12 @@ reenvío desde `pushLiveFrame`, muestra el avance y al final guarda la nube (`.p
     .venv/bin/python tools/live3d_replay.py --url http://127.0.0.1:8790 VIDEO.mp4
     .venv/bin/python tools/live3d_replay.py --url https://vigia-live3d-….run.app --gcp VIDEO.mp4 --out out/live3d/prueba
 
+Con --splat además pide los Gaussian splats en vivo mientras corre (eso mantiene encendido el
+entrenamiento), sigue entrenando --splat-extra segundos al final y guarda `splats.splat`
+(formato .splat de antimatter15, se abre con cualquier visor):
+
+    .venv/bin/python tools/live3d_replay.py --url … --gcp --splat VIDEO.mp4
+
 Con --app el video va a la app como si fuera el dron (POST /api/drone/<misión>/live con el token
 de ingesta, 8 cuadros por segundo) y la nube se mira en la pestaña «Dron 3D» de la ficha:
 
@@ -31,6 +37,7 @@ import numpy as np
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from splat.live3d import decode_points
+from splat.live_gs import decode_live_splat
 
 
 def jpeg_frames(path: str, fps: float, width: int):
@@ -123,6 +130,46 @@ def render(path: str, xyz: np.ndarray, rgb: np.ndarray, display: np.ndarray, cam
     cv2.imwrite(path, img)
 
 
+def write_splat(path: str, data: bytes) -> int:
+    """VGS1 → .splat (32 bytes por gaussiana). Devuelve cuántas escribió."""
+    d = decode_live_splat(data)
+    n = len(d["position"])
+    rec = np.zeros(n, dtype=[("p", "<f4", 3), ("s", "<f4", 3), ("c", "u1", 4), ("r", "u1", 4)])
+    rec["p"] = d["position"]
+    rec["s"] = np.exp(d["log_scale"])
+    rec["c"] = d["rgba"]
+    rec["r"] = np.clip(np.round(d["rot_wxyz"] * 128 + 128), 0, 255).astype(np.uint8)
+    with open(path, "wb") as f:
+        f.write(rec.tobytes())
+    return n
+
+
+class SplatPoller:
+    def __init__(self, cli: "Client", sid: str):
+        self.cli = cli
+        self.sid = sid
+        self.version = 0
+        self.data: bytes | None = None
+        self.last = 0.0
+
+    def poll(self, every: float = 2.0) -> None:
+        if time.time() - self.last < every:
+            return
+        self.last = time.time()
+        try:
+            body = self.cli.req("GET", f"/sessions/{self.sid}/splat?after={self.version}", timeout=30)
+        except urllib.error.HTTPError as err:
+            if err.code != 404:
+                print("falló /splat:", err)
+            return
+        except urllib.error.URLError as err:
+            print("falló /splat:", err)
+            return
+        if body:
+            self.data = body
+            self.version = decode_live_splat(body)["version"]
+
+
 def as_drone(a: argparse.Namespace) -> int:
     """Manda los videos a la app como video en vivo del dron, al ritmo real."""
     fps = a.fps or 8.0
@@ -165,6 +212,8 @@ def main() -> int:
     ap.add_argument("--width", type=int, default=640)
     ap.add_argument("--speed", type=float, default=1.0, help="1 = tiempo real")
     ap.add_argument("--out", default="out/live3d/replay")
+    ap.add_argument("--splat", action="store_true", help="pide y guarda los Gaussian splats en vivo")
+    ap.add_argument("--splat-extra", type=float, default=30.0, help="segundos de entrenamiento al final")
     a = ap.parse_args()
     if a.app:
         if not (a.mission and a.token):
@@ -190,6 +239,7 @@ def main() -> int:
     print(f"listo: motor {h['engine']}, GPU {h.get('gpu')}, en {time.time() - t0:.0f} s")
 
     sid = a.session
+    splats = SplatPoller(cli, sid) if a.splat else None
     start = time.time()
     sent = 0
     last_print = 0.0
@@ -201,13 +251,22 @@ def main() -> int:
             sent += 1
         except urllib.error.URLError as err:
             print("falló un envío:", err)
+        if splats:
+            splats.poll()
         if time.time() - last_print > 2:
             last_print = time.time()
             st = cli.json("GET", f"/sessions/{sid}/status")
+            sp = st.get("splat") or {}
             print(
                 f"t={time.time() - start:5.1f}s enviados={sent} clave={st['keyframes']} pend={st['pending']} "
                 f"trozos={st['chunks']} puntos={st['points']} ventana={st['last_chunk_ms']} ms {st['state']}"
                 + (f" · {st['message']}" if st["message"] else "")
+                + (
+                    f" · splats v{sp.get('version')} {sp.get('gaussians')} gs paso {sp.get('steps')} PSNR {sp.get('psnr')}"
+                    + (f" ({sp['error']})" if sp.get("error") else "")
+                    if splats
+                    else ""
+                )
             )
     # Espera a que se vacíen los pendientes.
     for _ in range(40):
@@ -216,6 +275,13 @@ def main() -> int:
             break
         time.sleep(0.5)
     time.sleep(1.5)
+    if splats:
+        until = time.time() + a.splat_extra
+        while time.time() < until:
+            splats.poll(1.0)
+            time.sleep(0.5)
+        splats.last = 0.0
+        splats.poll()
     st = cli.json("GET", f"/sessions/{sid}/status")
     print(json.dumps({k: v for k, v in st.items() if k not in ("display", "cameras")}, ensure_ascii=False))
 
@@ -234,6 +300,11 @@ def main() -> int:
         json.dump(st, f)
     render(os.path.join(a.out, "vista.png"), xyz, rgb, np.array(st["display"]), np.array(st["cameras"]))
     print(f"{len(xyz)} puntos → {a.out}/nube.ply y vista.png")
+    if splats and splats.data:
+        n = write_splat(os.path.join(a.out, "splats.splat"), splats.data)
+        print(f"{n} gaussianas (v{splats.version}) → {a.out}/splats.splat")
+    elif splats:
+        print("no llegaron splats")
     return 0
 
 

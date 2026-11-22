@@ -169,6 +169,35 @@ export async function fetchLive3dPoints(
   }
 }
 
+/**
+ * Última instantánea de los Gaussian splats en vivo (binario "VGS1") salvo que `after` ya sea ella.
+ * Pedirla es lo que mantiene encendido el entrenamiento en el servicio. status 204 = sin nada más
+ * nuevo; 0 = no se pudo consultar.
+ */
+export async function fetchLive3dSplat(
+  missionId: string,
+  after: number,
+): Promise<{ status: number; body: ArrayBuffer | null; version: number | null }> {
+  const url = sessionUrl(missionId, `splat?after=${Math.max(0, Math.floor(after))}`);
+  if (!url) return { status: 0, body: null, version: null };
+  try {
+    const res = await fetch(url, {
+      headers: await authHeaders(),
+      signal: AbortSignal.timeout(20_000),
+      cache: "no-store",
+    });
+    if (res.status !== 200) {
+      await res.arrayBuffer().catch(() => undefined);
+      return { status: res.status, body: null, version: null };
+    }
+    const version = Number(res.headers.get("x-splat-version"));
+    return { status: 200, body: await res.arrayBuffer(), version: Number.isFinite(version) ? version : null };
+  } catch (error) {
+    warnSparingly(missionId, "splat", "falló la descarga de splats", error);
+    return { status: 0, body: null, version: null };
+  }
+}
+
 /** Borra la sesión en el servicio. true si respondió bien. */
 export async function resetLive3dSession(missionId: string): Promise<boolean> {
   const url = sessionUrl(missionId, "reset");

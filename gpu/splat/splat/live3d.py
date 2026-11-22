@@ -24,6 +24,8 @@ from typing import Callable, Protocol, Sequence
 import cv2
 import numpy as np
 
+from .live_gs import View, encode_live_splat
+
 # Lado de VGGT y múltiplo de los parches.
 VGGT_SIZE = 518
 PATCH = 14
@@ -68,6 +70,14 @@ DISPLAY_EARLY = 6
 PLANE_MAX_ANGLE_DEG = 65.0
 
 POINTS_MAGIC = b"VL3D"
+
+# Gaussian splatting en vivo (live_gs.py): solo mientras alguien pide /splat.
+MAX_VIEWS = 600  # cuadros clave que se guardan para entrenar (los antiguos se ralean)
+MASK_CONF_QUANTILE = 0.1  # máscara de entrenamiento: más permisiva que la de la nube
+SPLAT_WANT_S = 20.0  # tras la última consulta de /splat se deja de entrenar
+TRAIN_SLICE_S = 0.4  # tramo de entrenamiento entre ventanas de VGGT
+EXPORT_EVERY_S = 2.5
+SPLAT_MAX_FAILS = 3
 
 
 @dataclass(frozen=True)
@@ -330,6 +340,18 @@ class Session:
         self.updated_at_ms: int | None = None
         self.last_seen = now()
         self.busy = False
+        # Gaussian splatting en vivo.
+        self.views: list[View] = []
+        self.splat_wanted_at = -math.inf
+        self.trainer = None  # lo crea el hilo de GPU al primer pedido
+        self.splat_engine: str | None = None
+        self.splat_bytes: bytes | None = None
+        self.splat_version = 0
+        self.splat_count = 0
+        self.splat_updated_ms: int | None = None
+        self.splat_last_export = -math.inf
+        self.splat_error: str | None = None
+        self.splat_fails = 0
 
     # -- entrada ------------------------------------------------------------
 
@@ -430,6 +452,7 @@ class Session:
         valid_conf = conf[np.isfinite(conf) & np.isfinite(pred.depth) & (pred.depth > 0)]
         thr = float(np.quantile(valid_conf, CONF_QUANTILE)) if valid_conf.size else math.inf
         thr = max(thr, 1.0 + 1e-6)
+        thr_mask = float(np.quantile(valid_conf, MASK_CONF_QUANTILE)) if valid_conf.size else math.inf
 
         if na == 0:
             fit = Sim3Fit(np.eye(4), 1.0, 0.0, 0, True)
@@ -468,13 +491,18 @@ class Session:
         scale = fit.scale
 
         # Puntos de los cuadros nuevos.
-        xyz_all, rgb_all = [], []
+        xyz_all, rgb_all, masks = [], [], []
         for j in range(na, na + len(win.new)):
             depth = pred.depth[j]
-            ok = np.isfinite(depth) & (depth > 0) & (conf[j] >= thr) & ~depth_edges(depth)
+            valid = np.isfinite(depth) & (depth > 0)
+            ok = valid & (conf[j] >= thr) & ~depth_edges(depth)
+            # Máscara para entrenar los splats: con profundidad, sin cielo ni fondo lejano.
+            train_mask = valid & (conf[j] >= thr_mask)
             if ok.any():
                 med = float(np.median(depth[ok]))
                 ok &= depth <= FAR_MULT * med
+                train_mask &= depth <= FAR_MULT * med
+            masks.append(train_mask)
             ok_s = ok[::POINT_STRIDE, ::POINT_STRIDE]
             pts = unproject(depth, pred.K[j], c2w_world[j], POINT_STRIDE)
             pts = pts.astype(np.float64)
@@ -522,6 +550,10 @@ class Session:
                 k.world, k.weight = maps[j - na]
                 self.placed.append(k)
                 self.cameras.append(c2w_world[j])
+                self.views.append(View(k.index, k.image, c2w_world[j].copy(), pred.K[j].copy(), masks[j - na]))
+            if len(self.views) > MAX_VIEWS:
+                half = len(self.views) // 2
+                self.views = self.views[:half:2] + self.views[half:]
             for old in self.placed[:-KEEP_MAPS]:
                 old.world = None
                 old.weight = None
@@ -571,7 +603,38 @@ class Session:
                 "updated_at": self.updated_at_ms,
                 "display": [round(float(v), 6) for v in self.display.reshape(-1)],
                 "cameras": [[round(float(v), 5) for v in c[:3, :4].reshape(-1)] for c in cams],
+                "splat": self._splat_status(),
             }
+
+    def _splat_status(self) -> dict:
+        tr = self.trainer
+        return {
+            "engine": self.splat_engine,
+            "active": self.splat_active(),
+            "version": self.splat_version,
+            "gaussians": self.splat_count,
+            "training": 0 if tr is None else int(tr.count),
+            "steps": 0 if tr is None else int(tr.steps),
+            "views": 0 if tr is None else int(tr.n_views),
+            "psnr": None if tr is None or tr.psnr is None else round(float(tr.psnr), 2),
+            "updated_at": self.splat_updated_ms,
+            "error": self.splat_error,
+        }
+
+    # -- splats ---------------------------------------------------------------
+
+    def want_splat(self) -> None:
+        """Alguien mira la vista de splats: se entrena hasta SPLAT_WANT_S después de esto."""
+        with self.lock:
+            self.splat_wanted_at = self.now()
+            self.last_seen = self.splat_wanted_at
+
+    def splat_active(self) -> bool:
+        return self.now() - self.splat_wanted_at < SPLAT_WANT_S
+
+    def splat_payload(self) -> tuple[bytes | None, int]:
+        with self.lock:
+            return self.splat_bytes, self.splat_version
 
     def points(self, start: int, max_chunks: int) -> bytes:
         with self.lock:
@@ -694,7 +757,14 @@ MAX_SESSIONS = 6
 
 
 class Manager:
-    def __init__(self, make_estimator: Callable[[], Estimator], engine: str, log: Callable[[str], None] = print):
+    def __init__(
+        self,
+        make_estimator: Callable[[], Estimator],
+        engine: str,
+        log: Callable[[str], None] = print,
+        make_trainer: Callable[[], object] | None = None,
+        splat_engine: str | None = None,
+    ):
         self.sessions: dict[str, Session] = {}
         self.lock = threading.Lock()
         self.wake = threading.Event()
@@ -705,6 +775,9 @@ class Manager:
         self.log = log
         self._make = make_estimator
         self._rr = 0
+        self._make_trainer = make_trainer
+        self.splat_engine = splat_engine if make_trainer is not None else None
+        self.splat_error: str | None = None
 
     @property
     def ready(self) -> bool:
@@ -719,6 +792,7 @@ class Manager:
             if s is None and create:
                 self._evict()
                 s = Session(sid, self.engine)
+                s.splat_engine = self.splat_engine
                 self.sessions[sid] = s
                 self.log(f"[live3d] sesión nueva {sid}")
             return s
@@ -747,21 +821,81 @@ class Manager:
             self.log(f"[live3d] no se pudo cargar el modelo: {err}")
             return
         while True:
+            worked = False
             job = self._next()
-            if job is None:
+            if job is not None:
+                worked = True
+                s, win = job
+                t0 = time.perf_counter()
+                try:
+                    s.process(win, self.estimator)
+                    self.log(
+                        f"[live3d] {s.sid}: ventana {len(s.chunks)} ({len(win.anchors)} anclas + {len(win.new)} nuevos) "
+                        f"en {(time.perf_counter() - t0) * 1000:.0f} ms · {s.n_points} puntos · {s.state}"
+                    )
+                except Exception as err:  # noqa: BLE001
+                    self.log(f"[live3d] {s.sid}: falló una ventana: {err!r}")
+            # VGGT primero, pero con splats pedidos siempre queda un tramo de entrenamiento entre ventanas.
+            sp = self._splat_session()
+            if sp is not None and self.train_splat(sp, TRAIN_SLICE_S):
+                worked = True
+            if not worked:
                 self.wake.wait(0.15)
                 self.wake.clear()
-                continue
-            s, win = job
-            t0 = time.perf_counter()
+
+    def _splat_session(self) -> Session | None:
+        """La sesión con splats pedidos más recientemente (y con nube que entrenar)."""
+        if self._make_trainer is None:
+            return None
+        with self.lock:
+            sessions = list(self.sessions.values())
+        wanted = [s for s in sessions if s.splat_active() and s.chunks and s.splat_fails < SPLAT_MAX_FAILS]
+        return max(wanted, key=lambda s: s.splat_wanted_at) if wanted else None
+
+    def train_splat(self, s: Session, seconds: float) -> bool:
+        """Un tramo de entrenamiento de la sesión `s` (hilo de GPU). True si entrenó algo."""
+        if s.trainer is None:
+            if self._make_trainer is None or self.splat_error is not None:
+                s.splat_error = self.splat_error
+                return False
             try:
-                s.process(win, self.estimator)
-                self.log(
-                    f"[live3d] {s.sid}: ventana {len(s.chunks)} ({len(win.anchors)} anclas + {len(win.new)} nuevos) "
-                    f"en {(time.perf_counter() - t0) * 1000:.0f} ms · {s.n_points} puntos · {s.state}"
-                )
-            except Exception as err:  # noqa: BLE001
-                self.log(f"[live3d] {s.sid}: falló una ventana: {err!r}")
+                s.trainer = self._make_trainer()
+                self.log(f"[live3d] {s.sid}: entrenador de splats listo ({self.splat_engine})")
+            except Exception as err:  # noqa: BLE001 - sin splats la nube sigue igual
+                self.splat_error = f"No se pudo iniciar el entrenamiento de splats: {err}"
+                s.splat_error = self.splat_error
+                self.log(f"[live3d] {self.splat_error}")
+                return False
+        tr = s.trainer
+        with s.lock:
+            views = list(s.views)
+            chunks = [(c.xyz, c.rgb) for c in s.chunks[tr.n_chunks :]]
+            voxel = s.voxel
+        try:
+            tr.sync(views, chunks, voxel)
+            steps = tr.train(seconds)
+            now = time.monotonic()
+            if steps and now - s.splat_last_export >= EXPORT_EVERY_S:
+                data, n = encode_live_splat(*tr.arrays(), version=s.splat_version + 1)
+                with s.lock:
+                    s.splat_bytes = data
+                    s.splat_version += 1
+                    s.splat_count = n
+                    s.splat_updated_ms = int(time.time() * 1000)
+                    s.splat_last_export = now
+                    s.splat_error = None
+                    s.splat_fails = 0
+                if s.splat_version == 1 or s.splat_version % 20 == 0:
+                    self.log(
+                        f"[live3d] {s.sid}: splats v{s.splat_version} · {n} gaussianas · paso {tr.steps} · "
+                        f"{tr.n_views} vistas · PSNR {tr.psnr or 0:.1f}"
+                    )
+            return steps > 0
+        except Exception as err:  # noqa: BLE001
+            s.splat_fails += 1
+            s.splat_error = f"Falló el entrenamiento de splats: {err}"
+            self.log(f"[live3d] {s.sid}: falló el entrenamiento de splats ({s.splat_fails}): {err!r}")
+            return False
 
     def _next(self) -> tuple[Session, Window] | None:
         with self.lock:

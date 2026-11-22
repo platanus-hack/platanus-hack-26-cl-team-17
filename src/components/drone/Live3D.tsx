@@ -7,16 +7,20 @@
  *   la pestaña oculta) y baja los trozos de puntos que faltan, de a 8.
  * - El lienzo three.js (Live3DCanvas) se carga aparte con next/dynamic, solo en el navegador.
  * - Los datos viven aquí: cerrar o ampliar la vista no vuelve a bajar la nube.
+ * - Vista «Gaussian splats» (solo en la pestaña de la ficha): mientras está elegida y visible pide
+ *   la última instantánea cada ~2 s; eso es lo que mantiene el entrenamiento encendido en el
+ *   servicio (se apaga solo ~20 s después de la última consulta). Lienzo aparte: Live3DSplatCanvas.
  */
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import dynamic from "next/dynamic";
-import { Box, Maximize2, RotateCcw, TriangleAlert, X } from "lucide-react";
+import { Box, Maximize2, RotateCcw, Sparkles, TriangleAlert, X } from "lucide-react";
 import { Badge, Button, IconButton, Spinner, useNow } from "@/components/ui";
 import { ViewerErrorBoundary } from "@/components/scene3d/error-boundary";
 import { cn } from "@/lib/cn";
 import { formatNumber, timeAgo } from "@/lib/format";
 import { parseLive3dChunk, PointCloudBuffer } from "@/lib/drone/live3d-points";
+import { parseLiveSplat, type LiveSplat } from "@/lib/drone/live3d-splat";
 import type { Live3DSceneResponse, Live3DStatus } from "@/lib/drone/live3d-types";
 
 const STATUS_POLL_MS = 1000;
@@ -24,6 +28,10 @@ const STATUS_POLL_MS = 1000;
 const CATCHUP_POLL_MS = 120;
 const RETRY_MS = 3000;
 const CHUNKS_PER_REQUEST = 8;
+/** Cada cuánto se pide la instantánea de splats (el servicio exporta una cada ~2,5 s, de ~4 MB). */
+const SPLAT_POLL_MS = 2000;
+
+export type Live3DMode = "points" | "splat";
 
 const Live3DCanvas = dynamic(() => import("./Live3DCanvas"), {
   ssr: false,
@@ -31,6 +39,16 @@ const Live3DCanvas = dynamic(() => import("./Live3DCanvas"), {
     <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-white/75">
       <Spinner size="sm" label="" />
       Cargando vista 3D…
+    </div>
+  ),
+});
+
+const Live3DSplatCanvas = dynamic(() => import("./Live3DSplatCanvas"), {
+  ssr: false,
+  loading: () => (
+    <div className="absolute inset-0 flex items-center justify-center gap-2 text-sm text-white/75">
+      <Spinner size="sm" label="" />
+      Cargando vista de splats…
     </div>
   ),
 });
@@ -147,6 +165,81 @@ function useLive3dData(missionId: string, open: boolean): Live3DData {
   return { status, cloud, cloudVersion, clear };
 }
 
+interface LiveSplatData {
+  /** Última instantánea de la misión (null = todavía ninguna). */
+  splat: LiveSplat | null;
+  clear: () => void;
+}
+
+/**
+ * Instantáneas de los Gaussian splats en vivo; solo consulta con `active` y la pestaña visible.
+ * Pedirlas es lo que mantiene encendido el entrenamiento en el servicio.
+ */
+function useLiveSplat(missionId: string, active: boolean): LiveSplatData {
+  const [state, setState] = useState<{ mission: string; splat: LiveSplat } | null>(null);
+  const version = useRef<{ mission: string; v: number }>({ mission: "", v: 0 });
+  const [kick, setKick] = useState(0);
+
+  useEffect(() => {
+    if (!active || !missionId) return;
+    const ctl = new AbortController();
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const url = `/api/drone/${encodeURIComponent(missionId)}/live/scene3d/splat`;
+    if (version.current.mission !== missionId) version.current = { mission: missionId, v: 0 };
+
+    async function poll() {
+      timer = null;
+      if (ctl.signal.aborted) return;
+      const started = Date.now();
+      let next = SPLAT_POLL_MS;
+      if (!document.hidden) {
+        try {
+          const res = await fetch(`${url}?after=${version.current.v}`, {
+            cache: "no-store",
+            credentials: "same-origin",
+            signal: ctl.signal,
+          });
+          if (res.status === 200) {
+            const parsed = parseLiveSplat(await res.arrayBuffer());
+            if (ctl.signal.aborted) return;
+            if (parsed) {
+              version.current = { mission: missionId, v: parsed.version };
+              setState({ mission: missionId, splat: parsed });
+            }
+          } else if (res.status !== 204) {
+            next = RETRY_MS;
+          }
+        } catch {
+          if (ctl.signal.aborted) return;
+          next = RETRY_MS;
+        }
+      }
+      if (!ctl.signal.aborted) timer = setTimeout(poll, Math.max(250, next - (Date.now() - started)));
+    }
+
+    const onVisibility = () => {
+      if (!document.hidden && timer !== null) {
+        clearTimeout(timer);
+        timer = setTimeout(poll, 0);
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    void poll();
+    return () => {
+      ctl.abort();
+      if (timer !== null) clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [missionId, active, kick]);
+
+  const clear = useCallback(() => {
+    version.current = { mission: "", v: 0 };
+    setState(null);
+    setKick((k) => k + 1);
+  }, []);
+  return { splat: state && state.mission === missionId ? state.splat : null, clear };
+}
+
 /** Una consulta al montar: ¿hay servicio 3D configurado? */
 export function useLive3dEnabled(missionId: string): boolean {
   const [enabled, setEnabled] = useState(false);
@@ -185,25 +278,57 @@ interface ViewProps {
   onClose: () => void;
   onReset?: () => void;
   resetting?: boolean;
+  /** Con esto aparece el selector «Nube de puntos · Gaussian splats» (si el servicio los trae). */
+  mode?: Live3DMode;
+  onModeChange?: (mode: Live3DMode) => void;
+  splat?: LiveSplat | null;
   className?: string;
 }
 
-function Live3DView({ data, expanded, onExpand, pipMissionId, onClose, onReset, resetting, className }: ViewProps) {
+function Live3DView({
+  data,
+  expanded,
+  onExpand,
+  pipMissionId,
+  onClose,
+  onReset,
+  resetting,
+  mode = "points",
+  onModeChange,
+  splat = null,
+  className,
+}: ViewProps) {
   const now = useNow(1000);
   const [failed, setFailed] = useState(false);
   const { status, cloud, cloudVersion } = data;
   const hasPoints = status !== null && cloud.count > 0;
   const lost = status?.state === "lost";
   const ago = agoText(status?.updated_at ?? null, now);
+  // Un servicio sin Gaussian splatting (versión anterior o LIVE3D_SPLAT=0) no muestra el selector.
+  const splatInfo = status?.splat ?? null;
+  const canSplat = onModeChange !== undefined && splatInfo !== null && splatInfo.engine !== null;
+  const splatMode = canSplat && mode === "splat";
+  const splatAgo = agoText(splatInfo?.updated_at ?? null, now);
 
   return (
     <div className={cn("relative isolate overflow-hidden bg-[#090b0f]", className)}>
       {hasPoints && !failed && (
-        <ViewerErrorBoundary onError={() => setFailed(true)}>
+        <ViewerErrorBoundary key={splatMode ? "splat" : "points"} onError={() => setFailed(true)}>
           <div className="absolute inset-0">
-            <Live3DCanvas status={status} cloud={cloud} cloudVersion={cloudVersion} />
+            {splatMode ? (
+              <Live3DSplatCanvas status={status} cloud={cloud} cloudVersion={cloudVersion} splat={splat} />
+            ) : (
+              <Live3DCanvas status={status} cloud={cloud} cloudVersion={cloudVersion} />
+            )}
           </div>
         </ViewerErrorBoundary>
+      )}
+
+      {splatMode && hasPoints && !failed && splat === null && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-2 p-4 text-center text-sm text-white/80">
+          <Spinner size="md" label="Entrenando" />
+          {splatInfo?.error ?? "Entrenando Gaussian splats con el video del dron…"}
+        </div>
       )}
 
       {failed ? (
@@ -231,6 +356,7 @@ function Live3DView({ data, expanded, onExpand, pipMissionId, onClose, onReset, 
               Simulado
             </Badge>
           )}
+          {canSplat && onModeChange && <ModeToggle mode={splatMode ? "splat" : "points"} onChange={onModeChange} />}
         </div>
         <div className="pointer-events-auto flex items-center gap-1.5">
           {onReset && (
@@ -266,7 +392,21 @@ function Live3DView({ data, expanded, onExpand, pipMissionId, onClose, onReset, 
               <span className="truncate">{status.message}</span>
             </span>
           )}
-          {hasPoints && (
+          {splatMode && splatInfo?.error && splat !== null && (
+            <span className="flex max-w-full items-center gap-1.5 rounded-md bg-warning/90 px-2 py-1 text-xs font-semibold text-on-solid backdrop-blur-sm">
+              <TriangleAlert aria-hidden="true" className="size-3.5 shrink-0" />
+              <span className="truncate">{splatInfo.error}</span>
+            </span>
+          )}
+          {hasPoints && splatMode && splatInfo && (
+            <span className="flex items-center gap-1.5 rounded-md bg-black/60 px-2 py-1 font-mono text-xs text-white/85 tabular backdrop-blur-sm">
+              {splatInfo.active && <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-accent" aria-hidden="true" />}
+              {formatNumber(splat?.count ?? splatInfo.gaussians)} gaussianas · {formatNumber(splatInfo.views)} vistas · paso{" "}
+              {formatNumber(splatInfo.steps)}
+              {splatAgo && ` · ${splatAgo}`}
+            </span>
+          )}
+          {hasPoints && !splatMode && (
             <span className="rounded-md bg-black/60 px-2 py-1 font-mono text-xs text-white/85 tabular backdrop-blur-sm">
               {formatNumber(status.points)} puntos · {formatNumber(status.keyframes)} cuadros clave
               {ago && ` · ${ago}`}
@@ -276,6 +416,49 @@ function Live3DView({ data, expanded, onExpand, pipMissionId, onClose, onReset, 
       )}
 
       {pipMissionId && <LiveFramePip missionId={pipMissionId} />}
+    </div>
+  );
+}
+
+const MODES: { value: Live3DMode; label: string; icon: typeof Box; title: string }[] = [
+  { value: "points", label: "Nube de puntos", icon: Box, title: "Puntos de VGGT: lo más rápido, se arma al instante" },
+  {
+    value: "splat",
+    label: "Gaussian splats",
+    icon: Sparkles,
+    title: "Gaussian splatting entrenado en vivo con el video del dron (se entrena solo mientras esta vista está abierta)",
+  },
+];
+
+/** «Nube de puntos · Gaussian splats», con el estilo de los rótulos sobre la escena. */
+function ModeToggle({ mode, onChange }: { mode: Live3DMode; onChange: (m: Live3DMode) => void }) {
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Tipo de reconstrucción"
+      className="pointer-events-auto flex gap-0.5 rounded-md bg-black/60 p-0.5 backdrop-blur-sm"
+    >
+      {MODES.map((m) => {
+        const Icon = m.icon;
+        const on = mode === m.value;
+        return (
+          <button
+            key={m.value}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            title={m.title}
+            onClick={() => onChange(m.value)}
+            className={cn(
+              "inline-flex h-7 items-center gap-1.5 rounded px-2 text-xs font-semibold transition-colors",
+              on ? "bg-white/90 text-black" : "text-white/75 hover:text-white",
+            )}
+          >
+            <Icon className="size-3.5" aria-hidden="true" />
+            {m.label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -345,7 +528,17 @@ export interface Live3DStageProps {
  */
 export function Live3DStage({ missionId, className, style }: Live3DStageProps) {
   const data = useLive3dData(missionId, true);
-  const { reset, resetting } = useLive3dReset(missionId, data.clear);
+  const [mode, setMode] = useState<Live3DMode>("points");
+  // Solo con «Gaussian splats» elegido (y un servicio que los trae) se piden y se entrenan.
+  const splatOn = mode === "splat" && data.status?.splat?.engine != null;
+  const live = useLiveSplat(missionId, splatOn);
+  const { clear: clearPoints } = data;
+  const { clear: clearSplat } = live;
+  const clear = useCallback(() => {
+    clearPoints();
+    clearSplat();
+  }, [clearPoints, clearSplat]);
+  const { reset, resetting } = useLive3dReset(missionId, clear);
   return (
     <div className={className} style={style}>
       <Live3DView
@@ -355,6 +548,9 @@ export function Live3DStage({ missionId, className, style }: Live3DStageProps) {
         onClose={() => undefined}
         onReset={() => void reset()}
         resetting={resetting}
+        mode={mode}
+        onModeChange={setMode}
+        splat={live.splat}
         className="size-full"
       />
     </div>

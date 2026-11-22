@@ -2,6 +2,7 @@
 
     PORT=8080 python -m splat.live3d_server              # VGGT en GPU (imagen de Cloud Run)
     LIVE3D_FAKE=1 PORT=8790 python -m splat.live3d_server # motor simulado, sin GPU (desarrollo)
+    LIVE3D_SPLAT=0 …                                      # sin Gaussian splatting en vivo
 
 El servidor responde de inmediato (Cloud Run exige que escuche pronto); el modelo se carga en el
 hilo de GPU y /health dice `ready: false` hasta que está listo. Los cuadros que llegan antes se
@@ -18,10 +19,11 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from .live3d import FakeEstimator, Manager
+from .live_gs import FakeSplatTrainer
 
 MAX_BODY = 3 * 1024 * 1024
 SID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
-ROUTE = re.compile(r"^/sessions/([^/]+)/(frames|status|points|reset)$")
+ROUTE = re.compile(r"^/sessions/([^/]+)/(frames|status|points|splat|reset)$")
 
 
 def log(msg: str) -> None:
@@ -29,8 +31,15 @@ def log(msg: str) -> None:
 
 
 def build_manager() -> Manager:
+    splat = os.environ.get("LIVE3D_SPLAT", "1") != "0"
     if os.environ.get("LIVE3D_FAKE") == "1":
-        return Manager(lambda: FakeEstimator(), "fake", log)
+        return Manager(
+            lambda: FakeEstimator(),
+            "fake",
+            log,
+            make_trainer=(lambda: FakeSplatTrainer(log)) if splat else None,
+            splat_engine="fake",
+        )
     weights = os.environ.get("VGGT_WEIGHTS", "/opt/models/vggt/model.safetensors")
 
     def make():
@@ -38,7 +47,12 @@ def build_manager() -> Manager:
 
         return VGGTEstimator(weights)
 
-    return Manager(make, "vggt", log)
+    def make_trainer():
+        from .live_gs import LiveSplatTrainer
+
+        return LiveSplatTrainer("cuda", log)
+
+    return Manager(make, "vggt", log, make_trainer=make_trainer if splat else None, splat_engine="gsplat")
 
 
 MANAGER: Manager | None = None
@@ -58,6 +72,11 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("cache-control", "no-store")
         self.end_headers()
         self.wfile.write(body)
+
+    def _empty(self, code: int) -> None:
+        self.send_response(code)
+        self.send_header("cache-control", "no-store")
+        self.end_headers()
 
     def _json(self, code: int, obj: object) -> None:
         self._send(code, json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode(), "application/json")
@@ -86,7 +105,7 @@ class Handler(BaseHTTPRequestHandler):
             )
             return
         r = self._route()
-        if r is None or r[1] not in ("status", "points"):
+        if r is None or r[1] not in ("status", "points", "splat"):
             self._json(404, {"error": "ruta desconocida"})
             return
         sid, kind, q = r
@@ -96,6 +115,28 @@ class Handler(BaseHTTPRequestHandler):
             return
         if kind == "status":
             self._json(200, s.status(mgr.ready))
+            return
+        if kind == "splat":
+            # Pedir los splats es lo que mantiene encendido el entrenamiento (SPLAT_WANT_S).
+            try:
+                after = int(q.get("after", ["0"])[0])
+            except ValueError:
+                self._json(400, {"error": "after debe ser entero"})
+                return
+            s.want_splat()
+            mgr.wake.set()
+            data, version = s.splat_payload()
+            # La última, salvo que `after` ya sea ella (tras un reinicio la versión vuelve a empezar).
+            if data is None or version == after:
+                self._empty(204)
+                return
+            self.send_response(200)
+            self.send_header("content-type", "application/octet-stream")
+            self.send_header("content-length", str(len(data)))
+            self.send_header("cache-control", "no-store")
+            self.send_header("x-splat-version", str(version))
+            self.end_headers()
+            self.wfile.write(data)
             return
         try:
             start = int(q.get("from", ["0"])[0])
