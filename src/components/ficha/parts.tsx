@@ -380,9 +380,11 @@ export function VigiaPanel({
   const [filter, setFilter] = useState<TimelineFilter>("all");
   const listRef = useRef<HTMLOListElement | null>(null);
   const items = filterTimeline(timeline, filter);
+  // El más reciente arriba: al llegar uno nuevo, la lista vuelve al inicio.
+  const newestFirst = [...chat].reverse();
   useEffect(() => {
     const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (el) el.scrollTop = 0;
   }, [chat.length]);
 
   return (
@@ -396,7 +398,7 @@ export function VigiaPanel({
           </li>
         )}
         {!arriving && chat.length === 0 && <li className="py-6 text-center text-[13.5px] text-f-muted">Vigía hablará cuando haya algo nuevo.</li>}
-        {chat.map((m) => (
+        {newestFirst.map((m) => (
           <Bubble key={m.id} msg={m} speaking={m.id === speakingId} onPick={onPick} />
         ))}
       </ol>
